@@ -41,9 +41,9 @@ class FungiRepository(
      * Seeds the local database with species from the bundled assets species.json.
      */
     suspend fun seedDatabase() = withContext(Dispatchers.IO) {
-        val existing = dao.getAllSpecies()
-        if (existing.isEmpty()) {
-            try {
+        try {
+            val existing = dao.getAllSpecies()
+            if (existing.isEmpty()) {
                 context.assets.open("species.json").use { inputStream ->
                     val reader = InputStreamReader(inputStream)
                     val jsonString = reader.readText()
@@ -55,9 +55,9 @@ class FungiRepository(
                         Log.d(TAG, "Successfully seeded ${speciesList.size} species to Room database.")
                     }
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to seed species database from assets", e)
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to seed species database from assets or check existing record schema", e)
         }
     }
 

@@ -256,100 +256,117 @@ fun MapScreen(
                         // Weather parameters microclimate summary notification block
                         weatherSummary?.let { (rainfall, maxTemp) ->
                             Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f),
-                                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.15f),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(vertical = 8.dp)
                             ) {
-                                Row(
-                                    modifier = Modifier.padding(10.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
+                                Column(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
                                         Icon(
                                             imageVector = Icons.Default.CloudQueue,
                                             contentDescription = null,
                                             tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(20.dp)
+                                            modifier = Modifier.size(16.dp)
                                         )
-                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
                                         Text(
-                                            text = "Microclimate Signal (Past 30d):",
+                                            text = "MICROCLIMATE RESEARCH SIGNALS",
                                             style = MaterialTheme.typography.labelSmall,
                                             fontFamily = FontFamily.Monospace,
-                                            fontWeight = FontWeight.Bold
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            letterSpacing = 0.5.sp
                                         )
                                     }
                                     Text(
-                                        text = "⚡ Rainfall: ${String.format(Locale.getDefault(), "%.1f", rainfall)}mm  |  🔥 Avg Max Temp: ${String.format(Locale.getDefault(), "%.1f", maxTemp)}°C",
-                                        style = MaterialTheme.typography.labelSmall,
+                                        text = "⚡ Rainfall (Past 30d): ${String.format(Locale.getDefault(), "%.1f", rainfall)}mm\n🔥 Avg Max Temperature: ${String.format(Locale.getDefault(), "%.1f", maxTemp)}°C",
+                                        style = MaterialTheme.typography.bodySmall,
                                         fontFamily = FontFamily.Monospace,
                                         fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.primary
+                                        lineHeight = 16.sp,
+                                        modifier = Modifier.padding(start = 22.dp)
                                     )
                                 }
                             }
                         }
 
                         // Quick coordinates override inputs for emulator mapping convenience
-                        Row(
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                                .padding(vertical = 8.dp)
                         ) {
                             Text(
-                                text = "STATION LAT/LNG:",
+                                text = "STATION GEOLOCATION OVERRIDE",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary,
                                 fontFamily = FontFamily.Monospace,
-                                modifier = Modifier.padding(end = 8.dp)
+                                modifier = Modifier.padding(bottom = 6.dp)
                             )
-                            OutlinedTextField(
-                                value = manualLatText,
-                                onValueChange = { manualLatText = it },
-                                textStyle = TextStyle(fontSize = 12.sp, fontFamily = FontFamily.Monospace),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(48.dp),
-                                singleLine = true,
-                                shape = RoundedCornerShape(4.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            OutlinedTextField(
-                                value = manualLngText,
-                                onValueChange = { manualLngText = it },
-                                textStyle = TextStyle(fontSize = 12.sp, fontFamily = FontFamily.Monospace),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(48.dp),
-                                singleLine = true,
-                                shape = RoundedCornerShape(4.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            IconButton(
-                                onClick = {
-                                    val customLat = manualLatText.toDoubleOrNull()
-                                    val customLng = manualLngText.toDoubleOrNull()
-                                    if (customLat != null && customLng != null) {
-                                        viewModel.mapCenter.value = Pair(customLat, customLng)
-                                        viewModel.computeHotspots()
-                                        Toast.makeText(context, "Coordinates modified to manual site", Toast.LENGTH_SHORT).show()
-                                    } else {
-                                        Toast.makeText(context, "Invalid input coordinates", Toast.LENGTH_SHORT).show()
-                                    }
-                                },
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .background(MaterialTheme.colorScheme.primary),
-                                colors = IconButtonDefaults.iconButtonColors(contentColor = MaterialTheme.colorScheme.onPrimary)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Icon(imageVector = Icons.Default.Check, contentDescription = "Apply custom coordinates")
+                                OutlinedTextField(
+                                    value = manualLatText,
+                                    onValueChange = { manualLatText = it },
+                                    label = { Text("Latitude", fontSize = 11.sp) },
+                                    textStyle = TextStyle(fontSize = 13.sp, fontFamily = FontFamily.Monospace),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(56.dp),
+                                    singleLine = true,
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+                                OutlinedTextField(
+                                    value = manualLngText,
+                                    onValueChange = { manualLngText = it },
+                                    label = { Text("Longitude", fontSize = 11.sp) },
+                                    textStyle = TextStyle(fontSize = 13.sp, fontFamily = FontFamily.Monospace),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(56.dp),
+                                    singleLine = true,
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+                                Button(
+                                    onClick = {
+                                        val customLat = manualLatText.toDoubleOrNull()
+                                        val customLng = manualLngText.toDoubleOrNull()
+                                        if (customLat != null && customLng != null) {
+                                            viewModel.mapCenter.value = Pair(customLat, customLng)
+                                            viewModel.computeHotspots()
+                                            Toast.makeText(context, "Coordinates modified to manual site", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            Toast.makeText(context, "Invalid input coordinates", Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .height(56.dp)
+                                        .width(56.dp),
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(0.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.primary,
+                                        contentColor = MaterialTheme.colorScheme.onPrimary
+                                    )
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check, 
+                                        contentDescription = "Apply custom coordinates",
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
                             }
                         }
                     }

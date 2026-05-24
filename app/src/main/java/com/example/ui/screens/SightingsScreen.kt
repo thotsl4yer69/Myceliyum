@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -302,8 +303,8 @@ fun SightingsScreen(
             speciesList = speciesList,
             initialLocation = detectedLocation,
             onDismiss = { showAddSightingDialog = false },
-            onSave = { speciesId, lat, lng, notes, isPrivate ->
-                viewModel.addUserSighting(speciesId, lat, lng, notes, "", isPrivate)
+            onSave = { speciesId, lat, lng, notes, photoPath, isPrivate ->
+                viewModel.addUserSighting(speciesId, lat, lng, notes, photoPath, isPrivate)
                 showAddSightingDialog = false
                 Toast.makeText(context, "Specimen logged successfully!", Toast.LENGTH_SHORT).show()
             }
@@ -584,7 +585,7 @@ fun AddSightingDialog(
     speciesList: List<Species>,
     initialLocation: Pair<Double, Double>?,
     onDismiss: () -> Unit,
-    onSave: (speciesId: String, lat: Double, lng: Double, notes: String, isPrivate: Boolean) -> Unit
+    onSave: (speciesId: String, lat: Double, lng: Double, notes: String, photoPath: String?, isPrivate: Boolean) -> Unit
 ) {
     var selectedSpecies by remember { mutableStateOf<Species?>(speciesList.firstOrNull()) }
     var dropShown by remember { mutableStateOf(false) }
@@ -735,30 +736,93 @@ fun AddSightingDialog(
                     fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                 )
-                Surface(
-                    onClick = {
-                        // Dummy photo generation for simulation emulator mapping!
-                        voucherPhotoPath = "https://images.unsplash.com/photo-1599059813005-11265ba4b4ce"
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(100.dp)
-                        .padding(vertical = 6.dp)
-                        .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp)),
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant
-                ) {
-                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(imageVector = Icons.Default.CameraAlt, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = if (voucherPhotoPath != null) "VOUCHER PHOTO LINKED" else "TAP TO TAKE DIGITAL VOUCHER",
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 11.sp
+                if (voucherPhotoPath != null) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(130.dp)
+                            .padding(vertical = 6.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .border(1.5.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp))
+                    ) {
+                        AsyncImage(
+                            model = voucherPhotoPath,
+                            contentDescription = "Voucher photograph",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    androidx.compose.ui.graphics.Brush.verticalGradient(
+                                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f))
+                                    )
+                                )
+                        )
+                        Row(
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
                             )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "✓ VOUCHER PHOTO ACTIVE",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                        IconButton(
+                            onClick = { voucherPhotoPath = null },
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(8.dp)
+                                .background(Color.Black.copy(alpha = 0.6f), CircleShape)
+                                .size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Remove photo",
+                                tint = Color.Red,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                } else {
+                    Surface(
+                        onClick = {
+                            // Dummy photo generation for simulation emulator mapping!
+                            voucherPhotoPath = "https://images.unsplash.com/photo-1599059813005-11265ba4b4ce"
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(100.dp)
+                            .padding(vertical = 6.dp)
+                            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp)),
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant
+                    ) {
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(imageVector = Icons.Default.CameraAlt, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "TAP TO TAKE DIGITAL VOUCHER",
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 11.sp
+                                )
+                            }
                         }
                     }
                 }
@@ -814,6 +878,7 @@ fun AddSightingDialog(
                                 computedLat,
                                 computedLng,
                                 userNotes,
+                                voucherPhotoPath,
                                 isPrivateEntry
                             )
                         },
