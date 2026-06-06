@@ -5,6 +5,8 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Location
+import android.net.Uri
+import android.os.Environment
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -36,11 +38,13 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
 import com.example.model.Species
 import com.example.model.UserSighting
 import com.example.ui.viewmodel.FungiViewModel
 import com.google.android.gms.location.LocationServices
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -529,7 +533,7 @@ fun SightingDetailDialog(
                         sdf.format(Date(sighting.timestamp))
                     }
                     Text(
-                        text = "Recorded at: $fullDate UTC",
+                        text = "Recorded at: $fullDate (local time)",
                         fontFamily = FontFamily.Monospace,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -595,8 +599,20 @@ fun AddSightingDialog(
     var userNotes by remember { mutableStateOf("") }
     var isPrivateEntry by remember { mutableStateOf(false) }
 
-    // Captured photo placeholder path
+    // Captured voucher photo (content:// URI from the system camera via FileProvider)
     var voucherPhotoPath by remember { mutableStateOf<String?>(null) }
+
+    val context = LocalContext.current
+    var pendingPhotoUri by remember { mutableStateOf<Uri?>(null) }
+    val takePictureLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success && pendingPhotoUri != null) {
+            voucherPhotoPath = pendingPhotoUri.toString()
+        } else if (!success) {
+            Toast.makeText(context, "Photo capture cancelled", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -800,8 +816,23 @@ fun AddSightingDialog(
                 } else {
                     Surface(
                         onClick = {
-                            // Dummy photo generation for simulation emulator mapping!
-                            voucherPhotoPath = "https://images.unsplash.com/photo-1599059813005-11265ba4b4ce"
+                            // The app declares the CAMERA permission, so launching the
+                            // camera intent without the grant would crash — guard it.
+                            val cameraGranted = ContextCompat.checkSelfPermission(
+                                context, Manifest.permission.CAMERA
+                            ) == PackageManager.PERMISSION_GRANTED
+                            val uri = if (cameraGranted) createVoucherImageUri(context) else null
+                            when {
+                                !cameraGranted ->
+                                    Toast.makeText(context, "Grant camera permission to attach a voucher photo", Toast.LENGTH_LONG).show()
+                                uri == null ->
+                                    Toast.makeText(context, "Could not prepare camera storage", Toast.LENGTH_SHORT).show()
+                                else -> {
+                                    // Photo is written to our FileProvider URI and stored on success.
+                                    pendingPhotoUri = uri
+                                    takePictureLauncher.launch(uri)
+                                }
+                            }
                         },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -893,5 +924,21 @@ fun AddSightingDialog(
                 }
             }
         }
+    }
+}
+
+/**
+ * Creates an empty image file in the app's external Pictures dir and returns a
+ * shareable FileProvider content URI the system camera can write into.
+ */
+private fun createVoucherImageUri(context: Context): Uri? {
+    return try {
+        val picturesDir = context.getExternalFilesDir(Environment.DIRECTORY_PICTURES)
+            ?: context.filesDir
+        if (!picturesDir.exists()) picturesDir.mkdirs()
+        val photoFile = File(picturesDir, "voucher_${System.currentTimeMillis()}.jpg")
+        FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", photoFile)
+    } catch (e: Exception) {
+        null
     }
 }

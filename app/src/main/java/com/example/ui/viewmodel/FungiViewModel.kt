@@ -1,6 +1,8 @@
 package com.example.ui.viewmodel
 
 import android.app.Application
+import android.content.Context
+import androidx.core.content.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -87,10 +89,19 @@ class FungiViewModel(
     private val _isRecomputationsRunning = MutableStateFlow(false)
     val isRecomputationsRunning: StateFlow<Boolean> = _isRecomputationsRunning.asStateFlow()
 
-    // 5. Settings Configuration State
-    val measureUnits = MutableStateFlow("Metric") // "Metric" / "Imperial"
-    val mapTheme = MutableStateFlow("Topo Field Plan") // Style options
-    val splashNoticeAccepted = MutableStateFlow(false)
+    // 5. Settings Configuration State (persisted across launches via SharedPreferences)
+    private val prefs = application.getSharedPreferences("mycelium_settings", Context.MODE_PRIVATE)
+
+    val measureUnits = MutableStateFlow(prefs.getString(KEY_UNITS, "Metric") ?: "Metric") // "Metric" / "Imperial"
+    val mapTheme = MutableStateFlow(prefs.getString(KEY_MAP_THEME, "Topo Field Plan") ?: "Topo Field Plan")
+    val splashNoticeAccepted = MutableStateFlow(prefs.getBoolean(KEY_SPLASH_ACCEPTED, false))
+
+    init {
+        // Persist settings whenever they change so they survive process death.
+        measureUnits.onEach { prefs.edit { putString(KEY_UNITS, it) } }.launchIn(viewModelScope)
+        mapTheme.onEach { prefs.edit { putString(KEY_MAP_THEME, it) } }.launchIn(viewModelScope)
+        splashNoticeAccepted.onEach { prefs.edit { putBoolean(KEY_SPLASH_ACCEPTED, it) } }.launchIn(viewModelScope)
+    }
 
     /**
      * Recomputes hotspots overlay and pins based on active map parameters
@@ -197,6 +208,10 @@ class FungiViewModel(
 
     // Factory Class
     companion object {
+        private const val KEY_UNITS = "measure_units"
+        private const val KEY_MAP_THEME = "map_theme"
+        private const val KEY_SPLASH_ACCEPTED = "splash_notice_accepted"
+
         fun provideFactory(application: Application): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")

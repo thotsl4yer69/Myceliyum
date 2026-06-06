@@ -12,6 +12,7 @@ import com.example.model.Species
 import com.example.model.UserSighting
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
+import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
@@ -28,7 +29,9 @@ class FungiRepository(
     private val iNatApi: INaturalistApi,
     private val openMeteoApi: OpenMeteoApi
 ) {
-    private val moshi = Moshi.Builder().build()
+    private val moshi = Moshi.Builder()
+        .add(KotlinJsonAdapterFactory())
+        .build()
     private val TAG = "FungiRepository"
 
     // TTL for iNaturalist observations cache (24 hours)
