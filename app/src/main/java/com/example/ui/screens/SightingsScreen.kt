@@ -529,7 +529,7 @@ fun SightingDetailDialog(
                         sdf.format(Date(sighting.timestamp))
                     }
                     Text(
-                        text = "Recorded at: $fullDate UTC",
+                        text = "Recorded at: $fullDate (local time)",
                         fontFamily = FontFamily.Monospace,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant

@@ -54,6 +54,7 @@ fun HomeScreen(
     
     // Compute list of observations from cached pins across all species
     val recentObservations by viewModel.observationPins.collectAsState()
+    val isLoadingObservations by viewModel.isRecomputationsRunning.collectAsState()
 
     // Query nearby observations automatically on first launch or when mapCenter changes
     LaunchedEffect(speciesList, mapCenter) {
@@ -345,14 +346,34 @@ fun HomeScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator(modifier = Modifier.size(32.dp))
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text(
-                                text = "Fetching nearby iNaturalist research observation layers...",
-                                style = MaterialTheme.typography.bodySmall,
-                                textAlign = TextAlign.Center,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            if (isLoadingObservations) {
+                                CircularProgressIndicator(modifier = Modifier.size(32.dp))
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    text = "Fetching nearby iNaturalist research observation layers...",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    textAlign = TextAlign.Center,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.TravelExplore,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                    modifier = Modifier.size(40.dp)
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    text = "No iNaturalist research observations found near this grid station. Widen the search radius or reposition on the Hotspots map.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    textAlign = TextAlign.Center,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                TextButton(onClick = onNavigateToMap) {
+                                    Text("OPEN HOTSPOT MAP")
+                                }
+                            }
                         }
                     }
                 }

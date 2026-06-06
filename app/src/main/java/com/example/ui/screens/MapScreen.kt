@@ -52,6 +52,7 @@ fun MapScreen(
     val pins by viewModel.observationPins.collectAsState()
     val weatherSummary by viewModel.weatherSummary.collectAsState()
     val isRunning by viewModel.isRecomputationsRunning.collectAsState()
+    val measureUnits by viewModel.measureUnits.collectAsState()
 
     var showSpeciesDropdown by remember { mutableStateOf(false) }
     var selectedHotspotCell by remember { mutableStateOf<HotspotCell?>(null) }
@@ -286,8 +287,19 @@ fun MapScreen(
                                             letterSpacing = 0.5.sp
                                         )
                                     }
+                                    val isImperial = measureUnits == "Imperial"
+                                    val rainfallText = if (isImperial) {
+                                        "${String.format(Locale.getDefault(), "%.2f", rainfall / 25.4)} in"
+                                    } else {
+                                        "${String.format(Locale.getDefault(), "%.1f", rainfall)}mm"
+                                    }
+                                    val tempText = if (isImperial) {
+                                        "${String.format(Locale.getDefault(), "%.1f", maxTemp * 9.0 / 5.0 + 32.0)}°F"
+                                    } else {
+                                        "${String.format(Locale.getDefault(), "%.1f", maxTemp)}°C"
+                                    }
                                     Text(
-                                        text = "⚡ Rainfall (Past 30d): ${String.format(Locale.getDefault(), "%.1f", rainfall)}mm\n🔥 Avg Max Temperature: ${String.format(Locale.getDefault(), "%.1f", maxTemp)}°C",
+                                        text = "⚡ Rainfall (Past 30d): $rainfallText\n🔥 Avg Max Temperature: $tempText",
                                         style = MaterialTheme.typography.bodySmall,
                                         fontFamily = FontFamily.Monospace,
                                         fontWeight = FontWeight.Bold,
