@@ -9,6 +9,7 @@ import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ManageSearch
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -86,7 +87,7 @@ fun MainWorkflowLayout(viewModel: FungiViewModel) {
                             activeTab = SelectedTab.Search
                             activeDetailSpecies = null
                         },
-                        icon = { Icon(Icons.Default.ManageSearch, contentDescription = "Search Catalogue") },
+                        icon = { Icon(Icons.AutoMirrored.Filled.ManageSearch, contentDescription = "Search Catalogue") },
                         label = { Text("Taxa") },
                         modifier = Modifier.testTag("nav_search")
                     )
