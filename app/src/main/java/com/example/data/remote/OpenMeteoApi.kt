@@ -5,12 +5,19 @@ import retrofit2.http.GET
 import retrofit2.http.Query
 
 interface OpenMeteoApi {
+    /**
+     * Fetches past weather data for rainfall lag analysis.
+     *
+     * Uses 45 days of history so the lag analysis window (10-21 days ago)
+     * is fully covered with room to spare, and we can compute accurate
+     * recent averages for temperature suitability scoring.
+     */
     @GET("v1/forecast")
     suspend fun getPastWeather(
         @Query("latitude") limitLat: Double,
         @Query("longitude") limitLng: Double,
         @Query("daily") dailyParams: String = "precipitation_sum,temperature_2m_max,temperature_2m_min",
-        @Query("past_days") pastDays: Int = 30,
+        @Query("past_days") pastDays: Int = 45,
         @Query("forecast_days") forecastDays: Int = 0,
         @Query("timezone") timezone: String = "auto"
     ): OpenMeteoResponse
@@ -24,6 +31,7 @@ data class OpenMeteoResponse(
 
 data class OpenMeteoDaily(
     @Json(name = "time") val time: List<String>,
-    @Json(name = "precipitation_sum") val precipitationSum: List<Double>?,
-    @Json(name = "temperature_2m_max") val temperatureMax: List<Double>?
+    @Json(name = "precipitation_sum") val precipitationSum: List<Double?>?,
+    @Json(name = "temperature_2m_max") val temperatureMax: List<Double?>?,
+    @Json(name = "temperature_2m_min") val temperatureMin: List<Double?>?
 )

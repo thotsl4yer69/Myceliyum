@@ -16,7 +16,11 @@
     "bruisingReaction": "No bruising reaction.",
     "lookAlikes": ["Amanita xanthocephala (Yellow-orange flygills, smaller, yellow cap parts)"],
     "notes": "Introduced species, highly toxic/hallucinogenic. Forms spectacular mycorrhizal rings around Pinus radiata in Victorian plantations.",
-    "imageUrls": ["https://images.unsplash.com/photo-1601758174114-e711c0cbaa69?auto=format&fit=crop&q=80&w=600"]
+    "imageUrls": [
+      "file:///android_asset/species_images/amanita_muscaria_1.jpg",
+      "file:///android_asset/species_images/amanita_muscaria_2.jpg",
+      "file:///android_asset/species_images/amanita_muscaria_3.jpg"
+    ]
   },
   {
     "id": "psilocybe_subaeruginosa",
@@ -35,7 +39,11 @@
     "bruisingReaction": "Intense blue-green bruising on all parts when handled or damaged.",
     "lookAlikes": ["Galerina patagonica (Yellow-brown spore print, no blue bruising, central ring zone)", "Hypholoma fasciculare (Sulfur tuft, bright yellow-green gills, bitter taste, no blue bruising)"],
     "notes": "Native to SE Australia. Potently psychoactive (contains psilocybin). Can grow in abundance in municipal mulch gardens in Melbourne and Victoria hills.",
-    "imageUrls": ["https://images.unsplash.com/photo-1599059813005-11265ba4b4ce?auto=format&fit=crop&q=80&w=600"]
+    "imageUrls": [
+      "file:///android_asset/species_images/psilocybe_subaeruginosa_1.jpg",
+      "file:///android_asset/species_images/psilocybe_subaeruginosa_2.jpg",
+      "file:///android_asset/species_images/psilocybe_subaeruginosa_3.jpg"
+    ]
   },
   {
     "id": "omphalotus_nidiformis",
@@ -54,7 +62,11 @@
     "bruisingReaction": "No bruising reaction, but gills emit a dim green light.",
     "lookAlikes": ["Pleurotus ostreatus (Oyster Mushroom - edible, not native, gills not bioluminescent, typically uniform color)"],
     "notes": "Highly toxic, causing severe vomiting. Celebrated for its remarkable bioluminescence due to luciferin-luciferase reaction, visible to dark-adapted eyes.",
-    "imageUrls": ["https://images.unsplash.com/photo-1534126511673-b6899657816a?auto=format&fit=crop&q=80&w=600"]
+    "imageUrls": [
+      "file:///android_asset/species_images/omphalotus_nidiformis_1.jpg",
+      "file:///android_asset/species_images/omphalotus_nidiformis_2.jpg",
+      "file:///android_asset/species_images/omphalotus_nidiformis_3.jpg"
+    ]
   },
   {
     "id": "gymnopilus_junonius",
@@ -73,7 +85,11 @@
     "bruisingReaction": "No bruising or slight browning.",
     "lookAlikes": ["Armillaria luteobubalina (Australian Honey Fungus - white spore print, lacks intense orange color)"],
     "notes": "Bitter taste. Often found in massive, visually stunning clusters at the base of Eucalyptus trees across Victoria.",
-    "imageUrls": ["https://images.unsplash.com/photo-1629197475960-b6da12d1b092?auto=format&fit=crop&q=80&w=600"]
+    "imageUrls": [
+      "file:///android_asset/species_images/gymnopilus_junonius_1.jpg",
+      "file:///android_asset/species_images/gymnopilus_junonius_2.jpg",
+      "file:///android_asset/species_images/gymnopilus_junonius_3.jpg"
+    ]
   },
   {
     "id": "favolaschia_calocera",
@@ -92,6 +108,241 @@
     "bruisingReaction": "No bruising.",
     "lookAlikes": ["Cruentomycena viscidocruenta (Ruby Bonnet, tiny red cap, normal gills, not pores)"],
     "notes": "Invasive species native to Madagascar. Rapidly spreading through wet gullies of Victoria (e.g. Otway Ranges, Dandenongs), displacing native saprotrophs.",
-    "imageUrls": ["https://images.unsplash.com/photo-1504198453319-5ce911bafcde?auto=format&fit=crop&q=80&w=600"]
+    "imageUrls": [
+      "file:///android_asset/species_images/favolaschia_calocera_1.jpg",
+      "file:///android_asset/species_images/favolaschia_calocera_2.jpg",
+      "file:///android_asset/species_images/favolaschia_calocera_3.jpg"
+    ]
+  },
+  {
+    "id": "amanita_phalloides",
+    "scientificName": "Amanita phalloides",
+    "commonNames": ["Death Cap"],
+    "genus": "Amanita",
+    "family": "Amanitaceae",
+    "habitatTypes": ["Oak and Exotic Parkland", "Urban Gardens"],
+    "substrates": ["Soil (mycorrhizal, especially with introduced oaks and other exotic trees)"],
+    "seasonStart": 3,
+    "seasonEnd": 6,
+    "capDescription": "5-15 cm wide, smooth, greenish-yellow to olive or bronze, sometimes pale to nearly white. Faint radial fibrils under the surface. Cap margin not striate.",
+    "gillDescription": "White, free from the stem, crowded, remaining white at maturity.",
+    "stemDescription": "White, with a soft hanging membranous ring near the top and a prominent sac-like cup (volva) enclosing the swollen base.",
+    "sporeColor": "White",
+    "bruisingReaction": "No bruising reaction.",
+    "lookAlikes": ["Agaricus (field mushrooms) which have pink-then-brown gills and no volva", "Edible straw mushrooms which also have a volva but pink-brown spores"],
+    "notes": "DEADLY. Responsible for the majority of fatal mushroom poisonings worldwide. Contains amatoxins that cause delayed, severe liver and kidney failure; cooking does not destroy them. Established in Victoria under introduced oaks in parks and gardens. Never handle and eat.",
+    "imageUrls": [
+      "file:///android_asset/species_images/amanita_phalloides_1.jpg",
+      "file:///android_asset/species_images/amanita_phalloides_2.jpg",
+      "file:///android_asset/species_images/amanita_phalloides_3.jpg"
+    ]
+  },
+  {
+    "id": "macrolepiota_clelandii",
+    "scientificName": "Macrolepiota clelandii",
+    "commonNames": ["Graceful Parasol", "Slender Parasol"],
+    "genus": "Macrolepiota",
+    "family": "Agaricaceae",
+    "habitatTypes": ["Eucalypt Forest", "Woodland Edges"],
+    "substrates": ["Leaf litter", "Soil in open forest and woodland"],
+    "seasonStart": 3,
+    "seasonEnd": 6,
+    "capDescription": "5-12 cm wide, opening from egg-shaped to broadly flat with a distinct central bump (umbo). Pale cream ground colour broken into concentric brown scales.",
+    "gillDescription": "White to cream, free from the stem, crowded, soft.",
+    "stemDescription": "Tall and slender with a swollen base, bearing a movable ring and a fine brownish snakeskin-like banding below the ring.",
+    "sporeColor": "White",
+    "bruisingReaction": "Little to no bruising; flesh may slowly discolour.",
+    "lookAlikes": ["Chlorophyllum molybdites, a toxic look-alike that produces a distinctly green spore print", "Young Amanita species before the volva and ring are obvious"],
+    "notes": "A common native parasol of southern Australian forests. The dangerous confusion is with green-spored Chlorophyllum; always take a spore print. Treat as reference-only.",
+    "imageUrls": [
+      "file:///android_asset/species_images/macrolepiota_clelandii_1.jpg",
+      "file:///android_asset/species_images/macrolepiota_clelandii_2.jpg",
+      "file:///android_asset/species_images/macrolepiota_clelandii_3.jpg"
+    ]
+  },
+  {
+    "id": "cortinarius_archeri",
+    "scientificName": "Cortinarius archeri",
+    "commonNames": ["Archer's Cortinar", "Emperor Cortinar"],
+    "genus": "Cortinarius",
+    "family": "Cortinariaceae",
+    "habitatTypes": ["Eucalypt Forest", "Wet Sclerophyll Forest"],
+    "substrates": ["Soil (mycorrhizal with eucalypts)"],
+    "seasonStart": 4,
+    "seasonEnd": 7,
+    "capDescription": "4-10 cm wide, deep violet to purple when young, slimy (viscid) when wet, fading to brownish-purple with age.",
+    "gillDescription": "Violet at first, becoming rusty brown as the spores mature, attached to the stem. A cobweb-like veil (cortina) covers the young gills.",
+    "stemDescription": "Stout, purple, club-shaped to bulbous at the base, often with a slimy universal veil layer.",
+    "sporeColor": "Rusty brown",
+    "bruisingReaction": "No distinct bruising.",
+    "lookAlikes": ["Other purple Cortinarius species, several of which are dangerously toxic", "Cortinarius rotundisporus and blue webcaps"],
+    "notes": "A striking native webcap. Many Cortinarius worldwide contain orellanine, which causes delayed, irreversible kidney failure. The whole genus should be considered unsafe to eat.",
+    "imageUrls": [
+      "file:///android_asset/species_images/cortinarius_archeri_1.jpg",
+      "file:///android_asset/species_images/cortinarius_archeri_2.jpg",
+      "file:///android_asset/species_images/cortinarius_archeri_3.jpg"
+    ]
+  },
+  {
+    "id": "mycena_interrupta",
+    "scientificName": "Mycena interrupta",
+    "commonNames": ["Pixie's Parasol"],
+    "genus": "Mycena",
+    "family": "Mycenaceae",
+    "habitatTypes": ["Cool Temperate Rainforest", "Wet Sclerophyll Forest"],
+    "substrates": ["Decaying logs and fallen wood", "Bark of Myrtle Beech"],
+    "seasonStart": 4,
+    "seasonEnd": 8,
+    "capDescription": "Tiny, 0.5-2 cm wide, brilliant sky-blue to pale blue, hemispherical, sticky, translucent with fine radial striations.",
+    "gillDescription": "Pale blue to whitish, attached, well spaced.",
+    "stemDescription": "Very thin, bluish and gelatinous, attaching to wood by a small basal disc.",
+    "sporeColor": "White",
+    "bruisingReaction": "No bruising reaction.",
+    "lookAlikes": ["Other small Mycena, none of which share the vivid blue colouring"],
+    "notes": "An iconic Gondwanan species found in wet gullies of the Otways, Dandenongs, and Tasmania. Grows in colonies on damp rotting wood. Too small and insubstantial to be of food interest.",
+    "imageUrls": [
+      "file:///android_asset/species_images/mycena_interrupta_1.jpg",
+      "file:///android_asset/species_images/mycena_interrupta_2.jpg",
+      "file:///android_asset/species_images/mycena_interrupta_3.jpg"
+    ]
+  },
+  {
+    "id": "aseroe_rubra",
+    "scientificName": "Aseroe rubra",
+    "commonNames": ["Anemone Stinkhorn", "Sea Anemone Fungus"],
+    "genus": "Aseroe",
+    "family": "Phallaceae",
+    "habitatTypes": ["Gardens and Mulch", "Urban Woodchips", "Forest Litter"],
+    "substrates": ["Bark mulch", "Wood chips", "Rich leaf litter"],
+    "seasonStart": 11,
+    "seasonEnd": 5,
+    "capDescription": "Emerges from a white gelatinous egg into a red star 5-10 cm across with six to ten arms radiating from a central disc coated in dark olive-brown spore slime.",
+    "gillDescription": "None. As a stinkhorn it has no gills; spores are carried in the foul-smelling slime (gleba).",
+    "stemDescription": "A short, hollow, white to pinkish spongy stalk rising from the ruptured egg.",
+    "sporeColor": "Olive-brown (in slime)",
+    "bruisingReaction": "No bruising reaction.",
+    "lookAlikes": ["Other stinkhorns such as Clathrus and Lysurus species"],
+    "notes": "A native stinkhorn that smells of carrion to attract flies, which disperse the spores. Common in mulched gardens after rain. Not edible.",
+    "imageUrls": [
+      "file:///android_asset/species_images/aseroe_rubra_1.jpg",
+      "file:///android_asset/species_images/aseroe_rubra_2.jpg",
+      "file:///android_asset/species_images/aseroe_rubra_3.jpg"
+    ]
+  },
+  {
+    "id": "hypholoma_fasciculare",
+    "scientificName": "Hypholoma fasciculare",
+    "commonNames": ["Sulphur Tuft"],
+    "genus": "Hypholoma",
+    "family": "Strophariaceae",
+    "habitatTypes": ["Eucalypt Forest", "Pine Forest", "Urban Parks"],
+    "substrates": ["Dead wood", "Stumps and buried roots"],
+    "seasonStart": 3,
+    "seasonEnd": 7,
+    "capDescription": "2-6 cm wide, sulphur-yellow with a tawny to orange-brown centre, smooth, convex then flattening.",
+    "gillDescription": "Crowded, sulphur-yellow becoming greenish then purple-brown as spores ripen, attached to the stem.",
+    "stemDescription": "Slender, yellow above and rusty toward the base, often curved, clustered, with only a faint ring zone.",
+    "sporeColor": "Purple-brown",
+    "bruisingReaction": "No bruising; flesh is intensely bitter.",
+    "lookAlikes": ["Gymnopilus junonius (larger, rusty-orange, robust ring)", "Edible honey fungus, which has a white spore print"],
+    "notes": "Toxic and very bitter. Grows in dense clusters on dead wood. Among the most common toxic mushrooms encountered in Victorian forests and parks.",
+    "imageUrls": [
+      "file:///android_asset/species_images/hypholoma_fasciculare_1.jpg",
+      "file:///android_asset/species_images/hypholoma_fasciculare_2.jpg",
+      "file:///android_asset/species_images/hypholoma_fasciculare_3.jpg"
+    ]
+  },
+  {
+    "id": "coprinus_comatus",
+    "scientificName": "Coprinus comatus",
+    "commonNames": ["Shaggy Ink Cap", "Lawyer's Wig"],
+    "genus": "Coprinus",
+    "family": "Agaricaceae",
+    "habitatTypes": ["Lawns and Grassland", "Disturbed Ground", "Roadsides"],
+    "substrates": ["Disturbed and enriched soil", "Grassy verges"],
+    "seasonStart": 3,
+    "seasonEnd": 6,
+    "capDescription": "Tall and cylindrical, 5-15 cm high, white with shaggy upturned scales. The lower edge blackens and dissolves into an inky black liquid as it matures (deliquescence).",
+    "gillDescription": "Crowded, white then pink, finally turning black and dissolving from the rim upward.",
+    "stemDescription": "White, hollow, tall, with a movable ring low on the stalk.",
+    "sporeColor": "Black",
+    "bruisingReaction": "Auto-digests to black ink rather than bruising.",
+    "lookAlikes": ["Coprinopsis atramentaria (Common Ink Cap), which causes illness if consumed with alcohol", "Other small inkcaps"],
+    "notes": "Distinctive for its shaggy white cap that liquefies into ink. Appears quickly on lawns and disturbed ground after rain. Reference-only in this app.",
+    "imageUrls": [
+      "file:///android_asset/species_images/coprinus_comatus_1.jpg",
+      "file:///android_asset/species_images/coprinus_comatus_2.jpg",
+      "file:///android_asset/species_images/coprinus_comatus_3.jpg"
+    ]
+  },
+  {
+    "id": "trametes_versicolor",
+    "scientificName": "Trametes versicolor",
+    "commonNames": ["Turkey Tail"],
+    "genus": "Trametes",
+    "family": "Polyporaceae",
+    "habitatTypes": ["Eucalypt Forest", "Wet Sclerophyll Forest", "Urban Parks"],
+    "substrates": ["Dead hardwood logs and stumps"],
+    "seasonStart": 1,
+    "seasonEnd": 12,
+    "capDescription": "Thin, leathery, fan-shaped brackets 3-8 cm across in overlapping tiers, banded in concentric zones of brown, tan, grey, rust and bluish tones, with a velvety surface.",
+    "gillDescription": "No gills. The underside is a whitish layer of very fine pores.",
+    "stemDescription": "Absent; attached laterally to the wood.",
+    "sporeColor": "White to pale yellow",
+    "bruisingReaction": "No bruising reaction.",
+    "lookAlikes": ["Stereum species, which have a smooth (poreless) underside", "Other Trametes brackets"],
+    "notes": "A widespread saprotrophic bracket fungus that recycles dead hardwood. Persistent year-round. Tough and woody rather than a culinary mushroom.",
+    "imageUrls": [
+      "file:///android_asset/species_images/trametes_versicolor_1.jpg",
+      "file:///android_asset/species_images/trametes_versicolor_2.jpg",
+      "file:///android_asset/species_images/trametes_versicolor_3.jpg"
+    ]
+  },
+  {
+    "id": "pleurotus_ostreatus",
+    "scientificName": "Pleurotus ostreatus",
+    "commonNames": ["Oyster Mushroom"],
+    "genus": "Pleurotus",
+    "family": "Pleurotaceae",
+    "habitatTypes": ["Eucalypt Forest", "Urban Parks"],
+    "substrates": ["Dead and dying hardwood", "Logs and standing trunks"],
+    "seasonStart": 4,
+    "seasonEnd": 8,
+    "capDescription": "5-20 cm wide, oyster or fan-shaped, smooth, ranging from grey-brown to creamy fawn, often in shelving clusters.",
+    "gillDescription": "White to cream, decurrent (running down onto the short stem), fairly well spaced.",
+    "stemDescription": "Short and stubby, lateral or nearly absent, often merging with neighbouring caps.",
+    "sporeColor": "White to lilac-grey",
+    "bruisingReaction": "No bruising reaction.",
+    "lookAlikes": ["Omphalotus nidiformis (Ghost Fungus), a toxic look-alike with crowded bioluminescent gills, usually in dense clusters at the tree base"],
+    "notes": "A widely cultivated edible, but in the field its toxic look-alike the Ghost Fungus is genuinely dangerous. Expert confirmation is essential before any consumption; this app is for reference only.",
+    "imageUrls": [
+      "file:///android_asset/species_images/pleurotus_ostreatus_1.jpg",
+      "file:///android_asset/species_images/pleurotus_ostreatus_2.jpg",
+      "file:///android_asset/species_images/pleurotus_ostreatus_3.jpg"
+    ]
+  },
+  {
+    "id": "armillaria_luteobubalina",
+    "scientificName": "Armillaria luteobubalina",
+    "commonNames": ["Australian Honey Fungus"],
+    "genus": "Armillaria",
+    "family": "Physalacriaceae",
+    "habitatTypes": ["Eucalypt Forest", "Urban Parks", "Gardens and Mulch"],
+    "substrates": ["Base of living and dead eucalypts", "Stumps and buried roots"],
+    "seasonStart": 3,
+    "seasonEnd": 6,
+    "capDescription": "3-10 cm wide, honey-yellow to tan-brown, often with fine darker scales toward the centre, convex then flattening, appearing in dense clusters.",
+    "gillDescription": "Cream, attached to slightly decurrent, bruising brownish with age.",
+    "stemDescription": "Fibrous and tapering, sharing a clustered base, bearing a yellowish ring high on the stalk.",
+    "sporeColor": "Cream to white",
+    "bruisingReaction": "Slow brownish discolouration.",
+    "lookAlikes": ["Gymnopilus junonius (rusty-orange spore print)", "Galerina species, which are small and deadly"],
+    "notes": "A major native forest and garden pathogen causing Armillaria root rot, killing eucalypts and ornamentals. Identified by clustered honey-coloured caps with a ring and white spores.",
+    "imageUrls": [
+      "file:///android_asset/species_images/armillaria_luteobubalina_1.jpg",
+      "file:///android_asset/species_images/armillaria_luteobubalina_2.jpg",
+      "file:///android_asset/species_images/armillaria_luteobubalina_3.jpg"
+    ]
   }
 ]
+

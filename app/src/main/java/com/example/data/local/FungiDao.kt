@@ -46,4 +46,5 @@ interface FungiDao {
 
     @Delete
     suspend fun deleteUserSighting(sighting: UserSighting)
+
 }

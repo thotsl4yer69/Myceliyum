@@ -26,9 +26,15 @@ data class INatObservation(
     @Json(name = "latitude") val latitude: Double?,
     @Json(name = "longitude") val longitude: Double?,
     @Json(name = "location") val location: String?,
+    @Json(name = "geojson") val geojson: INatGeoJson?,
     @Json(name = "observed_on") val observedOn: String?,
     @Json(name = "quality_grade") val qualityGrade: String?,
     @Json(name = "photos") val photos: List<INatPhoto>?
+)
+
+// iNaturalist returns coordinates as GeoJSON: { "coordinates": [lng, lat] }
+data class INatGeoJson(
+    @Json(name = "coordinates") val coordinates: List<Double>?
 )
 
 data class INatPhoto(

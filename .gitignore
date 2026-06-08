@@ -16,3 +16,11 @@
 local.properties
 .env
 debug.keystore
+
+# APK / build artifacts
+*.apk
+*.aab
+/app/build
+.build-outputs/
+.gradle-user-home/
+build.log

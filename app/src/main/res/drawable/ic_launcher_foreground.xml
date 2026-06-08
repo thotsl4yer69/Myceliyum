@@ -1,30 +1,95 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path android:pathData="M31,63.928c0,0 6.4,-11 12.1,-13.1c7.2,-2.6 26,-1.4 26,-1.4l38.1,38.1L107,108.928l-32,-1L31,63.928z">
-        <aapt:attr name="android:fillColor">
-            <gradient
-                android:endX="85.84757"
-                android:endY="92.4963"
-                android:startX="42.9492"
-                android:startY="49.59793"
-                android:type="linear">
-                <item
-                    android:color="#44000000"
-                    android:offset="0.0" />
-                <item
-                    android:color="#00000000"
-                    android:offset="1.0" />
-            </gradient>
-        </aapt:attr>
-    </path>
+
+    <!-- Outer glow halo (very soft neon mint) -->
     <path
-        android:fillColor="#FFFFFF"
-        android:fillType="nonZero"
-        android:pathData="M65.3,45.828l3.8,-6.6c0.2,-0.4 0.1,-0.9 -0.3,-1.1c-0.4,-0.2 -0.9,-0.1 -1.1,0.3l-3.9,6.7c-6.3,-2.8 -13.4,-2.8 -19.7,0l-3.9,-6.7c-0.2,-0.4 -0.7,-0.5 -1.1,-0.3C38.8,38.328 38.7,38.828 38.9,39.228l3.8,6.6C36.2,49.428 31.7,56.028 31,63.928h46C76.3,56.028 71.8,49.428 65.3,45.828zM43.4,57.328c-0.8,0 -1.5,-0.5 -1.8,-1.2c-0.3,-0.7 -0.1,-1.5 0.4,-2.1c0.5,-0.5 1.4,-0.7 2.1,-0.4c0.7,0.3 1.2,1 1.2,1.8C45.3,56.528 44.5,57.328 43.4,57.328L43.4,57.328zM64.6,57.328c-0.8,0 -1.5,-0.5 -1.8,-1.2s-0.1,-1.5 0.4,-2.1c0.5,-0.5 1.4,-0.7 2.1,-0.4c0.7,0.3 1.2,1 1.2,1.8C66.5,56.528 65.6,57.328 64.6,57.328L64.6,57.328z"
-        android:strokeWidth="1"
-        android:strokeColor="#00000000" />
+        android:fillColor="#0A4FFFB0"
+        android:pathData="M54,20 C34,20 20,34 20,54 C20,60 22,64 24,66 L30,62 C28,58 28,56 28,54 C28,38 38,26 54,26 C70,26 80,38 80,54 C80,56 80,58 78,62 L84,66 C86,64 88,60 88,54 C88,34 74,20 54,20 Z" />
+
+    <!-- Inner glow ring (neon mint, subtle) -->
+    <path
+        android:fillColor="#154FFFB0"
+        android:pathData="M54,24 C37,24 25,36 25,54 C25,58 26,61 27,63 L31,60 C30,58 29,56 29,54 C29,39 39,28 54,28 C69,28 79,39 79,54 C79,56 78,58 77,60 L81,63 C82,61 83,58 83,54 C83,36 71,24 54,24 Z" />
+
+    <!-- Mushroom cap - main body (chanterelle gold, slightly asymmetric) -->
+    <path
+        android:fillColor="#FFB347"
+        android:pathData="M29,60 C29,44 36,30 54,29 C72,30 79,44 79,60 Z" />
+
+    <!-- Cap top highlight (lighter gold crescent for depth) -->
+    <path
+        android:fillColor="#22FFFFFF"
+        android:pathData="M38,52 C38,42 43,33 54,32 C65,33 70,42 70,52 Q54,47 38,52 Z" />
+
+    <!-- Cap edge glow - neon mint stroke -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#4FFFB0"
+        android:strokeWidth="1.8"
+        android:pathData="M29,60 C29,44 36,30 54,29 C72,30 79,44 79,60" />
+
+    <!-- Gill lines under cap (subtle dark lines radiating from center) -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#18000000"
+        android:strokeWidth="0.6"
+        android:pathData="M36,60 L54,56 M42,60 L54,56 M48,60 L54,56 M54,60 L54,56 M60,60 L54,56 M66,60 L54,56 M72,60 L54,56" />
+
+    <!-- Stem (warm gold, slight taper with organic curve) -->
+    <path
+        android:fillColor="#E09838"
+        android:pathData="M46,60 C45.5,66 45,72 44.5,78 Q54,83 63.5,78 C63,72 62.5,66 62,60 Z" />
+
+    <!-- Stem center highlight -->
+    <path
+        android:fillColor="#15FFFFFF"
+        android:pathData="M50,60 C49.5,66 49,72 49,77 Q54,80 59,77 C59,72 58.5,66 58,60 Z" />
+
+    <!-- Cap spots - bioluminescent neon mint dots -->
+    <!-- Large spot upper-left -->
+    <path
+        android:fillColor="#4FFFB0"
+        android:pathData="M42,41 m-2.5,0 a2.5,2.5 0 1,0 5,0 a2.5,2.5 0 1,0 -5,0" />
+    <!-- Large spot upper-right -->
+    <path
+        android:fillColor="#4FFFB0"
+        android:pathData="M57,36 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0" />
+    <!-- Medium spot right -->
+    <path
+        android:fillColor="#4FFFB0"
+        android:pathData="M66,46 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0" />
+    <!-- Small spot center -->
+    <path
+        android:fillColor="#BB4FFFB0"
+        android:pathData="M50,49 m-1.5,0 a1.5,1.5 0 1,0 3,0 a1.5,1.5 0 1,0 -3,0" />
+    <!-- Small spot left -->
+    <path
+        android:fillColor="#BB4FFFB0"
+        android:pathData="M36,51 m-1.5,0 a1.5,1.5 0 1,0 3,0 a1.5,1.5 0 1,0 -3,0" />
+    <!-- Tiny spot right edge -->
+    <path
+        android:fillColor="#884FFFB0"
+        android:pathData="M70,54 m-1.2,0 a1.2,1.2 0 1,0 2.4,0 a1.2,1.2 0 1,0 -2.4,0" />
+    <!-- Tiny spot upper center -->
+    <path
+        android:fillColor="#884FFFB0"
+        android:pathData="M48,38 m-1,0 a1,1 0 1,0 2,0 a1,1 0 1,0 -2,0" />
+
+    <!-- Falling spore dots (progressively fading) -->
+    <path
+        android:fillColor="#4FFFB0"
+        android:pathData="M48,86 m-1.2,0 a1.2,1.2 0 1,0 2.4,0 a1.2,1.2 0 1,0 -2.4,0" />
+    <path
+        android:fillColor="#884FFFB0"
+        android:pathData="M58,88 m-0.9,0 a0.9,0.9 0 1,0 1.8,0 a0.9,0.9 0 1,0 -1.8,0" />
+    <path
+        android:fillColor="#554FFFB0"
+        android:pathData="M52,91 m-0.7,0 a0.7,0.7 0 1,0 1.4,0 a0.7,0.7 0 1,0 -1.4,0" />
+    <path
+        android:fillColor="#334FFFB0"
+        android:pathData="M44,90 m-0.5,0 a0.5,0.5 0 1,0 1,0 a0.5,0.5 0 1,0 -1,0" />
+
 </vector>

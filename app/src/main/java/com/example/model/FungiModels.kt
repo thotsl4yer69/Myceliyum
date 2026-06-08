@@ -31,9 +31,9 @@ data class Observation(
     val lat: Double,
     val lng: Double,
     val observedAt: Long, // timestamp
-    val source: String, // "iNaturalist" or "user"
+    val source: String, // "iNaturalist", "MushroomObserver", "ALA", or "user"
     val photoUrl: String?,
-    val qualityGrade: String,
+    val qualityGrade: String, // "research", "needs_id", "casual"
     val cachedAt: Long = System.currentTimeMillis() // for TTL check
 )
 
@@ -49,10 +49,20 @@ data class UserSighting(
     val isPrivate: Boolean
 )
 
+/**
+ * 5-tier hotspot cell for the prediction grid.
+ *
+ * Tiers:
+ *   Excellent  (>80%)  — perfect storm of evidence, season, and conditions
+ *   VeryGood   (60-80%) — strong indicators across multiple factors
+ *   Promising  (40-60%) — several positive factors present
+ *   Possible   (20-40%) — some positive indicators
+ *   Unlikely   (<20%)  — few or no positive indicators
+ */
 data class HotspotCell(
     val lat: Double,
     val lng: Double,
     val score: Double, // 0 to 1
-    val tier: String, // "Low" / "Medium" / "High"
+    val tier: String,  // "Excellent" / "VeryGood" / "Promising" / "Possible" / "Unlikely"
     val contributingFactors: List<String>
 )

@@ -11,7 +11,7 @@ import com.example.model.UserSighting
 
 @Database(
     entities = [Species::class, Observation::class, UserSighting::class],
-    version = 1,
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -29,7 +29,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "mycelium_mapper_db"
                 )
-                .fallbackToDestructiveMigration(dropAllTables = true)
+                .fallbackToDestructiveMigration()
                 .build()
                 INSTANCE = instance
                 instance

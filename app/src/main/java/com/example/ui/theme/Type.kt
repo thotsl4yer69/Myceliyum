@@ -52,17 +52,17 @@ val Typography =
       letterSpacing = 0.25.sp
     ),
     labelMedium = TextStyle(
-      fontFamily = FontFamily.Monospace,
-      fontWeight = FontWeight.Bold,
-      fontSize = 12.sp,
-      lineHeight = 16.sp,
-      letterSpacing = 0.5.sp
+      fontFamily = FontFamily.SansSerif,
+      fontWeight = FontWeight.Medium,
+      fontSize = 13.sp,
+      lineHeight = 17.sp,
+      letterSpacing = 0.25.sp
     ),
     labelSmall = TextStyle(
-      fontFamily = FontFamily.Monospace,
-      fontWeight = FontWeight.Bold,
-      fontSize = 10.sp,
-      lineHeight = 14.sp,
-      letterSpacing = 0.75.sp
+      fontFamily = FontFamily.SansSerif,
+      fontWeight = FontWeight.Medium,
+      fontSize = 11.sp,
+      lineHeight = 15.sp,
+      letterSpacing = 0.25.sp
     )
   )

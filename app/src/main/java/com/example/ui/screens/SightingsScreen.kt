@@ -6,7 +6,6 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Location
 import android.net.Uri
-import android.os.Environment
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -57,7 +56,6 @@ fun SightingsScreen(
     val context = LocalContext.current
     val speciesList by viewModel.speciesList.collectAsState()
     val userSightings by viewModel.userSightings.collectAsState()
-
     var showAddSightingDialog by remember { mutableStateOf(false) }
     var selectedSightingForDetail by remember { mutableStateOf<UserSighting?>(null) }
 
@@ -81,9 +79,9 @@ fun SightingsScreen(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
-            Toast.makeText(context, "Camera permission allowed. Save your sighting photo voucher.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Camera ready.", Toast.LENGTH_SHORT).show()
         } else {
-            Toast.makeText(context, "Camera permission is required to save sighting photographs.", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, "Camera permission is needed to attach a photo.", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -97,7 +95,7 @@ fun SightingsScreen(
                 }
             }
         } else {
-            Toast.makeText(context, "GPS Location is required to pinpoint exact fungi colonies.", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, "Location is needed to tag where you found something.", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -120,17 +118,14 @@ fun SightingsScreen(
                 title = {
                     Column {
                         Text(
-                            text = "FIELD WORK SIGHTINGS",
+                            text = "Sightings",
                             fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 20.sp,
-                            letterSpacing = 1.2.sp
+                            fontSize = 20.sp
                         )
                         Text(
-                            text = "Personal Voucher Logbook",
+                            text = "Your private field log",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontFamily = FontFamily.Monospace
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
                 },
@@ -153,92 +148,97 @@ fun SightingsScreen(
                 contentColor = MaterialTheme.colorScheme.onPrimary,
                 modifier = Modifier.testTag("add_sighting_fab")
             ) {
-                Icon(imageVector = Icons.Default.AddPhotoAlternate, contentDescription = "Log Specimen")
+                Icon(
+                    imageVector = Icons.Default.AddPhotoAlternate,
+                    contentDescription = "Log Specimen"
+                )
             }
         }
     ) { innerPadding ->
-        LazyColumn(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            if (userSightings.isEmpty()) {
-                item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .fillParentMaxHeight(0.8f),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(32.dp)
+            LazyColumn(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                if (userSightings.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .fillParentMaxHeight(0.8f),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.FilterVintage,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                                modifier = Modifier.size(72.dp)
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                text = "Personal Mycology Log is Empty",
-                                fontWeight = FontWeight.Bold,
-                                style = MaterialTheme.typography.titleLarge,
-                                textAlign = TextAlign.Center
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "Keep a secure personal log of your mushroom finds. Sightings can be marked private and exported as standardized CSV tables anytime.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.Center,
-                                lineHeight = 18.sp
-                            )
-                            Spacer(modifier = Modifier.height(24.dp))
-                            Button(
-                                onClick = {
-                                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-                                        showCameraRationale = true
-                                    } else {
-                                        showAddSightingDialog = true
-                                    }
-                                },
-                                shape = RoundedCornerShape(8.dp)
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.padding(32.dp)
                             ) {
-                                Text("LOG FIRST DISCOVERY")
+                                Icon(
+                                    imageVector = Icons.Default.FilterVintage,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                    modifier = Modifier.size(72.dp)
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text(
+                                    text = "No sightings yet",
+                                    fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.titleLarge,
+                                    textAlign = TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Log your finds privately on this device. Mark them private and export as CSV anytime.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center,
+                                    lineHeight = 18.sp
+                                )
+                                Spacer(modifier = Modifier.height(24.dp))
+                                Button(
+                                    onClick = {
+                                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                                            showCameraRationale = true
+                                        } else {
+                                            showAddSightingDialog = true
+                                        }
+                                    },
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text("Log first sighting")
+                                }
                             }
                         }
                     }
-                }
-            } else {
-                item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
-                            .padding(16.dp)
-                    ) {
-                        Text(
-                            text = "🔒 ALL ENTRIES ARE STORED ENCRYPTED IN THE LOCAL DEVICE DATABASE ROOM CLIENT",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontFamily = FontFamily.Monospace,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth()
+                } else {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
+                                .padding(16.dp)
+                        ) {
+                            Text(
+                                text = "Stored privately on this device — nothing is uploaded",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+
+                    items(userSightings) { sighting ->
+                        SightingItemRow(
+                            sighting = sighting,
+                            speciesList = speciesList,
+                            onSightingSelected = { selectedSightingForDetail = it }
                         )
                     }
-                }
-
-                items(userSightings) { sighting ->
-                    SightingItemRow(
-                        sighting = sighting,
-                        speciesList = speciesList,
-                        onSightingSelected = { selectedSightingForDetail = it }
-                    )
                 }
             }
         }
@@ -248,9 +248,9 @@ fun SightingsScreen(
     if (showCameraRationale) {
         AlertDialog(
             onDismissRequest = { showCameraRationale = false },
-            title = { Text("Voucher Photo Permission", fontWeight = FontWeight.Bold) },
+            title = { Text("Camera access", fontWeight = FontWeight.Bold) },
             text = {
-                Text("Mycelium Mapper requires access to your camera to attach photographic documentation as physical proof for each observed fungi colony.", lineHeight = 20.sp)
+                Text("To attach a photo to each sighting we need access to your camera. Photos are stored only on this device.", lineHeight = 20.sp)
             },
             confirmButton = {
                 Button(
@@ -259,17 +259,17 @@ fun SightingsScreen(
                         cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
                     }
                 ) {
-                    Text("ALLOW CAMERA")
+                    Text("Allow camera")
                 }
             },
             dismissButton = {
                 TextButton(
                     onClick = {
                         showCameraRationale = false
-                        showAddSightingDialog = true // fallback logging with photo dummy path
+                        showAddSightingDialog = true // log without a photo
                     }
                 ) {
-                    Text("SKIP PHOTO VOUCHER")
+                    Text("Skip photo")
                 }
             }
         )
@@ -279,9 +279,9 @@ fun SightingsScreen(
     if (showLocationRationale) {
         AlertDialog(
             onDismissRequest = { showLocationRationale = false },
-            title = { Text("Location Services Required", fontWeight = FontWeight.Bold) },
+            title = { Text("Location access", fontWeight = FontWeight.Bold) },
             text = {
-                Text("To compute probable fruiting hotspots, this research terminal overlay maps microclimate rain and soil levels corresponding directly to your actual GPS location coordinates.", lineHeight = 20.sp)
+                Text("Sharing your GPS location lets the app suggest hotspots near you and tag your sightings accurately.", lineHeight = 20.sp)
             },
             confirmButton = {
                 Button(
@@ -290,12 +290,12 @@ fun SightingsScreen(
                         locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
                     }
                 ) {
-                    Text("ALLOW LOCATION Access")
+                    Text("Allow location")
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showLocationRationale = false }) {
-                    Text("NO THANKS")
+                    Text("Not now")
                 }
             }
         )
@@ -310,7 +310,7 @@ fun SightingsScreen(
             onSave = { speciesId, lat, lng, notes, photoPath, isPrivate ->
                 viewModel.addUserSighting(speciesId, lat, lng, notes, photoPath, isPrivate)
                 showAddSightingDialog = false
-                Toast.makeText(context, "Specimen logged successfully!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Sighting saved.", Toast.LENGTH_SHORT).show()
             }
         )
     }
@@ -462,20 +462,25 @@ fun SightingDetailDialog(
             tonalElevation = 6.dp,
             modifier = Modifier
                 .fillMaxWidth()
-                .wrapContentHeight()
+                .fillMaxHeight(0.85f)
+                .padding(16.dp)
         ) {
-            Column(modifier = Modifier.padding(20.dp)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(20.dp)
+            ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                        text = "VOUCHER SPECIMEN INFO",
-                        style = MaterialTheme.typography.labelSmall,
+                        text = "Sighting details",
+                        style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontFamily = FontFamily.Monospace
+                        color = MaterialTheme.colorScheme.primary
                     )
                     IconButton(onClick = onDismiss) {
                         Icon(imageVector = Icons.Default.Close, contentDescription = "Close description")
@@ -533,7 +538,7 @@ fun SightingDetailDialog(
                         sdf.format(Date(sighting.timestamp))
                     }
                     Text(
-                        text = "Recorded at: $fullDate (local time)",
+                        text = "Recorded at: $fullDate UTC",
                         fontFamily = FontFamily.Monospace,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -543,10 +548,10 @@ fun SightingDetailDialog(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
-                    text = "FIELD WORK RESEARCH ANNOTATIONS :",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold
+                    text = "Notes",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Surface(
@@ -555,7 +560,7 @@ fun SightingDetailDialog(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = sighting.notes.ifEmpty { "No explicit description notes provided." },
+                        text = sighting.notes.ifEmpty { "No notes." },
                         style = MaterialTheme.typography.bodySmall,
                         lineHeight = 16.sp,
                         modifier = Modifier.padding(12.dp)
@@ -576,7 +581,7 @@ fun SightingDetailDialog(
                     ) {
                         Icon(imageVector = Icons.Default.Delete, contentDescription = "Delete observation")
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("DELETE SIGHTING")
+                        Text("Delete sighting")
                     }
                 }
             }
@@ -591,6 +596,8 @@ fun AddSightingDialog(
     onDismiss: () -> Unit,
     onSave: (speciesId: String, lat: Double, lng: Double, notes: String, photoPath: String?, isPrivate: Boolean) -> Unit
 ) {
+    val context = LocalContext.current
+
     var selectedSpecies by remember { mutableStateOf<Species?>(speciesList.firstOrNull()) }
     var dropShown by remember { mutableStateOf(false) }
 
@@ -599,18 +606,32 @@ fun AddSightingDialog(
     var userNotes by remember { mutableStateOf("") }
     var isPrivateEntry by remember { mutableStateOf(false) }
 
-    // Captured voucher photo (content:// URI from the system camera via FileProvider)
+    // Captured voucher photo (content:// URI string from our FileProvider)
     var voucherPhotoPath by remember { mutableStateOf<String?>(null) }
-
-    val context = LocalContext.current
+    // URI we asked the camera app to write the full-resolution image into
     var pendingPhotoUri by remember { mutableStateOf<Uri?>(null) }
+
     val takePictureLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
     ) { success ->
         if (success && pendingPhotoUri != null) {
             voucherPhotoPath = pendingPhotoUri.toString()
-        } else if (!success) {
-            Toast.makeText(context, "Photo capture cancelled", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(context, "No photo captured.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun launchVoucherCamera() {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            Toast.makeText(context, "Camera permission is required to capture a voucher photo.", Toast.LENGTH_LONG).show()
+            return
+        }
+        try {
+            val uri = createVoucherImageUri(context)
+            pendingPhotoUri = uri
+            takePictureLauncher.launch(uri)
+        } catch (e: Exception) {
+            Toast.makeText(context, "Unable to start the camera: ${e.message}", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -620,23 +641,27 @@ fun AddSightingDialog(
     ) {
         Surface(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(24.dp)
-                .verticalScroll(rememberScrollState()),
+                .fillMaxWidth()
+                .fillMaxHeight(0.9f)
+                .padding(16.dp),
             shape = RoundedCornerShape(16.dp),
             tonalElevation = 4.dp
         ) {
-            Column(modifier = Modifier.padding(20.dp)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(20.dp)
+            ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "ADD FIELD LOG SIGHTING",
+                        text = "Log a sighting",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace,
                         color = MaterialTheme.colorScheme.primary
                     )
                     IconButton(onClick = onDismiss) {
@@ -648,11 +673,10 @@ fun AddSightingDialog(
 
                 // 1. Select Species
                 Text(
-                    text = "VOUCHER TAXON ID",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontSize = 10.sp,
-                    fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                    text = "Species",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
                 Box(modifier = Modifier.fillMaxWidth()) {
@@ -665,7 +689,7 @@ fun AddSightingDialog(
                         shape = RoundedCornerShape(8.dp)
                     ) {
                         Text(
-                            text = selectedSpecies?.scientificName ?: "Select Reference Specimen",
+                            text = selectedSpecies?.scientificName ?: "Pick a species",
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.weight(1f),
                             textAlign = TextAlign.Start
@@ -693,11 +717,10 @@ fun AddSightingDialog(
 
                 // 2. Latitude & Longitude inputs
                 Text(
-                    text = "GPS SITE COORDINATES",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontSize = 10.sp,
-                    fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                    text = "Location",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Row(
                     modifier = Modifier
@@ -725,16 +748,15 @@ fun AddSightingDialog(
 
                 // 3. User Notes
                 Text(
-                    text = "REPRESENTATIVE HABITAT NOTES",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontSize = 10.sp,
-                    fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                    text = "Notes",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 OutlinedTextField(
                     value = userNotes,
                     onValueChange = { userNotes = it },
-                    placeholder = { Text("Describe substrate wood types, dampness indices, spore dusts...") },
+                    placeholder = { Text("Substrate, weather, surrounding trees, anything you noticed…") },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(110.dp)
@@ -744,13 +766,12 @@ fun AddSightingDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // 4. Photo Voucher Mock
+                // 4. Photo capture
                 Text(
-                    text = "SIGHTING PHOTO VOUCHER",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontSize = 10.sp,
-                    fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                    text = "Photo",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 if (voucherPhotoPath != null) {
                     Box(
@@ -790,11 +811,10 @@ fun AddSightingDialog(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "✓ VOUCHER PHOTO ACTIVE",
-                                style = MaterialTheme.typography.labelSmall,
+                                text = "Photo attached",
+                                style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                fontFamily = FontFamily.Monospace
+                                color = Color.White
                             )
                         }
                         IconButton(
@@ -815,25 +835,7 @@ fun AddSightingDialog(
                     }
                 } else {
                     Surface(
-                        onClick = {
-                            // The app declares the CAMERA permission, so launching the
-                            // camera intent without the grant would crash — guard it.
-                            val cameraGranted = ContextCompat.checkSelfPermission(
-                                context, Manifest.permission.CAMERA
-                            ) == PackageManager.PERMISSION_GRANTED
-                            val uri = if (cameraGranted) createVoucherImageUri(context) else null
-                            when {
-                                !cameraGranted ->
-                                    Toast.makeText(context, "Grant camera permission to attach a voucher photo", Toast.LENGTH_LONG).show()
-                                uri == null ->
-                                    Toast.makeText(context, "Could not prepare camera storage", Toast.LENGTH_SHORT).show()
-                                else -> {
-                                    // Photo is written to our FileProvider URI and stored on success.
-                                    pendingPhotoUri = uri
-                                    takePictureLauncher.launch(uri)
-                                }
-                            }
-                        },
+                        onClick = { launchVoucherCamera() },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(100.dp)
@@ -847,11 +849,10 @@ fun AddSightingDialog(
                                 Icon(imageVector = Icons.Default.CameraAlt, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "TAP TO TAKE DIGITAL VOUCHER",
+                                    text = "Tap to take a photo",
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.primary,
-                                    fontFamily = FontFamily.Monospace,
-                                    fontSize = 11.sp
+                                    fontSize = 13.sp
                                 )
                             }
                         }
@@ -874,13 +875,13 @@ fun AddSightingDialog(
                     Spacer(modifier = Modifier.width(8.dp))
                     Column {
                         Text(
-                            text = "Keep Sighting Location Private",
-                            style = MaterialTheme.typography.labelSmall,
+                            text = "Keep this sighting private",
+                            style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "Do not share with iNat or global mapping overlays.",
+                            text = "Already on-device only — this just hides it from any future sharing or export.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -897,10 +898,11 @@ fun AddSightingDialog(
                         onClick = onDismiss,
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("CANCEL")
+                        Text("Cancel")
                     }
 
                     Button(
+                        enabled = selectedSpecies != null,
                         onClick = {
                             val computedLat = manualLat.toDoubleOrNull() ?: -37.8136
                             val computedLng = manualLng.toDoubleOrNull() ?: 144.9631
@@ -919,7 +921,7 @@ fun AddSightingDialog(
                             .weight(1f)
                             .testTag("submit_sighting_button")
                     ) {
-                        Text("SAVE FIELD RECORD")
+                        Text("Save sighting")
                     }
                 }
             }
@@ -928,17 +930,18 @@ fun AddSightingDialog(
 }
 
 /**
- * Creates an empty image file in the app's external Pictures dir and returns a
- * shareable FileProvider content URI the system camera can write into.
+ * Creates a destination file in the app's internal storage for a captured
+ * voucher photo and returns a FileProvider content:// URI that the camera
+ * app can write to. The URI string is later persisted on the UserSighting.
  */
-private fun createVoucherImageUri(context: Context): Uri? {
-    return try {
-        val picturesDir = context.getExternalFilesDir(Environment.DIRECTORY_PICTURES)
-            ?: context.filesDir
-        if (!picturesDir.exists()) picturesDir.mkdirs()
-        val photoFile = File(picturesDir, "voucher_${System.currentTimeMillis()}.jpg")
-        FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", photoFile)
-    } catch (e: Exception) {
-        null
-    }
+private fun createVoucherImageUri(context: Context): Uri {
+    val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+    val dir = File(context.filesDir, "voucher_photos")
+    if (!dir.exists()) dir.mkdirs()
+    val photoFile = File(dir, "voucher_$timeStamp.jpg")
+    return FileProvider.getUriForFile(
+        context,
+        "${context.packageName}.fileprovider",
+        photoFile
+    )
 }

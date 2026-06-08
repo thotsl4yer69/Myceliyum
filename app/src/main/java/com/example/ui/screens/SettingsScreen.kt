@@ -36,6 +36,7 @@ fun SettingsScreen(
     val context = LocalContext.current
     val measureUnits by viewModel.measureUnits.collectAsState()
     val mapTheme by viewModel.mapTheme.collectAsState()
+    val appTheme by viewModel.appTheme.collectAsState()
     val userSightings by viewModel.userSightings.collectAsState()
 
     var showExportSuccessDialog by remember { mutableStateOf(false) }
@@ -55,22 +56,69 @@ fun SettingsScreen(
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
-                    text = "FIELD RESEARCH TERMINAL SETTINGS",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
-                    modifier = Modifier.padding(bottom = 4.dp)
-                )
-                Text(
-                    text = "System Preferences & Purge Ports",
+                    text = "Settings",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Preferences and stored data",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp)
                 )
             }
         }
 
         Column(modifier = Modifier.padding(16.dp)) {
+
+            // 0. App theme setting
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(imageVector = Icons.Default.DarkMode, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = "Theme",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Bioluminescent dark for nights in the field, or quiet light for trip planning.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 16.sp
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    listOf("System", "Light", "Dark").forEach { theme ->
+                        val isSelected = appTheme == theme
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = isSelected,
+                                onClick = { viewModel.setAppTheme(theme) },
+                                modifier = Modifier.testTag("app_theme_$theme")
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = theme,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                            )
+                        }
+                    }
+                }
+            }
 
             // 1. Measure Units setting
             Card(
@@ -84,9 +132,8 @@ fun SettingsScreen(
                         Icon(imageVector = Icons.Default.Straighten, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                         Spacer(modifier = Modifier.width(12.dp))
                         Text(
-                            text = "METEOROLOGY MEASUREMENT UNITS",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontFamily = FontFamily.Monospace,
+                            text = "Units",
+                            style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -98,7 +145,7 @@ fun SettingsScreen(
                         listOf("Metric", "Imperial").forEach { unit ->
                             val isSelected = measureUnits == unit
                             ElevatedCard(
-                                onClick = { viewModel.measureUnits.value = unit },
+                                onClick = { viewModel.setMeasureUnits(unit) },
                                 colors = CardDefaults.elevatedCardColors(
                                     containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
                                 ),
@@ -113,10 +160,9 @@ fun SettingsScreen(
                                         .padding(12.dp)
                                 ) {
                                     Text(
-                                        text = unit.uppercase(),
+                                        text = unit,
                                         fontWeight = FontWeight.Bold,
                                         style = MaterialTheme.typography.bodyMedium,
-                                        fontFamily = FontFamily.Monospace,
                                         color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
@@ -138,14 +184,13 @@ fun SettingsScreen(
                         Icon(imageVector = Icons.Default.Map, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                         Spacer(modifier = Modifier.width(12.dp))
                         Text(
-                            text = "TOPOGRAPHICAL MAP FIELD STYLE",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontFamily = FontFamily.Monospace,
+                            text = "Map style",
+                            style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold
                         )
                     }
                     Spacer(modifier = Modifier.height(12.dp))
-                    listOf("Topo Field Plan", "Dark Ecological Radar", "Satellite Microhabitat").forEach { style ->
+                    listOf("Topographic", "Dark", "Standard Street", "Satellite").forEach { style ->
                         val isSelected = mapTheme == style
                         Row(
                             modifier = Modifier
@@ -155,7 +200,7 @@ fun SettingsScreen(
                         ) {
                             RadioButton(
                                 selected = isSelected,
-                                onClick = { viewModel.mapTheme.value = style },
+                                onClick = { viewModel.setMapTheme(style) },
                                 modifier = Modifier.testTag("map_theme_$style")
                             )
                             Spacer(modifier = Modifier.width(8.dp))
@@ -181,15 +226,14 @@ fun SettingsScreen(
                         Icon(imageVector = Icons.Default.Memory, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                         Spacer(modifier = Modifier.width(12.dp))
                         Text(
-                            text = "LOCAL ROOM DATA STORAGE (TTL)",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontFamily = FontFamily.Monospace,
+                            text = "Cached data",
+                            style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold
                         )
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "iNaturalist observations are cached locally to support offline-first exploration. Our database uses a sliding 24-hour cache TTL policy before purging.",
+                        text = "Recent iNaturalist observations are stored locally for 24 hours so the app works offline.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 16.sp
@@ -198,7 +242,7 @@ fun SettingsScreen(
                     Button(
                         onClick = {
                             viewModel.clearCache()
-                            Toast.makeText(context, "iNaturalist database cache flushed completely!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Cache cleared.", Toast.LENGTH_SHORT).show()
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer, contentColor = MaterialTheme.colorScheme.onErrorContainer),
                         modifier = Modifier
@@ -210,10 +254,8 @@ fun SettingsScreen(
                         Icon(imageVector = Icons.Default.DeleteSweep, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "FLUSH OBSERVATIONS CACHE",
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 12.sp
+                            text = "Clear cache",
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
@@ -231,15 +273,14 @@ fun SettingsScreen(
                         Icon(imageVector = Icons.Default.IosShare, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                         Spacer(modifier = Modifier.width(12.dp))
                         Text(
-                            text = "EXPORT SIGHTINGS DATABASE",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontFamily = FontFamily.Monospace,
+                            text = "Export sightings",
+                            style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold
                         )
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Generate and export your local sightings data as a standardized CSV file for import into external GIS packages or QGIS.",
+                        text = "Save your sightings as a CSV file you can open in a spreadsheet or import into a GIS tool.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 16.sp
@@ -248,7 +289,7 @@ fun SettingsScreen(
                     Button(
                         onClick = {
                             if (userSightings.isEmpty()) {
-                                Toast.makeText(context, "No logged sightings available to export. Save a sighting first!", Toast.LENGTH_LONG).show()
+                                Toast.makeText(context, "No sightings to export yet — log one first.", Toast.LENGTH_LONG).show()
                             } else {
                                 val csv = buildCsvString(userSightings)
                                 val filePath = saveCsvFile(context, csv)
@@ -257,7 +298,7 @@ fun SettingsScreen(
                                     exportedCsvFilePath = filePath
                                     showExportSuccessDialog = true
                                 } else {
-                                    Toast.makeText(context, "Failed to compile export file.", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "Couldn't write the CSV file.", Toast.LENGTH_SHORT).show()
                                 }
                             }
                         },
@@ -270,10 +311,8 @@ fun SettingsScreen(
                         Icon(imageVector = Icons.Default.FileDownload, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "EXPORT TO STANDARDIZED CSV",
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 12.sp
+                            text = "Export to CSV",
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
@@ -286,32 +325,29 @@ fun SettingsScreen(
             onDismissRequest = { showExportSuccessDialog = false },
             title = {
                 Text(
-                    text = "CSV DATASET EXPORT PROGRESS",
-                    fontFamily = FontFamily.Monospace,
+                    text = "CSV saved",
                     fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp
+                    fontSize = 16.sp
                 )
             },
             text = {
                 Column {
                     Text(
-                        text = "Data successfully compiled to CSV!",
+                        text = "Your sightings have been written to a CSV file.",
                         style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "File written to:\n$exportedCsvFilePath",
+                        text = exportedCsvFilePath,
                         style = MaterialTheme.typography.bodySmall,
                         fontFamily = FontFamily.Monospace,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = "Dataset Preview:",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontFamily = FontFamily.Monospace,
+                        text = "Preview",
+                        style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(modifier = Modifier.height(4.dp))
@@ -351,7 +387,7 @@ fun SettingsScreen(
                         shareCsvText(context, exportedCsvPreview)
                     }
                 ) {
-                    Text("SHARE CSV DATA")
+                    Text("Share")
                 }
             }
         )

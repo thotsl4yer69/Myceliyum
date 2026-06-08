@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
-    <!-- Maps to context.getExternalFilesDir(Environment.DIRECTORY_PICTURES) -->
-    <external-files-path name="voucher_images" path="Pictures" />
+    <!-- Voucher photos captured by the camera are stored in the app's
+         internal files directory under voucher_photos/. -->
+    <files-path name="voucher_photos" path="voucher_photos/" />
 </paths>

@@ -1,13 +1,12 @@
 package com.example.ui.viewmodel
 
 import android.app.Application
-import android.content.Context
-import androidx.core.content.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.MyceliumApplication
+import com.example.data.local.SettingsStore
 import com.example.data.repository.FungiRepository
 import com.example.model.HotspotCell
 import com.example.model.Observation
@@ -25,13 +24,20 @@ sealed interface HotspotState {
 
 class FungiViewModel(
     application: Application,
-    private val repository: FungiRepository
+    private val repository: FungiRepository,
+    private val settingsStore: SettingsStore
 ) : AndroidViewModel(application) {
 
     // Seed state (ensure database is initialized on start)
     init {
         viewModelScope.launch {
             repository.seedDatabase()
+            speciesList.first { it.isNotEmpty() }.let { list ->
+                if (selectedSpeciesForHotspot.value == null) {
+                    selectedSpeciesForHotspot.value = list.first()
+                    computeHotspots()
+                }
+            }
         }
     }
 
@@ -74,8 +80,12 @@ class FungiViewModel(
 
     // 4. Map & Hotspots Calculation View State
     val mapCenter = MutableStateFlow(Pair(-37.8136, 144.9631)) // Default to Melbourne, Victoria
-    val searchRadiusKm = MutableStateFlow(5.0) // 1.0 to 20.0 km
+    val searchRadiusKm = MutableStateFlow(10.0) // 1.0 to 30.0 km
     val selectedSpeciesForHotspot = MutableStateFlow<Species?>(null)
+    // Default to aggregate ("any fungi") mode so the map populates with rich
+    // evidence as soon as the user opens it during peak season. They can switch
+    // to a specific species via the bottom drawer.
+    val isAllSpeciesMode = MutableStateFlow(true)
 
     private val _hotspotState = MutableStateFlow<HotspotState>(HotspotState.Idle)
     val hotspotState: StateFlow<HotspotState> = _hotspotState.asStateFlow()
@@ -89,56 +99,83 @@ class FungiViewModel(
     private val _isRecomputationsRunning = MutableStateFlow(false)
     val isRecomputationsRunning: StateFlow<Boolean> = _isRecomputationsRunning.asStateFlow()
 
-    // 5. Settings Configuration State (persisted across launches via SharedPreferences)
-    private val prefs = application.getSharedPreferences("mycelium_settings", Context.MODE_PRIVATE)
+    // 5. Settings Configuration State (persisted via DataStore)
+    val measureUnits: StateFlow<String> = settingsStore.measureUnits
+        .stateIn(viewModelScope, SharingStarted.Eagerly, SettingsStore.DEFAULT_UNITS)
+    val mapTheme: StateFlow<String> = settingsStore.mapTheme
+        .stateIn(viewModelScope, SharingStarted.Eagerly, SettingsStore.DEFAULT_MAP_THEME)
+    val appTheme: StateFlow<String> = settingsStore.appTheme
+        .stateIn(viewModelScope, SharingStarted.Eagerly, SettingsStore.DEFAULT_APP_THEME)
+    // Initial value true so the returning-user case doesn't flash the disclaimer
+    // before DataStore has loaded; a brand-new user sees it once it emits false.
+    val splashNoticeAccepted: StateFlow<Boolean> = settingsStore.splashAccepted
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
-    val measureUnits = MutableStateFlow(prefs.getString(KEY_UNITS, "Metric") ?: "Metric") // "Metric" / "Imperial"
-    val mapTheme = MutableStateFlow(prefs.getString(KEY_MAP_THEME, "Topo Field Plan") ?: "Topo Field Plan")
-    val splashNoticeAccepted = MutableStateFlow(prefs.getBoolean(KEY_SPLASH_ACCEPTED, false))
-
-    init {
-        // Persist settings whenever they change so they survive process death.
-        measureUnits.onEach { prefs.edit { putString(KEY_UNITS, it) } }.launchIn(viewModelScope)
-        mapTheme.onEach { prefs.edit { putString(KEY_MAP_THEME, it) } }.launchIn(viewModelScope)
-        splashNoticeAccepted.onEach { prefs.edit { putBoolean(KEY_SPLASH_ACCEPTED, it) } }.launchIn(viewModelScope)
+    fun setMeasureUnits(value: String) {
+        viewModelScope.launch { settingsStore.setMeasureUnits(value) }
     }
 
+    fun setMapTheme(value: String) {
+        viewModelScope.launch { settingsStore.setMapTheme(value) }
+    }
+
+    fun setAppTheme(value: String) {
+        viewModelScope.launch { settingsStore.setAppTheme(value) }
+    }
+
+    fun acceptSplashNotice() {
+        viewModelScope.launch { settingsStore.setSplashAccepted(true) }
+    }
+
+    private var computeJob: kotlinx.coroutines.Job? = null
+
     /**
-     * Recomputes hotspots overlay and pins based on active map parameters
+     * Recomputes hotspot overlay + pins for the current map parameters.
+     * Branches between single-species and aggregate "all species" mode.
      */
     fun computeHotspots() {
-        val species = selectedSpeciesForHotspot.value ?: return
         val (lat, lng) = mapCenter.value
         val radius = searchRadiusKm.value
+        val multiSpecies = isAllSpeciesMode.value
+        val species = selectedSpeciesForHotspot.value
+        if (!multiSpecies && species == null) return
 
-        viewModelScope.launch {
+        computeJob?.cancel()
+        computeJob = viewModelScope.launch {
             _hotspotState.value = HotspotState.Loading
             _isRecomputationsRunning.value = true
             try {
-                // Generate cells
-                val cells = repository.generateHotspots(
-                    species = species,
-                    centerLat = lat,
-                    centerLng = lng,
-                    radiusKm = radius,
-                    forceRefresh = false
-                )
+                val cells = if (multiSpecies) {
+                    repository.generateMultiSpeciesHotspots(lat, lng, radius)
+                } else {
+                    repository.generateHotspots(species!!, lat, lng, radius)
+                }
 
-                // Fetch weather signals for dashboard
                 val weather = repository.getWeatherLast30Days(lat, lng)
                 _weatherSummary.value = weather
 
-                // Fetch pins for rendering
-                val pins = repository.getObservations(species, lat, lng, radius)
-                _observationPins.value = pins
+                // Always populate pins for the current "selected species" — the
+                // Home tab uses these to show recent iNaturalist records. The
+                // map view chooses whether to render them based on mode.
+                _observationPins.value = species?.let {
+                    repository.getObservations(it, lat, lng, radius)
+                } ?: emptyList()
 
                 _hotspotState.value = HotspotState.Success(cells)
             } catch (e: Exception) {
-                _hotspotState.value = HotspotState.Error(e.message ?: "Failed to query research engine.")
+                if (e !is kotlinx.coroutines.CancellationException) {
+                    _hotspotState.value = HotspotState.Error(e.message ?: "Failed to compute hotspots.")
+                }
             } finally {
                 _isRecomputationsRunning.value = false
             }
         }
+    }
+
+    /** Toggle between single-species and aggregate "all species" hotspot mode. */
+    fun setAllSpeciesMode(enabled: Boolean) {
+        isAllSpeciesMode.value = enabled
+        computeHotspots()
     }
 
     /**
@@ -186,6 +223,24 @@ class FungiViewModel(
     }
 
     /**
+     * Exports sightings in Darwin Core format for contribution to
+     * Fungimap/ALA/GBIF biodiversity databases.
+     */
+    private val _darwinCoreExport = MutableStateFlow<String?>(null)
+    val darwinCoreExport: StateFlow<String?> = _darwinCoreExport.asStateFlow()
+
+    fun exportDarwinCore() {
+        viewModelScope.launch {
+            val csv = repository.exportDarwinCore()
+            _darwinCoreExport.value = csv
+        }
+    }
+
+    fun clearExport() {
+        _darwinCoreExport.value = null
+    }
+
+    /**
      * Clear local observation query cache (TTL management)
      */
     fun clearCache() {
@@ -208,16 +263,12 @@ class FungiViewModel(
 
     // Factory Class
     companion object {
-        private const val KEY_UNITS = "measure_units"
-        private const val KEY_MAP_THEME = "map_theme"
-        private const val KEY_SPLASH_ACCEPTED = "splash_notice_accepted"
-
         fun provideFactory(application: Application): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
                     val app = application as MyceliumApplication
-                    return FungiViewModel(application, app.repository) as T
+                    return FungiViewModel(application, app.repository, app.settingsStore) as T
                 }
             }
         }

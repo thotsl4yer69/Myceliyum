@@ -10,7 +10,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.FilterAlt
 import androidx.compose.material3.*
@@ -173,16 +172,15 @@ fun SearchScreen(
                 Column {
                     Column(modifier = Modifier.padding(20.dp)) {
                         Text(
-                            text = "FIELD IDENTIFICATION FILTERS",
+                            text = "Filters",
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary,
-                            fontFamily = FontFamily.Monospace,
                             modifier = Modifier.padding(bottom = 12.dp)
                         )
 
                         // 1. Habitat Filter
-                        Text("Macrohabitat Type:", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                        Text("Habitat", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
                         FlowRow(
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                             modifier = Modifier
@@ -207,7 +205,7 @@ fun SearchScreen(
                         Spacer(modifier = Modifier.height(10.dp))
 
                         // 2. Season Filter
-                        Text("Season Active Month:", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                        Text("Fruiting month", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
                         FlowRow(
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                             modifier = Modifier
@@ -232,7 +230,7 @@ fun SearchScreen(
                         Spacer(modifier = Modifier.height(10.dp))
 
                         // 3. Spore Print Filter
-                        Text("Spore Print Color:", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                        Text("Spore print colour", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
                         FlowRow(
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                             modifier = Modifier
@@ -261,11 +259,11 @@ fun SearchScreen(
                             horizontalArrangement = Arrangement.End
                         ) {
                             TextButton(onClick = { viewModel.resetFilters() }) {
-                                Text("RESET FILTERS")
+                                Text("Reset")
                             }
                             Spacer(modifier = Modifier.width(8.dp))
                             Button(onClick = { showFiltersPanel = false }) {
-                                Text("APPLY FILTERS")
+                                Text("Apply")
                             }
                         }
                     }
@@ -282,9 +280,8 @@ fun SearchScreen(
                 .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
             Text(
-                text = "FOUND ${filteredList.size} SCIENTIFIC REFERENCE TAXA",
+                text = if (filteredList.size == 1) "1 species" else "${filteredList.size} species",
                 style = MaterialTheme.typography.labelSmall,
-                fontFamily = FontFamily.Monospace,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
@@ -307,14 +304,14 @@ fun SearchScreen(
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        text = "No specimen matches the parameters.",
+                        text = "Nothing matches your filters",
                         fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.titleMedium,
                         textAlign = TextAlign.Center
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Try clearing active filters or searching broader taxonomic keywords.",
+                        text = "Try clearing a filter or searching for a broader term.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center
@@ -360,24 +357,39 @@ fun SpeciesItemCard(
                 .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Async Image
-            val context = LocalContext.current
-            val imageReq = remember(species.imageUrls) {
-                ImageRequest.Builder(context)
-                    .data(species.imageUrls.firstOrNull() ?: "")
-                    .crossfade(true)
-                    .build()
-            }
-
-            AsyncImage(
-                model = imageReq,
-                contentDescription = species.scientificName,
+            // Thumbnail — real image if the species ships one, otherwise a
+            // neutral placeholder icon (no stock stand-ins).
+            val ctx = LocalContext.current
+            val firstImage = species.imageUrls.firstOrNull()
+            Box(
                 modifier = Modifier
                     .size(80.dp)
                     .clip(RoundedCornerShape(8.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant),
-                contentScale = ContentScale.Crop
-            )
+                contentAlignment = Alignment.Center
+            ) {
+                if (!firstImage.isNullOrBlank()) {
+                    val imageReq = remember(firstImage) {
+                        ImageRequest.Builder(ctx)
+                            .data(firstImage)
+                            .crossfade(true)
+                            .build()
+                    }
+                    AsyncImage(
+                        model = imageReq,
+                        contentDescription = species.scientificName,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.FilterVintage,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.width(16.dp))
 
@@ -421,7 +433,7 @@ fun SpeciesItemCard(
             }
 
             Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+                imageVector = Icons.Default.ArrowForwardIos,
                 contentDescription = null,
                 modifier = Modifier.size(16.dp),
                 tint = MaterialTheme.colorScheme.primary

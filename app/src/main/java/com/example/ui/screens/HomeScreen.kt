@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import android.location.Geocoder
 import android.text.format.DateUtils
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
@@ -34,6 +35,8 @@ import com.example.model.Observation
 import com.example.model.Species
 import com.example.model.UserSighting
 import com.example.ui.viewmodel.FungiViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -44,17 +47,37 @@ fun HomeScreen(
     onNavigateToSearch: () -> Unit,
     onNavigateToMap: () -> Unit,
     onNavigateToSightings: () -> Unit,
+    onNavigateToSettings: () -> Unit = {},
     onSpeciesSelected: (Species) -> Unit
 ) {
     val speciesList by viewModel.speciesList.collectAsState()
     val userSightings by viewModel.userSightings.collectAsState()
     val mapCenter by viewModel.mapCenter.collectAsState()
+    val isRunning by viewModel.isRecomputationsRunning.collectAsState()
+    val context = LocalContext.current
 
     var searchQuery by remember { mutableStateOf("") }
-    
+
+    // Resolve a real locality name for the current map centre.
+    var currentLocalName by remember { mutableStateOf("Resolving site…") }
+    LaunchedEffect(mapCenter) {
+        currentLocalName = withContext(Dispatchers.IO) {
+            try {
+                val geocoder = Geocoder(context, Locale.getDefault())
+                @Suppress("DEPRECATION")
+                val addresses = geocoder.getFromLocation(mapCenter.first, mapCenter.second, 1)
+                val address = addresses?.firstOrNull()
+                val locality = address?.locality ?: address?.subAdminArea ?: address?.adminArea
+                locality?.takeIf { it.isNotBlank() }
+                    ?: String.format(Locale.US, "%.3f, %.3f", mapCenter.first, mapCenter.second)
+            } catch (e: Exception) {
+                String.format(Locale.US, "%.3f, %.3f", mapCenter.first, mapCenter.second)
+            }
+        }
+    }
+
     // Compute list of observations from cached pins across all species
     val recentObservations by viewModel.observationPins.collectAsState()
-    val isLoadingObservations by viewModel.isRecomputationsRunning.collectAsState()
 
     // Query nearby observations automatically on first launch or when mapCenter changes
     LaunchedEffect(speciesList, mapCenter) {
@@ -80,23 +103,23 @@ fun HomeScreen(
                 title = {
                     Column {
                         Text(
-                            text = "MYCELIUM MAPPER",
+                            text = "Mycilliyums",
                             fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 20.sp,
-                            letterSpacing = 1.5.sp
+                            fontSize = 20.sp
                         )
                         Text(
-                            text = "Victoria Field Mycology Terminal",
+                            text = "Victoria field guide",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontFamily = FontFamily.Monospace
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
                 },
                 actions = {
                     IconButton(onClick = onNavigateToMap) {
                         Icon(imageVector = Icons.Default.Map, contentDescription = "Observation Map")
+                    }
+                    IconButton(onClick = onNavigateToSettings) {
+                        Icon(imageVector = Icons.Default.Settings, contentDescription = "Settings")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -227,14 +250,13 @@ fun HomeScreen(
 
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "CURRENT FIELD GRID STATION",
+                                text = "Your area",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace
+                                fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Dandenong Ranges Sclerophyll Area",
+                                text = currentLocalName,
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
@@ -266,14 +288,13 @@ fun HomeScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "YOUR RECENT FIELD LOGS",
+                        text = "Your recent finds",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace,
                         color = MaterialTheme.colorScheme.onBackground
                     )
                     TextButton(onClick = onNavigateToSightings) {
-                        Text("VIEW ALL (${userSightings.size})")
+                        Text("See all (${userSightings.size})")
                     }
                 }
 
@@ -328,10 +349,9 @@ fun HomeScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "iNATURALIST FIELD TRACKS",
+                        text = "Recent iNaturalist observations",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace,
                         color = MaterialTheme.colorScheme.onBackground
                     )
                 }
@@ -346,33 +366,30 @@ fun HomeScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            if (isLoadingObservations) {
+                            if (isRunning) {
                                 CircularProgressIndicator(modifier = Modifier.size(32.dp))
                                 Spacer(modifier = Modifier.height(12.dp))
                                 Text(
-                                    text = "Fetching nearby iNaturalist research observation layers...",
+                                    text = "Looking for nearby observations…",
                                     style = MaterialTheme.typography.bodySmall,
                                     textAlign = TextAlign.Center,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             } else {
                                 Icon(
-                                    imageVector = Icons.Default.TravelExplore,
+                                    imageVector = Icons.Default.SearchOff,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                                    modifier = Modifier.size(40.dp)
+                                    modifier = Modifier.size(36.dp)
                                 )
                                 Spacer(modifier = Modifier.height(12.dp))
                                 Text(
-                                    text = "No iNaturalist research observations found near this grid station. Widen the search radius or reposition on the Hotspots map.",
+                                    text = "No iNaturalist observations within this area. Try widening the search radius on the Hotspots tab, or pan to a new region.",
                                     style = MaterialTheme.typography.bodySmall,
                                     textAlign = TextAlign.Center,
+                                    lineHeight = 18.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                                Spacer(modifier = Modifier.height(12.dp))
-                                TextButton(onClick = onNavigateToMap) {
-                                    Text("OPEN HOTSPOT MAP")
-                                }
                             }
                         }
                     }
@@ -397,10 +414,9 @@ fun HomeScreen(
                     color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
                 )
                 Text(
-                    text = "Mycelium Mapper Victoria Mycology Division • Offline Room Engine ACTIVE",
+                    text = "Offline-first field guide for Victoria, Australia",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                    fontFamily = FontFamily.Monospace,
                     textAlign = TextAlign.Center,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -449,7 +465,7 @@ fun UserSightingRowCard(
             }
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = sighting.notes.ifEmpty { "Field record without annotations." },
+                text = sighting.notes.ifEmpty { "No notes." },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 2,
@@ -511,24 +527,38 @@ fun ObservationItemRow(
                 .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Thumbnail
-            val context = LocalContext.current
-            val imageReq = remember(observation.photoUrl) {
-                ImageRequest.Builder(context)
-                    .data(observation.photoUrl ?: "https://images.unsplash.com/photo-1599059813005-11265ba4b4ce")
-                    .crossfade(true)
-                    .build()
-            }
-
-            AsyncImage(
-                model = imageReq,
-                contentDescription = title,
+            // Thumbnail — show the iNat photo if there is one, otherwise a
+            // neutral placeholder icon (no stock stand-in image).
+            val ctx = LocalContext.current
+            Box(
                 modifier = Modifier
                     .size(56.dp)
                     .clip(RoundedCornerShape(6.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant),
-                contentScale = ContentScale.Crop
-            )
+                contentAlignment = Alignment.Center
+            ) {
+                if (!observation.photoUrl.isNullOrBlank()) {
+                    val imageReq = remember(observation.photoUrl) {
+                        ImageRequest.Builder(ctx)
+                            .data(observation.photoUrl)
+                            .crossfade(true)
+                            .build()
+                    }
+                    AsyncImage(
+                        model = imageReq,
+                        contentDescription = title,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.FilterVintage,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.width(16.dp))
 
