@@ -162,6 +162,35 @@ class MycoMathTest {
         assertTrue("psilocybe ($psiGrass) should beat generalist ($genGrass) on grassland", psiGrass > genGrass)
     }
 
+    // ─── Habitat gate (the urban counter-weight) ─────────────────────
+
+    @Test
+    fun `built-up and water land cover are gated to near-zero`() {
+        assertTrue("built-up should be heavily gated", MycoMath.habitatGate(50, 0.05, "amanita_muscaria") < 0.2)
+        assertTrue("water should be gated to near-zero", MycoMath.habitatGate(80, -0.1, "amanita_muscaria") < 0.15)
+    }
+
+    @Test
+    fun `forest passes the gate, far above built-up`() {
+        val forest = MycoMath.habitatGate(10, 0.6, "amanita_muscaria")
+        val city = MycoMath.habitatGate(50, 0.0, "amanita_muscaria")
+        assertEquals(1.0, forest, 1e-9)
+        assertTrue("forest ($forest) must dominate city ($city)", forest > city * 3)
+    }
+
+    @Test
+    fun `negative ndvi vetoes a cell even when land cover is unknown`() {
+        // No EE land-cover class, but clearly non-vegetated (pavement/water).
+        assertTrue(MycoMath.habitatGate(null, -0.05, "amanita_muscaria") <= 0.2)
+    }
+
+    @Test
+    fun `psilocybe keeps a floor on urban mulch that forest species do not`() {
+        val psi = MycoMath.habitatGate(50, 0.2, "psilocybe_subaeruginosa")
+        val gen = MycoMath.habitatGate(50, 0.2, "amanita_muscaria")
+        assertTrue("psilocybe ($psi) tolerates built-up better than generalist ($gen)", psi > gen)
+    }
+
     @Test
     fun `rich canopy score blends the three layers within range`() {
         val s = MycoMath.richCanopyScore(canopyPct = 75.0, ndvi = 0.7, worldCoverClass = 10, speciesId = "cortinarius_archeri")

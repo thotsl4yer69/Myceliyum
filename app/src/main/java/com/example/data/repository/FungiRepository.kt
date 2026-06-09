@@ -737,7 +737,17 @@ class FungiRepository(
                 val seasonRainFloor = minOf(seasonScore, rainTriggerScore + 0.2)
                 val penaltyMultiplier = (0.3 + 0.7 * seasonRainFloor).coerceIn(0.0, 1.0)
 
-                val finalScore = (weightedSum * penaltyMultiplier).coerceIn(0.0, 1.0)
+                // Multiplicative HABITAT GATE — built-up/water/bare collapse the
+                // score toward zero so cities, roads and car parks can't rank
+                // high no matter how good the weather or how many records cluster
+                // there. Uses real EE land cover/NDVI when available, else an OSM
+                // canopy-proximity fallback.
+                val habitatGate = if (env != null)
+                    MycoMath.habitatGate(env.landcover.getOrNull(idx), env.ndvi.getOrNull(idx), species.id)
+                else
+                    (0.35 + 0.65 * canopyScore)
+
+                val finalScore = (weightedSum * penaltyMultiplier * habitatGate).coerceIn(0.0, 1.0)
 
                 // ── D. 5-tier classification ────────────────────────
                 val tier = MycoMath.classifyTier(finalScore)
@@ -767,6 +777,7 @@ class FungiRepository(
                 }
                 weather.avgSoilMoisture?.let { factors.add("💧 Soil moisture: ${String.format(Locale.US, "%.2f", it)} m³/m³ → ${String.format(Locale.US, "%.0f", MycoMath.soilMoistureFitness(it) * 100)}%") }
                 if (moonScore > 0.7) factors.add("🌙 Moon phase favourable (traditional signal)")
+                if (habitatGate < 0.95) factors.add("⛔ Habitat gate ×${String.format(Locale.US, "%.2f", habitatGate)} — built-up/water/bare ground suppresses this cell")
                 factors.add("Multi-factor Bayesian estimate — not a guarantee of presence.")
 
                 cells.add(HotspotCell(cellLat, cellLng, finalScore, tier, factors))
@@ -938,7 +949,12 @@ class FungiRepository(
 
                 val seasonRainFloor = minOf(seasonScore, rainTriggerScore + 0.2)
                 val penaltyMultiplier = (0.3 + 0.7 * seasonRainFloor).coerceIn(0.0, 1.0)
-                val finalScore = (weightedSum * penaltyMultiplier).coerceIn(0.0, 1.0)
+                // Habitat gate — suppress built-up/water/bare cells (see single-species note).
+                val habitatGate = if (env != null)
+                    MycoMath.habitatGate(env.landcover.getOrNull(idx), env.ndvi.getOrNull(idx), "aggregate_default")
+                else
+                    (0.35 + 0.65 * canopyScore)
+                val finalScore = (weightedSum * penaltyMultiplier * habitatGate).coerceIn(0.0, 1.0)
 
                 val tier = MycoMath.classifyTier(finalScore)
 
@@ -956,6 +972,7 @@ class FungiRepository(
                 } else {
                     factors.add("🌳 Canopy: ${if (canopyDist != null) "~${String.format(Locale.US, "%.0f m", canopyDist)} to woodland" else "no map data"} → ${String.format(Locale.US, "%.0f", canopyScore * 100)}%")
                 }
+                if (habitatGate < 0.95) factors.add("⛔ Habitat gate ×${String.format(Locale.US, "%.2f", habitatGate)} — built-up/water/bare ground suppresses this cell")
                 if (nearbySpecies.size >= 3) factors.add("🌿 Diversity bonus: ${nearbySpecies.size} distinct species recorded nearby")
                 factors.add("Multi-factor aggregate estimate — not species-specific.")
 
