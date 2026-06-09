@@ -155,6 +155,14 @@ class FungiViewModel(
         }
     }
 
+    /** Reverse-geocodes [lat]/[lng] to a place label for the map header. */
+    fun reverseGeocode(lat: Double, lng: Double, onResult: (String) -> Unit) {
+        viewModelScope.launch {
+            val name = repository.reverseGeocode(lat, lng)
+            onResult(name ?: String.format(java.util.Locale.US, "GPS: %.3f, %.3f", lat, lng))
+        }
+    }
+
     fun computeHotspots() {
         val (lat, lng) = mapCenter.value
         val radius = searchRadiusKm.value

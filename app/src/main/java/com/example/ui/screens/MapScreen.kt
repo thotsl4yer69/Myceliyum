@@ -115,24 +115,9 @@ fun MapScreen(
         manualLngText = String.format(Locale.US, "%.5f", mapCenter.second)
         
         currentLocalName = "Reading coordinates..."
-        withContext(Dispatchers.IO) {
-            try {
-                val geocoder = android.location.Geocoder(context, Locale.getDefault())
-                val addresses = geocoder.getFromLocation(mapCenter.first, mapCenter.second, 1)
-                if (!addresses.isNullOrEmpty()) {
-                    val address = addresses[0]
-                    val city = address.locality ?: address.subAdminArea ?: address.adminArea ?: ""
-                    val country = address.countryCode ?: address.countryName ?: ""
-                    val combined = if (city.isNotEmpty() && country.isNotEmpty()) "$city, $country" 
-                                    else if (city.isNotEmpty()) city 
-                                    else country
-                    currentLocalName = if (combined.isNotEmpty()) combined else "Unmapped Wildlands"
-                } else {
-                    currentLocalName = String.format(Locale.US, "GPS: %.3f, %.3f", mapCenter.first, mapCenter.second)
-                }
-            } catch (e: Exception) {
-                currentLocalName = String.format(Locale.US, "GPS: %.3f, %.3f", mapCenter.first, mapCenter.second)
-            }
+        // Reverse-geocode via the repository (Google when keyed, else device).
+        viewModel.reverseGeocode(mapCenter.first, mapCenter.second) { name ->
+            currentLocalName = name
         }
     }
 
