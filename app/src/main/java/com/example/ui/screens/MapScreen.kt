@@ -1209,10 +1209,18 @@ fun OSMMapView(
 private fun tileSourceForTheme(theme: String): ITileSource = when (theme) {
     "Standard Street" -> TileSourceFactory.MAPNIK
     "Dark" -> TileSourceFactory.MAPNIK // uses color inversion filter
-    "Satellite" -> org.osmdroid.tileprovider.tilesource.XYTileSource(
-        "USGS_SAT", 0, 18, 256, ".jpg",
-        arrayOf("https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/")
-    )
+    "Satellite" -> object : org.osmdroid.tileprovider.tilesource.XYTileSource(
+        "EsriWorldImagery", 0, 19, 256, "",
+        arrayOf("https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/")
+    ) {
+        // Esri/ArcGIS tiles are addressed z/y/x (row before column) — the
+        // default XYTileSource emits z/x/y, which fetches the wrong tiles.
+        // Global imagery; ideal for spotting actual tree canopy when foraging.
+        override fun getTileURLString(pMapTileIndex: Long): String =
+            baseUrl + org.osmdroid.util.MapTileIndex.getZoom(pMapTileIndex) + "/" +
+                org.osmdroid.util.MapTileIndex.getY(pMapTileIndex) + "/" +
+                org.osmdroid.util.MapTileIndex.getX(pMapTileIndex)
+    }
     "Topographic" -> org.osmdroid.tileprovider.tilesource.XYTileSource(
         "OpenTopoMap", 0, 17, 256, ".png",
         arrayOf("https://a.tile.opentopomap.org/", "https://b.tile.opentopomap.org/", "https://c.tile.opentopomap.org/")
