@@ -17,6 +17,7 @@ interface OpenMeteoApi {
         @Query("latitude") limitLat: Double,
         @Query("longitude") limitLng: Double,
         @Query("daily") dailyParams: String = "precipitation_sum,temperature_2m_max,temperature_2m_min",
+        @Query("hourly") hourlyParams: String = "soil_moisture_0_to_7cm",
         @Query("past_days") pastDays: Int = 45,
         @Query("forecast_days") forecastDays: Int = 0,
         @Query("timezone") timezone: String = "auto"
@@ -42,7 +43,13 @@ data class OpenMeteoElevationResponse(
 data class OpenMeteoResponse(
     @Json(name = "latitude") val latitude: Double,
     @Json(name = "longitude") val longitude: Double,
-    @Json(name = "daily") val daily: OpenMeteoDaily
+    @Json(name = "daily") val daily: OpenMeteoDaily,
+    @Json(name = "hourly") val hourly: OpenMeteoHourly? = null
+)
+
+data class OpenMeteoHourly(
+    @Json(name = "time") val time: List<String>?,
+    @Json(name = "soil_moisture_0_to_7cm") val soilMoisture0to7cm: List<Double?>?
 )
 
 data class OpenMeteoDaily(

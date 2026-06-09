@@ -8,6 +8,7 @@ import com.example.data.remote.GBIFApi
 import com.example.data.remote.INatObservation
 import com.example.data.remote.INaturalistApi
 import com.example.data.remote.OpenMeteoApi
+import com.example.data.remote.OverpassApi
 import com.example.model.HotspotCell
 import com.example.model.Observation
 import com.example.model.Species
@@ -33,7 +34,8 @@ class FungiRepository(
     private val iNatApi: INaturalistApi,
     private val openMeteoApi: OpenMeteoApi,
     private val alaApi: ALAApi,
-    private val gbifApi: GBIFApi
+    private val gbifApi: GBIFApi,
+    private val overpassApi: OverpassApi
 ) {
     private val moshi = Moshi.Builder()
         .add(KotlinJsonAdapterFactory())
@@ -302,7 +304,8 @@ class FungiRepository(
         val totalRainfallMm: Double,
         val avgMaxTemp: Double,
         val avgMinTemp: Double,
-        val avgTemp: Double
+        val avgTemp: Double,
+        val avgSoilMoisture: Double? = null // volumetric m³/m³, 0-7cm layer; null if unavailable
     )
 
     suspend fun getDetailedWeather(lat: Double, lng: Double): WeatherData = withContext(Dispatchers.IO) {
@@ -321,8 +324,12 @@ class FungiRepository(
             val avgMax = if (maxTemps.isNotEmpty()) maxTemps.average() else 15.0
             val avgMin = if (minTemps.isNotEmpty()) minTemps.average() else 8.0
 
-            Log.d(TAG, "Weather (${rainfall.size} days): Rain: ${totalRainfall}mm, AvgMax: ${avgMax}C, AvgMin: ${avgMin}C")
-            WeatherData(rainfall, totalRainfall, avgMax, avgMin, (avgMax + avgMin) / 2.0)
+            // Recent soil moisture (last ~7 days of hourly readings, 0-7cm layer).
+            val soil = response.hourly?.soilMoisture0to7cm?.mapNotNull { it } ?: emptyList()
+            val avgSoil = if (soil.isNotEmpty()) soil.takeLast(minOf(168, soil.size)).average() else null
+
+            Log.d(TAG, "Weather (${rainfall.size} days): Rain: ${totalRainfall}mm, AvgMax: ${avgMax}C, AvgMin: ${avgMin}C, Soil: $avgSoil")
+            WeatherData(rainfall, totalRainfall, avgMax, avgMin, (avgMax + avgMin) / 2.0, avgSoil)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to fetch detailed weather, using Victorian autumn defaults", e)
             // Default: moderate Victorian autumn conditions
@@ -354,6 +361,50 @@ class FungiRepository(
         // Guarantee 1:1 alignment even on partial/failed responses.
         while (result.size < coords.size) result.add(null)
         result
+    }
+
+    /**
+     * Fetches canopy/green-cover features (woods, forests, parks, reserves)
+     * within a bounding box from OpenStreetMap's Overpass API (free, no key).
+     * Returns representative coordinates; empty on failure so callers fall
+     * back to neutral canopy scoring.
+     */
+    suspend fun fetchCanopyFeatures(
+        minLat: Double, minLng: Double, maxLat: Double, maxLng: Double
+    ): List<Pair<Double, Double>> = withContext(Dispatchers.IO) {
+        try {
+            val bbox = String.format(Locale.US, "%.5f,%.5f,%.5f,%.5f", minLat, minLng, maxLat, maxLng)
+            val ql = """
+                [out:json][timeout:25];
+                (
+                  way["natural"="wood"]($bbox);
+                  way["landuse"="forest"]($bbox);
+                  way["leisure"="park"]($bbox);
+                  way["boundary"="protected_area"]($bbox);
+                );
+                out center;
+            """.trimIndent()
+            val resp = overpassApi.query(ql)
+            resp.elements.orEmpty().mapNotNull { el ->
+                val la = el.resolvedLat()
+                val lo = el.resolvedLon()
+                if (la != null && lo != null) la to lo else null
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Canopy (Overpass) fetch failed, neutral canopy: ${e.message}")
+            emptyList()
+        }
+    }
+
+    /** Distance (m) to the nearest green feature, or null if none provided. */
+    private fun nearestFeatureMeters(lat: Double, lng: Double, features: List<Pair<Double, Double>>): Double? {
+        if (features.isEmpty()) return null
+        var best = Double.MAX_VALUE
+        for ((flat, flng) in features) {
+            val d = calculateDistanceMeters(lat, lng, flat, flng)
+            if (d < best) best = d
+        }
+        return best
     }
 
     /**
@@ -394,18 +445,20 @@ class FungiRepository(
      * Multi-factor Bayesian hotspot prediction engine (500m resolution).
      *
      * Scoring factors and weights (sum to 1.0):
-     *   1. Observation evidence (iNat + ALA + GBIF + user)          — 0.27
-     *   2. Seasonal fitness (week-level precision)                 — 0.18
-     *   3. Rainfall trigger (20mm+ event 10-21 days ago with lag)  — 0.14
-     *   4. Terrain moisture (per-cell slope/concavity from DEM)    — 0.10
-     *   5. Habitat suitability (species substrate/habitat breadth) — 0.10
-     *   6. Temperature fitness (species-specific ideal range)      — 0.08
+     *   1. Observation evidence (iNat + ALA + GBIF + user)          — 0.24
+     *   2. Seasonal fitness (week-level precision)                 — 0.16
+     *   3. Rainfall trigger (20mm+ event 10-21 days ago with lag)  — 0.12
+     *   4. Canopy/forest proximity (per-cell, OSM Overpass)        — 0.12
+     *   5. Terrain moisture (per-cell slope/concavity from DEM)    — 0.08
+     *   6. Habitat suitability (species substrate/habitat breadth) — 0.08
      *   7. Elevation fitness (per-cell altitude vs species band)   — 0.06
-     *   8. Background moisture (sustained soil moisture proxy)     — 0.04
-     *   9. Moon phase (optional, traditional forager signal)       — 0.03
+     *   8. Temperature fitness (species-specific ideal range)      — 0.06
+     *   9. Slope aspect (per-cell; south/east-facing favoured)     — 0.04
+     *  10. Background moisture (rainfall + real 0-7cm soil moisture)— 0.03
+     *  11. Moon phase (optional, traditional forager signal)       — 0.01
      *
-     * Factors 4 and 7 use real per-cell ground elevation, so the map varies
-     * with genuine landform instead of only observation-record density.
+     * Factors 4, 5, 7 and 9 vary cell-to-cell (real elevation + OSM canopy),
+     * so the map reflects genuine landscape instead of only record density.
      * Each factor produces a 0.0–1.0 score; the final score is their weighted
      * combination, then gated by a season/rain penalty multiplier.
      */
@@ -442,11 +495,16 @@ class FungiRepository(
 
         // 3d. Background moisture proxy (sustained rain, not just trigger events)
         val recentRain30d = weather.dailyRainfallMm.takeLast(minOf(30, weather.dailyRainfallMm.size)).sum()
-        val moistureScore = when {
+        val rainMoistureScore = when {
             recentRain30d in 40.0..180.0 -> 1.0
             recentRain30d < 40.0 -> recentRain30d / 40.0
             else -> maxOf(0.3, 1.0 - (recentRain30d - 180.0) / 200.0)
         }
+        // Blend in real 0-7cm soil moisture when available — a far better
+        // dampness signal than rainfall totals alone.
+        val soilMoistureScore = weather.avgSoilMoisture?.let { MycoMath.soilMoistureFitness(it) }
+        val moistureScore = if (soilMoistureScore != null)
+            (0.4 * rainMoistureScore + 0.6 * soilMoistureScore) else rainMoistureScore
 
         // 3e. Moon phase (low-weight traditional signal)
         val moonScore = MycoMath.moonFruitingScore(nowMs)
@@ -479,10 +537,16 @@ class FungiRepository(
         }
 
         // 4b. Per-cell ground elevation (Open-Meteo, no key). Build a lookup
-        // so each cell can read its neighbours' elevations for slope/concavity.
+        // so each cell can read its neighbours' elevations for slope/aspect.
         val elevations = fetchElevations(cellLL)
         val elevByIJ = HashMap<Pair<Int, Int>, Double>()
         cellIJ.forEachIndexed { idx, ij -> elevations[idx]?.let { elevByIJ[ij] = it } }
+
+        // 4c. Canopy/forest features across the grid (OSM Overpass, no key).
+        val canopy = if (cellLL.isNotEmpty()) fetchCanopyFeatures(
+            cellLL.minOf { it.first }, cellLL.minOf { it.second },
+            cellLL.maxOf { it.first }, cellLL.maxOf { it.second }
+        ) else emptyList()
 
         for (idx in cellIJ.indices) {
             coroutineContext.ensureActive()
@@ -541,32 +605,45 @@ class FungiRepository(
                     MycoMath.elevationFitness(cellElev, species.id) else 0.6
                 val terrainScore = if (cellElev != null && neighbourElevs.isNotEmpty())
                     MycoMath.terrainMoistureScore(cellElev, neighbourElevs) else 0.5
+                // Slope aspect (south/east-facing favoured in S. Hemisphere).
+                val aspectScore = if (cellElev != null) MycoMath.slopeAspectMoistureScore(
+                    cellElev,
+                    elevByIJ[(i + 1) to j], elevByIJ[(i - 1) to j],
+                    elevByIJ[i to (j + 1)], elevByIJ[i to (j - 1)]
+                ) else 0.7
+                // Canopy/forest proximity (mycorrhizal & wood-rotting species).
+                val canopyDist = if (canopy.isEmpty()) null else nearestFeatureMeters(cellLat, cellLng, canopy)
+                val canopyScore = MycoMath.canopyProximityScore(canopyDist)
 
                 // ── C. Weighted factor combination ──────────────────
-                // Evidence stays dominant; terrain + elevation now add real
-                // per-cell differentiation alongside the global climate
-                // factors. Weights sum to 1.0.
+                // Evidence stays dominant; terrain, elevation, aspect and
+                // canopy give real per-cell differentiation alongside the
+                // global climate factors. Weights sum to 1.0.
                 val adjustedHabitat = (habitatScore * habitatWeight).coerceIn(0.0, 1.0)
 
                 val factorWeights = mapOf(
-                    "evidence"    to 0.27,
-                    "season"      to 0.18,
-                    "rainTrigger" to 0.14,
-                    "terrain"     to 0.10,
-                    "habitat"     to 0.10,
-                    "temperature" to 0.08,
+                    "evidence"    to 0.24,
+                    "season"      to 0.16,
+                    "rainTrigger" to 0.12,
+                    "canopy"      to 0.12,
+                    "terrain"     to 0.08,
+                    "habitat"     to 0.08,
                     "elevation"   to 0.06,
-                    "moisture"    to 0.04,
-                    "moon"        to 0.03
+                    "temperature" to 0.06,
+                    "aspect"      to 0.04,
+                    "moisture"    to 0.03,
+                    "moon"        to 0.01
                 )
                 val factorScores = mapOf(
                     "evidence"    to observationScore,
                     "season"      to seasonScore,
                     "rainTrigger" to rainTriggerScore,
+                    "canopy"      to canopyScore,
                     "terrain"     to terrainScore,
                     "habitat"     to adjustedHabitat,
-                    "temperature" to tempScore,
                     "elevation"   to elevationScore,
+                    "temperature" to tempScore,
+                    "aspect"      to aspectScore,
                     "moisture"    to moistureScore,
                     "moon"        to moonScore
                 )
@@ -601,7 +678,9 @@ class FungiRepository(
                 factors.add("🌲 Habitat: ${species.habitatTypes.joinToString(", ")} → ${String.format(Locale.US, "%.0f", adjustedHabitat * 100)}%")
                 factors.add("🪵 Substrate: ${species.substrates.joinToString(", ")}")
                 factors.add("⛰️ Elevation: ${if (cellElev != null) String.format(Locale.US, "%.0f m", cellElev) else "n/a"} → ${String.format(Locale.US, "%.0f", elevationScore * 100)}% fit")
-                factors.add("🏞️ Terrain (slope/moisture): ${String.format(Locale.US, "%.0f", terrainScore * 100)}%")
+                factors.add("🏞️ Terrain (slope/moisture): ${String.format(Locale.US, "%.0f", terrainScore * 100)}% | Aspect: ${String.format(Locale.US, "%.0f", aspectScore * 100)}%")
+                factors.add("🌳 Canopy: ${if (canopyDist != null) "~${String.format(Locale.US, "%.0f m", canopyDist)} to woodland" else "no map data"} → ${String.format(Locale.US, "%.0f", canopyScore * 100)}%")
+                weather.avgSoilMoisture?.let { factors.add("💧 Soil moisture: ${String.format(Locale.US, "%.2f", it)} m³/m³ → ${String.format(Locale.US, "%.0f", MycoMath.soilMoistureFitness(it) * 100)}%") }
                 if (moonScore > 0.7) factors.add("🌙 Moon phase favourable (traditional signal)")
                 factors.add("Multi-factor Bayesian estimate — not a guarantee of presence.")
 
@@ -659,11 +738,14 @@ class FungiRepository(
         val rainTriggerScore = MycoMath.rainfallTriggerScore(weather.dailyRainfallMm)
         val tempScore = MycoMath.temperatureFitness(weather.avgTemp, "aggregate_default")
         val recentRain30d = weather.dailyRainfallMm.takeLast(minOf(30, weather.dailyRainfallMm.size)).sum()
-        val moistureScore = when {
+        val rainMoistureScore = when {
             recentRain30d in 40.0..180.0 -> 1.0
             recentRain30d < 40.0 -> recentRain30d / 40.0
             else -> maxOf(0.3, 1.0 - (recentRain30d - 180.0) / 200.0)
         }
+        val soilMoistureScore = weather.avgSoilMoisture?.let { MycoMath.soilMoistureFitness(it) }
+        val moistureScore = if (soilMoistureScore != null)
+            (0.4 * rainMoistureScore + 0.6 * soilMoistureScore) else rainMoistureScore
         val moonScore = MycoMath.moonFruitingScore(nowMs)
 
         val latStep = 0.0045
@@ -688,6 +770,11 @@ class FungiRepository(
         val elevations = fetchElevations(cellLL)
         val elevByIJ = HashMap<Pair<Int, Int>, Double>()
         cellIJ.forEachIndexed { idx, ij -> elevations[idx]?.let { elevByIJ[ij] = it } }
+
+        val canopy = if (cellLL.isNotEmpty()) fetchCanopyFeatures(
+            cellLL.minOf { it.first }, cellLL.minOf { it.second },
+            cellLL.maxOf { it.first }, cellLL.maxOf { it.second }
+        ) else emptyList()
 
         for (idx in cellIJ.indices) {
             coroutineContext.ensureActive()
@@ -740,17 +827,26 @@ class FungiRepository(
                     MycoMath.elevationFitness(cellElev, "aggregate_default") else 0.6
                 val terrainScore = if (cellElev != null && neighbourElevs.isNotEmpty())
                     MycoMath.terrainMoistureScore(cellElev, neighbourElevs) else 0.5
+                val aspectScore = if (cellElev != null) MycoMath.slopeAspectMoistureScore(
+                    cellElev,
+                    elevByIJ[(i + 1) to j], elevByIJ[(i - 1) to j],
+                    elevByIJ[i to (j + 1)], elevByIJ[i to (j - 1)]
+                ) else 0.7
+                val canopyDist = if (canopy.isEmpty()) null else nearestFeatureMeters(cellLat, cellLng, canopy)
+                val canopyScore = MycoMath.canopyProximityScore(canopyDist)
 
                 // Weighted combination (weights sum to 1.0)
-                val weightedSum = 0.27 * observationScore +
-                        0.18 * seasonScore +
-                        0.14 * rainTriggerScore +
-                        0.10 * terrainScore +
-                        0.10 * 0.7 + // Aggregate habitat baseline (diverse catalogue)
-                        0.08 * tempScore +
+                val weightedSum = 0.24 * observationScore +
+                        0.16 * seasonScore +
+                        0.12 * rainTriggerScore +
+                        0.12 * canopyScore +
+                        0.08 * terrainScore +
+                        0.08 * 0.7 + // Aggregate habitat baseline (diverse catalogue)
                         0.06 * elevationScore +
-                        0.04 * moistureScore +
-                        0.03 * moonScore
+                        0.06 * tempScore +
+                        0.04 * aspectScore +
+                        0.03 * moistureScore +
+                        0.01 * moonScore
 
                 val seasonRainFloor = minOf(seasonScore, rainTriggerScore + 0.2)
                 val penaltyMultiplier = (0.3 + 0.7 * seasonRainFloor).coerceIn(0.0, 1.0)
@@ -764,7 +860,8 @@ class FungiRepository(
                 factors.add("📅 $inSeasonCount of ${allSpecies.size} species fruiting in ${monthName(currentMonth)} → ${String.format(Locale.US, "%.0f", seasonScore * 100)}%")
                 factors.add("🌧️ Rain trigger (10-21d lag): ${String.format(Locale.US, "%.0f", rainTriggerScore * 100)}% | Background moisture: ${String.format(Locale.US, "%.0f", recentRain30d)}mm/30d")
                 factors.add("🌡️ Avg temp ${String.format(Locale.US, "%.1f", weather.avgTemp)}°C → ${String.format(Locale.US, "%.0f", tempScore * 100)}%")
-                factors.add("⛰️ Elevation: ${if (cellElev != null) String.format(Locale.US, "%.0f m", cellElev) else "n/a"} → ${String.format(Locale.US, "%.0f", elevationScore * 100)}% | 🏞️ Terrain: ${String.format(Locale.US, "%.0f", terrainScore * 100)}%")
+                factors.add("⛰️ Elevation: ${if (cellElev != null) String.format(Locale.US, "%.0f m", cellElev) else "n/a"} → ${String.format(Locale.US, "%.0f", elevationScore * 100)}% | 🏞️ Terrain: ${String.format(Locale.US, "%.0f", terrainScore * 100)}% | Aspect: ${String.format(Locale.US, "%.0f", aspectScore * 100)}%")
+                factors.add("🌳 Canopy: ${if (canopyDist != null) "~${String.format(Locale.US, "%.0f m", canopyDist)} to woodland" else "no map data"} → ${String.format(Locale.US, "%.0f", canopyScore * 100)}%")
                 if (nearbySpecies.size >= 3) factors.add("🌿 Diversity bonus: ${nearbySpecies.size} distinct species recorded nearby")
                 factors.add("Multi-factor aggregate estimate — not species-specific.")
 

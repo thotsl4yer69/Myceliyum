@@ -7,6 +7,7 @@ import com.example.data.remote.ALAApi
 import com.example.data.remote.GBIFApi
 import com.example.data.remote.INaturalistApi
 import com.example.data.remote.OpenMeteoApi
+import com.example.data.remote.OverpassApi
 import com.example.data.repository.FungiRepository
 import org.osmdroid.config.Configuration as OsmConfig
 import com.squareup.moshi.Moshi
@@ -76,11 +77,18 @@ class MyceliumApplication : Application() {
             .addConverterFactory(MoshiConverterFactory.create(moshi))
             .build()
 
+        val overpassRetrofit = Retrofit.Builder()
+            .baseUrl("https://overpass-api.de/")
+            .client(okHttpClient)
+            .addConverterFactory(MoshiConverterFactory.create(moshi))
+            .build()
+
         val iNatApi = iNatRetrofit.create(INaturalistApi::class.java)
         val openMeteoApi = openMeteoRetrofit.create(OpenMeteoApi::class.java)
         val alaApi = alaRetrofit.create(ALAApi::class.java)
         val gbifApi = gbifRetrofit.create(GBIFApi::class.java)
+        val overpassApi = overpassRetrofit.create(OverpassApi::class.java)
 
-        repository = FungiRepository(this, database.fungiDao(), iNatApi, openMeteoApi, alaApi, gbifApi)
+        repository = FungiRepository(this, database.fungiDao(), iNatApi, openMeteoApi, alaApi, gbifApi, overpassApi)
     }
 }

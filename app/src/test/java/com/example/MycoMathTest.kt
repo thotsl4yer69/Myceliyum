@@ -95,4 +95,42 @@ class MycoMathTest {
     fun `terrain score with no neighbour data falls back to neutral`() {
         assertEquals(0.5, MycoMath.terrainMoistureScore(300.0, emptyList()), 1e-9)
     }
+
+    // ─── Slope aspect (Southern Hemisphere) ──────────────────────────
+
+    @Test
+    fun `south-facing slope scores higher than north-facing`() {
+        // South-facing: north neighbour higher, south neighbour lower.
+        val southFacing = MycoMath.slopeAspectMoistureScore(
+            elevCenter = 300.0, elevNorth = 330.0, elevSouth = 270.0, elevEast = 300.0, elevWest = 300.0
+        )
+        // North-facing: the reverse.
+        val northFacing = MycoMath.slopeAspectMoistureScore(
+            elevCenter = 300.0, elevNorth = 270.0, elevSouth = 330.0, elevEast = 300.0, elevWest = 300.0
+        )
+        assertTrue("south ($southFacing) should beat north ($northFacing)", southFacing > northFacing)
+    }
+
+    @Test
+    fun `flat ground gives a neutral aspect score`() {
+        val flat = MycoMath.slopeAspectMoistureScore(300.0, 300.0, 300.0, 300.0, 300.0)
+        assertEquals(0.70, flat, 1e-9)
+    }
+
+    // ─── Soil moisture ───────────────────────────────────────────────
+
+    @Test
+    fun `ideal damp soil scores full, bone-dry scores low`() {
+        assertEquals(1.0, MycoMath.soilMoistureFitness(0.32), 1e-9)
+        assertTrue(MycoMath.soilMoistureFitness(0.05) < 0.3)
+    }
+
+    // ─── Canopy proximity ────────────────────────────────────────────
+
+    @Test
+    fun `closer woodland scores higher, and missing data is neutral`() {
+        assertEquals(1.0, MycoMath.canopyProximityScore(50.0), 1e-9)
+        assertTrue(MycoMath.canopyProximityScore(100.0) > MycoMath.canopyProximityScore(2000.0))
+        assertEquals(0.6, MycoMath.canopyProximityScore(null), 1e-9)
+    }
 }

@@ -1,25 +1,31 @@
 # Changes — completion & stabilization pass
 
-## Prediction engine — per-cell terrain (accuracy upgrade)
+## Prediction engine — real per-cell environment (accuracy upgrade)
 
-Previously, only **observation density** varied between grid cells; season,
-rain, temperature, moisture, moon and habitat were computed once for the map
-centre and applied uniformly, so the map only looked "hot" where records
-clustered. Two genuinely per-cell inputs were added so scores reflect real
+Previously, only **observation density** varied between grid cells; every
+climate/habitat factor was computed once for the map centre and applied
+uniformly, so the map only looked "hot" where records clustered. Several
+genuinely per-cell, real-data inputs were added so scores reflect the actual
 landscape:
 
 - **Elevation fitness** — real ground elevation per cell (Open-Meteo's free,
-  no-key elevation API, batched ≤100 points/request) matched against a
-  species-specific altitude band.
-- **Terrain moisture** — local slope and concavity derived from neighbouring
-  cells' elevations: gentle slopes and concave hollows/gully heads (which hold
-  moisture and litter) score up; exposed local highs and steep faces score down.
+  no-key elevation API, batched ≤100 points/request) vs a species altitude band.
+- **Terrain moisture** — local slope + concavity from neighbouring cells'
+  elevations (gentle slopes / concave hollows score up; exposed highs down).
+- **Slope aspect** — south/east-facing slopes (cooler, moister in the Southern
+  Hemisphere) favoured, derived from the elevation gradient across the cell.
+- **Canopy/forest proximity** — distance to mapped woods/forest/parks/reserves
+  from OpenStreetMap's Overpass API (free, no key), a strong signal for
+  mycorrhizal and wood-rotting fungi.
+- **Soil moisture** — real 0–7 cm volumetric soil moisture (Open-Meteo hourly)
+  blended into the background-moisture factor, replacing rainfall totals alone.
 
-Factor weights were rebalanced to sum to 1.0 (evidence 0.27, season 0.18, rain
-0.14, **terrain 0.10**, habitat 0.10, temperature 0.08, **elevation 0.06**,
-moisture 0.04, moon 0.03). Elevation fetch failures degrade gracefully to
-neutral terrain so scoring never breaks offline. New pure helpers
-(`elevationFitness`, `terrainMoistureScore`) are unit-tested in `MycoMathTest`.
+Factor weights rebalanced to sum to 1.0 (evidence 0.24, season 0.16, rain 0.12,
+**canopy 0.12**, terrain 0.08, habitat 0.08, elevation 0.06, temperature 0.06,
+**aspect 0.04**, moisture 0.03, moon 0.01). Every external fetch degrades
+gracefully (neutral score) so prediction never breaks offline. New pure helpers
+(`elevationFitness`, `terrainMoistureScore`, `slopeAspectMoistureScore`,
+`soilMoistureFitness`, `canopyProximityScore`) are unit-tested in `MycoMathTest`.
 
 ---
 

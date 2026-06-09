@@ -296,6 +296,65 @@ object MycoMath {
         return (0.5 * slopeScore + 0.5 * concavityScore).coerceIn(0.0, 1.0)
     }
 
+    /**
+     * Slope-aspect moisture suitability (0.0–1.0) for the Southern Hemisphere.
+     *
+     * The sun sits to the north, so **south-facing** slopes stay cooler, shadier
+     * and moister (prime fungal ground), while north-facing slopes dry out.
+     * East-facing slopes (gentle morning sun) are mildly preferred over
+     * west-facing (harsh afternoon sun). Aspect is derived from the elevation
+     * difference across the cell, so flat ground scores neutrally.
+     *
+     * Pass the centre elevation plus its four cardinal neighbours; missing
+     * neighbours fall back to the centre (→ zero gradient → neutral).
+     */
+    fun slopeAspectMoistureScore(
+        elevCenter: Double,
+        elevNorth: Double?,
+        elevSouth: Double?,
+        elevEast: Double?,
+        elevWest: Double?
+    ): Double {
+        val n = elevNorth ?: elevCenter
+        val s = elevSouth ?: elevCenter
+        val e = elevEast ?: elevCenter
+        val w = elevWest ?: elevCenter
+        // +southness ⇒ terrain falls away to the south ⇒ south-facing.
+        val southness = ((n - s) / 30.0).coerceIn(-1.0, 1.0)
+        // +eastness ⇒ terrain falls away to the east ⇒ east-facing.
+        val eastness = ((w - e) / 30.0).coerceIn(-1.0, 1.0)
+        return (0.70 + 0.25 * southness + 0.05 * eastness).coerceIn(0.0, 1.0)
+    }
+
+    /**
+     * Soil-moisture suitability (0.0–1.0) from volumetric water content
+     * (m³/m³, as reported by Open-Meteo's 0–7 cm soil layer). Most fungi
+     * fruit best in consistently damp — but not waterlogged — soil.
+     */
+    fun soilMoistureFitness(vwc: Double): Double = when {
+        vwc <= 0.0 -> 0.0
+        vwc < 0.15 -> vwc / 0.15 * 0.5                       // dry
+        vwc < 0.25 -> 0.5 + (vwc - 0.15) / 0.10 * 0.4        // improving
+        vwc <= 0.40 -> 1.0                                   // ideal damp range
+        vwc <= 0.50 -> 1.0 - (vwc - 0.40) / 0.10 * 0.3       // getting waterlogged
+        else -> 0.6
+    }.coerceIn(0.0, 1.0)
+
+    /**
+     * Canopy/forest proximity suitability (0.0–1.0). Most target fungi are
+     * woodland species (mycorrhizal or wood-rotting), so cells in or near
+     * mapped forest/wood/park features score higher. [distanceMeters] is the
+     * distance to the nearest such feature, or null when canopy data is
+     * unavailable (→ neutral, so the factor doesn't penalise on a failed fetch).
+     */
+    fun canopyProximityScore(distanceMeters: Double?): Double = when {
+        distanceMeters == null -> 0.6
+        distanceMeters <= 150.0 -> 1.0                                          // inside/at the treeline
+        distanceMeters <= 1500.0 -> 1.0 - (distanceMeters - 150.0) / 1350.0 * 0.7 // 1.0 → 0.3
+        distanceMeters <= 3000.0 -> 0.3 - (distanceMeters - 1500.0) / 1500.0 * 0.2 // 0.3 → 0.1
+        else -> 0.1
+    }.coerceIn(0.0, 1.0)
+
     // ─── Moon phase (optional factor) ────────────────────────────────
 
     /**
