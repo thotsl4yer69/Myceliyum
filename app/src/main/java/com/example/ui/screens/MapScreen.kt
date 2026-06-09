@@ -87,6 +87,7 @@ fun MapScreen(
     val isRunning by viewModel.isRecomputationsRunning.collectAsState()
 
     var showSpeciesDropdown by remember { mutableStateOf(false) }
+    var showPresets by remember { mutableStateOf(false) }
     var selectedHotspotCell by remember { mutableStateOf<HotspotCell?>(null) }
     var isFullscreen by remember { mutableStateOf(false) }
     var currentBottomTab by remember { mutableStateOf(0) } // 0 = Parameters, 1 = Hotspots Registry
@@ -468,19 +469,33 @@ fun MapScreen(
                             }
                         }
 
-                        // B. Famous Fungal Hotspots Quick Presets Row
+                        // B. Quick presets — collapsed by default to keep the
+                        // card compact so it doesn't block the map.
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = if (showPresets) "▴ Hide quick spots" else "▾ Quick spots (Victoria)",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .clickable { showPresets = !showPresets }
+                                .padding(vertical = 2.dp)
+                                .testTag("presets_toggle")
+                        )
+                        androidx.compose.animation.AnimatedVisibility(visible = showPresets) {
                         LazyRow(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                             contentPadding = PaddingValues(horizontal = 4.dp)
                         ) {
                             val presetSites = listOf(
-                                PresetLoc("🌲 Redwood Valley, CA", 41.2758, -124.0321),
-                                PresetLoc("🍂 Dandenong Ranges, AU", -37.8386, 145.3524),
-                                PresetLoc("🍄 Black Forest, DE", 47.9959, 8.2523),
-                                PresetLoc("🏰 Sherwood Forest, UK", 53.2033, -1.0741),
-                                PresetLoc("🏔️ Mt Rainier, WA", 46.8523, -121.7603),
-                                PresetLoc("🏕️ Shenandoah Valley, VA", 38.4862, -78.6186)
+                                PresetLoc("🍂 Dandenong Ranges", -37.8386, 145.3524),
+                                PresetLoc("🌲 Sherbrooke Forest", -37.8896, 145.3580),
+                                PresetLoc("🌿 Otway Ranges", -38.6500, 143.5500),
+                                PresetLoc("🌲 Toolangi Forest", -37.5300, 145.4700),
+                                PresetLoc("🏞️ Kinglake NP", -37.5200, 145.3500),
+                                PresetLoc("🏔️ Wombat Forest", -37.4500, 144.3000),
+                                PresetLoc("🍄 Wilsons Prom", -39.0300, 146.3200)
                             )
                             items(presetSites) { preset ->
                                 AssistChip(
@@ -499,6 +514,7 @@ fun MapScreen(
                                     modifier = Modifier.testTag("preset_${preset.name.replace(" ", "_")}")
                                 )
                             }
+                        }
                         }
                     }
                     } // end AnimatedVisibility for search bar
