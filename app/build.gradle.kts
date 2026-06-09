@@ -1,72 +1,88 @@
+import java.util.Properties
+
 plugins {
   alias(libs.plugins.android.application)
+  alias(libs.plugins.kotlin.android)
   alias(libs.plugins.kotlin.compose)
   alias(libs.plugins.google.devtools.ksp)
-  alias(libs.plugins.roborazzi)
-  alias(libs.plugins.secrets)
 }
 
 android {
   namespace = "com.example"
-  compileSdk { version = release(36) { minorApiLevel = 1 } }
+  compileSdk = 35
 
   defaultConfig {
     applicationId = "com.aistudio.myceliummapper.vcfqka"
     minSdk = 24
-    targetSdk = 36
+    targetSdk = 35
     versionCode = 1
     versionName = "1.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-  }
 
-  // Release signing is driven by environment variables (set them as CI secrets or
-  // in your local shell). When they're absent we fall back to the debug key so a
-  // release-type build still produces an APK that installs on a real device — it
-  // just isn't upload-ready for the Play Store.
-  val releaseStoreFile = file(
-      System.getenv("KEYSTORE_PATH")?.takeIf { it.isNotBlank() } ?: "${rootDir}/my-upload-key.jks"
-  )
-  val hasReleaseSigning = releaseStoreFile.exists() &&
-      !System.getenv("STORE_PASSWORD").isNullOrBlank() &&
-      !System.getenv("KEY_PASSWORD").isNullOrBlank()
+    // Read Anthropic API key from local.properties (not checked into VCS)
+    val localProps = Properties()
+    val localPropsFile = rootProject.file("local.properties")
+    if (localPropsFile.exists()) {
+      localPropsFile.inputStream().use { localProps.load(it) }
+    }
+    buildConfigField(
+      "String",
+      "ANTHROPIC_API_KEY",
+      "\"${localProps.getProperty("ANTHROPIC_API_KEY", "")}\""
+    )
+    // Google Cloud API key (Geocoding / Elevation / Vision). Read from
+    // local.properties or the GOOGLE_API_KEY env var (CI) — never committed.
+    buildConfigField(
+      "String",
+      "GOOGLE_API_KEY",
+      "\"${localProps.getProperty("GOOGLE_API_KEY", System.getenv("GOOGLE_API_KEY") ?: "")}\""
+    )
+    // Earth Engine layers backend (Cloud Run). Blank = use free OSM canopy.
+    buildConfigField(
+      "String",
+      "BACKEND_BASE_URL",
+      "\"${localProps.getProperty("BACKEND_BASE_URL", System.getenv("BACKEND_BASE_URL") ?: "")}\""
+    )
+    buildConfigField(
+      "String",
+      "BACKEND_TOKEN",
+      "\"${localProps.getProperty("BACKEND_TOKEN", System.getenv("BACKEND_TOKEN") ?: "")}\""
+    )
+  }
 
   signingConfigs {
     create("release") {
-      if (hasReleaseSigning) {
-        storeFile = releaseStoreFile
-        storePassword = System.getenv("STORE_PASSWORD")
-        keyAlias = System.getenv("KEY_ALIAS") ?: "upload"
-        keyPassword = System.getenv("KEY_PASSWORD")
-      }
-    }
-    create("debugConfig") {
-      storeFile = file("${rootDir}/debug.keystore")
-      storePassword = "android"
-      keyAlias = "androiddebugkey"
-      keyPassword = "android"
+      val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
+      storeFile = file(keystorePath)
+      storePassword = System.getenv("STORE_PASSWORD")
+      keyAlias = "upload"
+      keyPassword = System.getenv("KEY_PASSWORD")
     }
   }
 
   buildTypes {
     release {
-      isCrunchPngs = false
       isMinifyEnabled = false
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-      signingConfig = if (hasReleaseSigning) {
-        signingConfigs.getByName("release")
-      } else {
-        // Debug-signed so the release build is still installable on a device.
-        signingConfigs.getByName("debugConfig")
+      // Release signing only kicks in when the keystore + env vars are provided.
+      if (System.getenv("STORE_PASSWORD") != null) {
+        signingConfig = signingConfigs.getByName("release")
       }
     }
     debug {
-      signingConfig = signingConfigs.getByName("debugConfig")
+      // Uses the standard auto-generated Android debug keystore
+      // (~/.android/debug.keystore), so no checked-in keystore is required.
     }
   }
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_11
     targetCompatibility = JavaVersion.VERSION_11
+  }
+  kotlin {
+    compilerOptions {
+      jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
+    }
   }
   buildFeatures {
     compose = true
@@ -75,24 +91,9 @@ android {
   testOptions { unitTests { isIncludeAndroidResources = true } }
 }
 
-// Configure the Secrets Gradle Plugin to use .env and .env.example files
-// to match the convention used in Web projects.
-secrets {
-  propertiesFileName = ".env"
-  defaultPropertiesFileName = ".env.example"
-}
-
-// Some unused dependencies are commented out below instead of being removed.
-// This makes it easy to add them back in the future if needed.
 dependencies {
   implementation(platform(libs.androidx.compose.bom))
-  implementation(platform(libs.firebase.bom))
-  implementation(libs.accompanist.permissions)
   implementation(libs.androidx.activity.compose)
-  implementation(libs.androidx.camera.camera2)
-  implementation(libs.androidx.camera.core)
-  implementation(libs.androidx.camera.lifecycle)
-  implementation(libs.androidx.camera.view)
   implementation(libs.androidx.compose.material.icons.core)
   implementation(libs.androidx.compose.material.icons.extended)
   implementation(libs.androidx.compose.material3)
@@ -100,7 +101,7 @@ dependencies {
   implementation(libs.androidx.compose.ui.graphics)
   implementation(libs.androidx.compose.ui.tooling.preview)
   implementation(libs.androidx.core.ktx)
-  // implementation(libs.androidx.datastore.preferences)
+  implementation(libs.androidx.datastore.preferences)
   implementation(libs.androidx.lifecycle.runtime.compose)
   implementation(libs.androidx.lifecycle.runtime.ktx)
   implementation(libs.androidx.lifecycle.viewmodel.compose)
@@ -109,7 +110,6 @@ dependencies {
   implementation(libs.androidx.room.runtime)
   implementation(libs.coil.compose)
   implementation(libs.converter.moshi)
-  // implementation(libs.firebase.ai)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)
   implementation(libs.logging.interceptor)
@@ -117,15 +117,13 @@ dependencies {
   implementation(libs.okhttp)
   implementation(libs.play.services.location)
   implementation(libs.retrofit)
+  implementation(libs.osmdroid.android)
   testImplementation(libs.androidx.compose.ui.test.junit4)
   testImplementation(libs.androidx.core)
   testImplementation(libs.androidx.junit)
   testImplementation(libs.junit)
   testImplementation(libs.kotlinx.coroutines.test)
   testImplementation(libs.robolectric)
-  testImplementation(libs.roborazzi)
-  testImplementation(libs.roborazzi.compose)
-  testImplementation(libs.roborazzi.junit.rule)
   androidTestImplementation(platform(libs.androidx.compose.bom))
   androidTestImplementation(libs.androidx.compose.ui.test.junit4)
   androidTestImplementation(libs.androidx.espresso.core)

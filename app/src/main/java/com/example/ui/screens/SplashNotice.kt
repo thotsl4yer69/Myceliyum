@@ -52,11 +52,10 @@ fun SplashNoticeDialog(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    text = "MYCOLOGICAL FIELD NOTICE",
+                    text = "Before you start",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onErrorContainer,
-                    fontFamily = FontFamily.Monospace,
                     textAlign = TextAlign.Center
                 )
 
@@ -96,10 +95,8 @@ fun SplashNoticeDialog(
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     Text(
-                        text = "I CERTIFY & UNDERSTAND",
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp,
-                        fontFamily = FontFamily.Monospace
+                        text = "I understand",
+                        fontWeight = FontWeight.Bold
                     )
                 }
             }

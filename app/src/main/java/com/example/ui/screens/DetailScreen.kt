@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -22,6 +21,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.model.Species
@@ -59,7 +63,7 @@ fun DetailScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -75,26 +79,97 @@ fun DetailScreen(
                 .background(MaterialTheme.colorScheme.background)
                 .verticalScroll(rememberScrollState())
         ) {
-            // 1. Image Carousel (Displays seeded URLs)
+            // 1. Image Carousel with Pager & Shimmer
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(260.dp)
+                    .height(280.dp)
                     .background(Color.Black)
             ) {
                 if (species.imageUrls.isNotEmpty()) {
-                    val imageReq = remember(species.imageUrls) {
-                        ImageRequest.Builder(context)
-                            .data(species.imageUrls.first())
-                            .crossfade(true)
-                            .build()
+                    val pagerState = rememberPagerState(pageCount = { species.imageUrls.size })
+
+                    HorizontalPager(
+                        state = pagerState,
+                        modifier = Modifier.fillMaxSize()
+                    ) { page ->
+                        var isLoading by remember { mutableStateOf(true) }
+                        var isError by remember { mutableStateOf(false) }
+
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            // Shimmer placeholder while loading
+                            if (isLoading && !isError) {
+                                ShimmerPlaceholder(modifier = Modifier.fillMaxSize())
+                            }
+
+                            AsyncImage(
+                                model = ImageRequest.Builder(context)
+                                    .data(species.imageUrls[page])
+                                    .crossfade(true)
+                                    .build(),
+                                contentDescription = "${species.scientificName} photo ${page + 1}",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop,
+                                onSuccess = { isLoading = false; isError = false },
+                                onError = { isLoading = false; isError = true }
+                            )
+
+                            // Error fallback — shown when image fails to load
+                            if (isError) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(Color(0xFF1A1A1A)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Icon(
+                                            imageVector = Icons.Default.FilterVintage,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                                            modifier = Modifier.size(48.dp)
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            text = species.scientificName,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = Color.White.copy(alpha = 0.7f),
+                                            fontStyle = FontStyle.Italic
+                                        )
+                                        Text(
+                                            text = "Image not available",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = Color.White.copy(alpha = 0.4f)
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
-                    AsyncImage(
-                        model = imageReq,
-                        contentDescription = species.scientificName,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
+
+                    // Page indicator dots
+                    if (species.imageUrls.size > 1) {
+                        Row(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = 40.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            repeat(species.imageUrls.size) { index ->
+                                Box(
+                                    modifier = Modifier
+                                        .size(if (pagerState.currentPage == index) 8.dp else 6.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            if (pagerState.currentPage == index)
+                                                Color.White
+                                            else
+                                                Color.White.copy(alpha = 0.4f)
+                                        )
+                                )
+                            }
+                        }
+                    }
                 } else {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Icon(
@@ -115,11 +190,10 @@ fun DetailScreen(
                         .padding(horizontal = 12.dp, vertical = 6.dp)
                 ) {
                     Text(
-                        text = "FAMILY: ${species.family.uppercase()}  •  GENUS: ${species.genus.uppercase()}",
+                        text = "Family ${species.family} · Genus ${species.genus}",
                         style = MaterialTheme.typography.labelSmall,
                         color = Color.White,
-                        fontFamily = FontFamily.Monospace,
-                        letterSpacing = 1.sp
+                        letterSpacing = 0.5.sp
                     )
                 }
             }
@@ -169,10 +243,8 @@ fun DetailScreen(
                         Icon(imageVector = Icons.Default.Radar, contentDescription = null)
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "FORECAST",
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace,
-                            letterSpacing = 0.5.sp
+                            text = "Find on map",
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
@@ -182,11 +254,10 @@ fun DetailScreen(
 
                 // 2. Botanical Details Panel
                 Text(
-                    text = "SPECIMEN DESCRIPTION",
-                    style = MaterialTheme.typography.labelSmall,
+                    text = "Description",
+                    style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
 
@@ -213,11 +284,10 @@ fun DetailScreen(
 
                 // 3. Ecological Settings (Habitats & Substrates)
                 Text(
-                    text = "ECOLOGICAL SIGNALS",
-                    style = MaterialTheme.typography.labelSmall,
+                    text = "Habitat & substrate",
+                    style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
 
@@ -255,11 +325,10 @@ fun DetailScreen(
 
                 // 4. Season Calendar Visualization
                 Text(
-                    text = "FRUITING CALENDAR",
-                    style = MaterialTheme.typography.labelSmall,
+                    text = "Fruiting calendar",
+                    style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
 
@@ -333,11 +402,10 @@ fun DetailScreen(
 
                 // 5. Look-Alikes Side-By-Side Section
                 Text(
-                    text = "CRITICAL FIELD COMPARISON (LOOK-ALIKES)",
-                    style = MaterialTheme.typography.labelSmall,
+                    text = "Look-alikes to watch for",
+                    style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.error,
                     fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
 
@@ -360,7 +428,7 @@ fun DetailScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "Be Aware of Look-alike:",
+                                    text = "Look-alike",
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onErrorContainer
@@ -381,11 +449,10 @@ fun DetailScreen(
 
                 // 6. Notes Panel
                 Text(
-                    text = "FIELD WORK RESEARCH NOTES",
-                    style = MaterialTheme.typography.labelSmall,
+                    text = "Notes",
+                    style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
 
@@ -417,11 +484,10 @@ fun FeatureDetailRow(
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
-            text = label.uppercase(),
-            style = MaterialTheme.typography.labelSmall,
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold,
-            color = if (highlighted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-            fontFamily = FontFamily.Monospace,
+            color = if (highlighted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 4.dp)
         )
         Text(
@@ -431,6 +497,34 @@ fun FeatureDetailRow(
             lineHeight = 20.sp
         )
     }
+}
+
+@Composable
+fun ShimmerPlaceholder(modifier: Modifier = Modifier) {
+    val shimmerColors = listOf(
+        Color.DarkGray.copy(alpha = 0.3f),
+        Color.DarkGray.copy(alpha = 0.1f),
+        Color.DarkGray.copy(alpha = 0.3f)
+    )
+
+    val transition = rememberInfiniteTransition(label = "shimmer")
+    val translateAnim = transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1000f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "shimmer_translate"
+    )
+
+    val brush = Brush.linearGradient(
+        colors = shimmerColors,
+        start = Offset(translateAnim.value - 200f, translateAnim.value - 200f),
+        end = Offset(translateAnim.value, translateAnim.value)
+    )
+
+    Box(modifier = modifier.background(brush))
 }
 
 private fun isMonthInSeason(month: Int, start: Int, end: Int): Boolean {

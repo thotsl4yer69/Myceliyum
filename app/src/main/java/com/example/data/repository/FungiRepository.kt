@@ -3,19 +3,27 @@ package com.example.data.repository
 import android.content.Context
 import android.util.Log
 import com.example.data.local.FungiDao
+import com.example.data.remote.ALAApi
+import com.example.data.remote.GBIFApi
 import com.example.data.remote.INatObservation
+import com.example.data.remote.EnvGridRequest
+import com.example.data.remote.EnvLayersApi
+import com.example.data.remote.GeocodingApi
 import com.example.data.remote.INaturalistApi
 import com.example.data.remote.OpenMeteoApi
+import com.example.data.remote.OverpassApi
 import com.example.model.HotspotCell
 import com.example.model.Observation
 import com.example.model.Species
 import com.example.model.UserSighting
+import com.example.util.MycoMath
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.ensureActive
 import java.io.InputStreamReader
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -27,7 +35,14 @@ class FungiRepository(
     private val context: Context,
     private val dao: FungiDao,
     private val iNatApi: INaturalistApi,
-    private val openMeteoApi: OpenMeteoApi
+    private val openMeteoApi: OpenMeteoApi,
+    private val alaApi: ALAApi,
+    private val gbifApi: GBIFApi,
+    private val overpassApi: OverpassApi,
+    private val envLayersApi: EnvLayersApi? = null,
+    private val backendToken: String = "",
+    private val geocodingApi: GeocodingApi? = null,
+    private val googleApiKey: String = ""
 ) {
     private val moshi = Moshi.Builder()
         .add(KotlinJsonAdapterFactory())
@@ -39,7 +54,6 @@ class FungiRepository(
 
     val allSpeciesFlow: Flow<List<Species>> = dao.getAllSpeciesFlow()
     val allUserSightingsFlow: Flow<List<UserSighting>> = dao.getAllUserSightingsFlow()
-
     /**
      * Seeds the local database with species from the bundled assets species.json.
      */
@@ -129,10 +143,18 @@ class FungiRepository(
 
             val iNatObsList = response.results
             val freshObservations = iNatObsList.mapNotNull { iObs ->
-                // Parse coordinates
-                val parsedLat = iObs.latitude ?: iObs.location?.split(",")?.getOrNull(0)?.toDoubleOrNull()
-                val parsedLng = iObs.longitude ?: iObs.location?.split(",")?.getOrNull(1)?.toDoubleOrNull()
-                
+                // Parse coordinates. iNaturalist usually returns coordinates in the
+                // `geojson` field as [lng, lat], and/or `location` as "lat,lng".
+                // Try the explicit lat/lng first, then location string, then geojson.
+                val geoLng = iObs.geojson?.coordinates?.getOrNull(0)
+                val geoLat = iObs.geojson?.coordinates?.getOrNull(1)
+                val parsedLat = iObs.latitude
+                    ?: iObs.location?.split(",")?.getOrNull(0)?.trim()?.toDoubleOrNull()
+                    ?: geoLat
+                val parsedLng = iObs.longitude
+                    ?: iObs.location?.split(",")?.getOrNull(1)?.trim()?.toDoubleOrNull()
+                    ?: geoLng
+
                 if (parsedLat != null && parsedLng != null) {
                     val obsTime = parseObsDate(iObs.observedOn)
                     Observation(
@@ -151,16 +173,22 @@ class FungiRepository(
                 }
             }
 
+            // Also pull from ALA and GBIF for richer evidence
+            val alaObs = try { getALAObservations(species, lat, lng, radiusKm) } catch (_: Exception) { emptyList() }
+            val gbifObs = try { getGBIFObservations(species, lat, lng, radiusKm) } catch (_: Exception) { emptyList() }
+
+            val allFresh = freshObservations + alaObs + gbifObs
+
             // Save new network result to local Room Cache
-            if (freshObservations.isNotEmpty()) {
+            if (allFresh.isNotEmpty()) {
                 // Clear and replace cache for this species to maintain fresh cache representation
                 dao.clearObservationsForSpecies(species.id)
-                dao.insertObservations(freshObservations)
-                Log.d(TAG, "Fetched and cached ${freshObservations.size} fresh observations in Room.")
+                dao.insertObservations(allFresh)
+                Log.d(TAG, "Fetched and cached ${allFresh.size} observations (iNat: ${freshObservations.size}, ALA: ${alaObs.size}, GBIF: ${gbifObs.size}) in Room.")
             }
-            
+
             // Return observations filtered by radius
-            return@withContext freshObservations.filter {
+            return@withContext allFresh.filter {
                 calculateDistanceMeters(lat, lng, it.lat, it.lng) <= radiusKm * 1000.0
             }
 
@@ -171,9 +199,291 @@ class FungiRepository(
         }
     }
 
+    // ─── ALA (Atlas of Living Australia) ─────────────────────────────
+
+    /**
+     * Fetches fungal occurrence records from the Atlas of Living Australia.
+     * Herbarium specimens (PRESERVED_SPECIMEN) from institutions like
+     * Royal Botanic Gardens Melbourne are weighted highest — verified by
+     * professional mycologists.
+     */
+    suspend fun getALAObservations(
+        species: Species,
+        lat: Double,
+        lng: Double,
+        radiusKm: Double
+    ): List<Observation> = withContext(Dispatchers.IO) {
+        try {
+            Log.d(TAG, "Fetching ALA records for ${species.scientificName}")
+            val response = alaApi.searchOccurrences(
+                query = species.scientificName,
+                lat = lat,
+                lon = lng,
+                radiusKm = radiusKm
+            )
+            val nowMs = System.currentTimeMillis()
+            response.occurrences?.mapNotNull { occ ->
+                val olat = occ.decimalLatitude ?: return@mapNotNull null
+                val olng = occ.decimalLongitude ?: return@mapNotNull null
+                val obsTime = parseYearMonth(occ.year, occ.month)
+                // Herbarium specimens are research-grade by definition
+                val quality = if (occ.basisOfRecord == "PRESERVED_SPECIMEN") "research" else "needs_id"
+                Observation(
+                    id = occ.uuid.hashCode().toLong(),
+                    speciesId = species.id,
+                    lat = olat, lng = olng,
+                    observedAt = obsTime,
+                    source = "ALA",
+                    photoUrl = null,
+                    qualityGrade = quality,
+                    cachedAt = nowMs
+                )
+            } ?: emptyList()
+        } catch (e: Exception) {
+            Log.w(TAG, "ALA fetch failed for ${species.scientificName}: ${e.message}")
+            emptyList()
+        }
+    }
+
+    // ─── GBIF (Global Biodiversity Information Facility) ──────────
+
+    /**
+     * Fetches occurrence records from GBIF for Australian fungi.
+     * Includes museum/herbarium records with DOIs — highest scientific value.
+     */
+    suspend fun getGBIFObservations(
+        species: Species,
+        lat: Double,
+        lng: Double,
+        radiusKm: Double
+    ): List<Observation> = withContext(Dispatchers.IO) {
+        try {
+            Log.d(TAG, "Fetching GBIF records for ${species.scientificName}")
+            // GBIF uses bounding box via lat/lon ranges
+            val latRange = radiusKm / 111.0
+            val lngRange = radiusKm / (111.0 * cos(lat * PI / 180.0))
+            val response = gbifApi.searchOccurrences(
+                scientificName = species.scientificName,
+                lat = "${String.format(Locale.US, "%.2f", lat - latRange)},${String.format(Locale.US, "%.2f", lat + latRange)}",
+                lon = "${String.format(Locale.US, "%.2f", lng - lngRange)},${String.format(Locale.US, "%.2f", lng + lngRange)}"
+            )
+            val nowMs = System.currentTimeMillis()
+            response.results?.mapNotNull { occ ->
+                val olat = occ.decimalLatitude ?: return@mapNotNull null
+                val olng = occ.decimalLongitude ?: return@mapNotNull null
+                val obsTime = parseYearMonth(occ.year, occ.month)
+                val quality = if (occ.basisOfRecord == "PRESERVED_SPECIMEN") "research" else "needs_id"
+                Observation(
+                    id = occ.key ?: occ.hashCode().toLong(),
+                    speciesId = species.id,
+                    lat = olat, lng = olng,
+                    observedAt = obsTime,
+                    source = "GBIF",
+                    photoUrl = null,
+                    qualityGrade = quality,
+                    cachedAt = nowMs
+                )
+            } ?: emptyList()
+        } catch (e: Exception) {
+            Log.w(TAG, "GBIF fetch failed for ${species.scientificName}: ${e.message}")
+            emptyList()
+        }
+    }
+
+    private fun parseYearMonth(year: Int?, month: Int?): Long {
+        if (year == null) return System.currentTimeMillis() - 365L * 24 * 60 * 60 * 1000
+        val cal = Calendar.getInstance()
+        cal.set(Calendar.YEAR, year)
+        cal.set(Calendar.MONTH, (month ?: 6) - 1)
+        cal.set(Calendar.DAY_OF_MONTH, 15)
+        return cal.timeInMillis
+    }
+
+    // ─── Weather Data ────────────────────────────────────────────────
+
+    /**
+     * Detailed weather data for the prediction engine.
+     * Returns daily rainfall array (oldest first), avg max temp, avg min temp,
+     * and total rainfall over the period.
+     */
+    data class WeatherData(
+        val dailyRainfallMm: List<Double>,
+        val totalRainfallMm: Double,
+        val avgMaxTemp: Double,
+        val avgMinTemp: Double,
+        val avgTemp: Double,
+        val avgSoilMoisture: Double? = null // volumetric m³/m³, 0-7cm layer; null if unavailable
+    )
+
+    suspend fun getDetailedWeather(lat: Double, lng: Double): WeatherData = withContext(Dispatchers.IO) {
+        try {
+            Log.d(TAG, "Fetching detailed weather from Open-Meteo for ($lat, $lng)")
+            val response = openMeteoApi.getPastWeather(limitLat = lat, limitLng = lng)
+
+            val rainfall = response.daily.precipitationSum
+                ?.map { it ?: 0.0 } ?: emptyList()
+            val maxTemps = response.daily.temperatureMax
+                ?.mapNotNull { it } ?: emptyList()
+            val minTemps = response.daily.temperatureMin
+                ?.mapNotNull { it } ?: emptyList()
+
+            val totalRainfall = rainfall.sum()
+            val avgMax = if (maxTemps.isNotEmpty()) maxTemps.average() else 15.0
+            val avgMin = if (minTemps.isNotEmpty()) minTemps.average() else 8.0
+
+            // Recent soil moisture (last ~7 days of hourly readings, 0-7cm layer).
+            val soil = response.hourly?.soilMoisture0to7cm?.mapNotNull { it } ?: emptyList()
+            val avgSoil = if (soil.isNotEmpty()) soil.takeLast(minOf(168, soil.size)).average() else null
+
+            Log.d(TAG, "Weather (${rainfall.size} days): Rain: ${totalRainfall}mm, AvgMax: ${avgMax}C, AvgMin: ${avgMin}C, Soil: $avgSoil")
+            WeatherData(rainfall, totalRainfall, avgMax, avgMin, (avgMax + avgMin) / 2.0, avgSoil)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to fetch detailed weather, using Victorian autumn defaults", e)
+            // Default: moderate Victorian autumn conditions
+            val defaultDaily = List(45) { 3.0 } // ~3mm per day
+            WeatherData(defaultDaily, 135.0, 15.5, 8.0, 11.75)
+        }
+    }
+
+    /**
+     * Fetches ground elevation for a list of coordinates, batched into
+     * requests of ≤100 points (Open-Meteo's per-call limit). Returns a list
+     * aligned 1:1 with [coords]; entries are null where elevation could not
+     * be resolved, so callers can fall back to neutral terrain scoring.
+     */
+    suspend fun fetchElevations(coords: List<Pair<Double, Double>>): List<Double?> = withContext(Dispatchers.IO) {
+        if (coords.isEmpty()) return@withContext emptyList()
+        val result = ArrayList<Double?>(coords.size)
+        try {
+            for (chunk in coords.chunked(100)) {
+                val latCsv = chunk.joinToString(",") { String.format(Locale.US, "%.5f", it.first) }
+                val lngCsv = chunk.joinToString(",") { String.format(Locale.US, "%.5f", it.second) }
+                val resp = openMeteoApi.getElevation(latCsv, lngCsv)
+                val elevs = resp.elevation ?: emptyList()
+                for (k in chunk.indices) result.add(elevs.getOrNull(k))
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Elevation fetch failed, using neutral terrain: ${e.message}")
+        }
+        // Guarantee 1:1 alignment even on partial/failed responses.
+        while (result.size < coords.size) result.add(null)
+        result
+    }
+
+    /**
+     * Fetches canopy/green-cover features (woods, forests, parks, reserves)
+     * within a bounding box from OpenStreetMap's Overpass API (free, no key).
+     * Returns representative coordinates; empty on failure so callers fall
+     * back to neutral canopy scoring.
+     */
+    suspend fun fetchCanopyFeatures(
+        minLat: Double, minLng: Double, maxLat: Double, maxLng: Double
+    ): List<Pair<Double, Double>> = withContext(Dispatchers.IO) {
+        try {
+            val bbox = String.format(Locale.US, "%.5f,%.5f,%.5f,%.5f", minLat, minLng, maxLat, maxLng)
+            val ql = """
+                [out:json][timeout:25];
+                (
+                  way["natural"="wood"]($bbox);
+                  way["landuse"="forest"]($bbox);
+                  way["leisure"="park"]($bbox);
+                  way["boundary"="protected_area"]($bbox);
+                );
+                out center;
+            """.trimIndent()
+            val resp = overpassApi.query(ql)
+            resp.elements.orEmpty().mapNotNull { el ->
+                val la = el.resolvedLat()
+                val lo = el.resolvedLon()
+                if (la != null && lo != null) la to lo else null
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Canopy (Overpass) fetch failed, neutral canopy: ${e.message}")
+            emptyList()
+        }
+    }
+
+    /** Per-cell Earth Engine layers, aligned 1:1 with the grid points. */
+    data class EnvLayers(
+        val landcover: List<Int?>,
+        val canopyPct: List<Double?>,
+        val ndvi: List<Double?>
+    )
+
+    /**
+     * Fetches Earth Engine land-cover / tree-canopy / NDVI for the grid from
+     * the optional Cloud Run backend. Returns null when the backend isn't
+     * configured or the call fails, so callers fall back to free OSM canopy.
+     */
+    suspend fun fetchEnvLayers(points: List<Pair<Double, Double>>): EnvLayers? {
+        val api = envLayersApi ?: return null
+        if (points.isEmpty()) return null
+        return withContext(Dispatchers.IO) {
+            try {
+                val resp = api.envGrid(backendToken, EnvGridRequest(points.map { listOf(it.first, it.second) }))
+                val n = points.size
+                EnvLayers(
+                    landcover = (0 until n).map { resp.landcover?.getOrNull(it)?.toInt() },
+                    canopyPct = (0 until n).map { resp.canopy?.getOrNull(it) },
+                    ndvi = (0 until n).map { resp.ndvi?.getOrNull(it) }
+                )
+            } catch (e: Exception) {
+                Log.w(TAG, "Earth Engine backend fetch failed, using OSM canopy: ${e.message}")
+                null
+            }
+        }
+    }
+
+    /** A geocoded place: coordinates plus a human-readable label. */
+    data class GeoPlace(val lat: Double, val lng: Double, val label: String)
+
+    /**
+     * Resolves a place name to coordinates for the map's "Area" search.
+     * Prefers the Google Geocoding API when a key is configured (reliable),
+     * and falls back to the on-device Android Geocoder otherwise.
+     */
+    suspend fun geocodePlace(query: String): GeoPlace? = withContext(Dispatchers.IO) {
+        if (query.isBlank()) return@withContext null
+        if (geocodingApi != null && googleApiKey.isNotBlank()) {
+            try {
+                val resp = geocodingApi.geocode(query, googleApiKey)
+                val result = resp.results?.firstOrNull()
+                val loc = result?.geometry?.location
+                if (resp.status == "OK" && loc?.lat != null && loc.lng != null) {
+                    return@withContext GeoPlace(loc.lat, loc.lng, result.formattedAddress ?: query)
+                }
+                Log.w(TAG, "Google geocoding returned status=${resp.status}; falling back")
+            } catch (e: Exception) {
+                Log.w(TAG, "Google geocoding failed, trying device geocoder: ${e.message}")
+            }
+        }
+        try {
+            val geocoder = android.location.Geocoder(context, Locale.getDefault())
+            @Suppress("DEPRECATION")
+            val res = geocoder.getFromLocationName(query, 1)
+            val a = res?.firstOrNull()
+            if (a != null) GeoPlace(a.latitude, a.longitude, a.locality ?: a.subAdminArea ?: a.adminArea ?: query) else null
+        } catch (e: Exception) {
+            Log.w(TAG, "Device geocoder failed: ${e.message}")
+            null
+        }
+    }
+
+    /** Distance (m) to the nearest green feature, or null if none provided. */
+    private fun nearestFeatureMeters(lat: Double, lng: Double, features: List<Pair<Double, Double>>): Double? {
+        if (features.isEmpty()) return null
+        var best = Double.MAX_VALUE
+        for ((flat, flng) in features) {
+            val d = calculateDistanceMeters(lat, lng, flat, flng)
+            if (d < best) best = d
+        }
+        return best
+    }
+
     /**
      * Fetches rainfall and temperature in past 30 days from Open-Meteo.
      * Returns total rainfall in mm, and average max recorded temperature in C.
+     * (Legacy method — kept for weather summary display in UI)
      */
     suspend fun getWeatherLast30Days(lat: Double, lng: Double): Pair<Double, Double> = withContext(Dispatchers.IO) {
         try {
@@ -183,18 +493,10 @@ class FungiRepository(
             val maxList = response.daily.temperatureMax
 
             // Sum of last 30 days rainfall
-            val totalRainfall = if (sumList != null && sumList.isNotEmpty()) {
-                sumList.sum()
-            } else {
-                0.0
-            }
+            val totalRainfall = sumList?.filterNotNull()?.sum() ?: 0.0
 
             // Average max temp over past 30 days
-            val avgMaxTemp = if (maxList != null && maxList.isNotEmpty()) {
-                maxList.average()
-            } else {
-                15.0
-            }
+            val avgMaxTemp = maxList?.filterNotNull()?.average() ?: 15.0
 
             Log.d(TAG, "Historical weather (last 30 days): Rainfall: $totalRainfall mm, Avg Max Temp: $avgMaxTemp C")
             return@withContext Pair(totalRainfall, avgMaxTemp)
@@ -213,7 +515,25 @@ class FungiRepository(
     }
 
     /**
-     * Hotspot Grid Calculation Algorithm (COMPUTED AT 500M RESOLUTION)
+     * Multi-factor Bayesian hotspot prediction engine (500m resolution).
+     *
+     * Scoring factors and weights (sum to 1.0):
+     *   1. Observation evidence (iNat + ALA + GBIF + user)          — 0.24
+     *   2. Seasonal fitness (week-level precision)                 — 0.16
+     *   3. Rainfall trigger (20mm+ event 10-21 days ago with lag)  — 0.12
+     *   4. Canopy/forest proximity (per-cell, OSM Overpass)        — 0.12
+     *   5. Terrain moisture (per-cell slope/concavity from DEM)    — 0.08
+     *   6. Habitat suitability (species substrate/habitat breadth) — 0.08
+     *   7. Elevation fitness (per-cell altitude vs species band)   — 0.06
+     *   8. Temperature fitness (species-specific ideal range)      — 0.06
+     *   9. Slope aspect (per-cell; south/east-facing favoured)     — 0.04
+     *  10. Background moisture (rainfall + real 0-7cm soil moisture)— 0.03
+     *  11. Moon phase (optional, traditional forager signal)       — 0.01
+     *
+     * Factors 4, 5, 7 and 9 vary cell-to-cell (real elevation + OSM canopy),
+     * so the map reflects genuine landscape instead of only record density.
+     * Each factor produces a 0.0–1.0 score; the final score is their weighted
+     * combination, then gated by a season/rain penalty multiplier.
      */
     suspend fun generateHotspots(
         species: Species,
@@ -222,143 +542,474 @@ class FungiRepository(
         radiusKm: Double,
         forceRefresh: Boolean = false
     ): List<HotspotCell> = withContext(Dispatchers.Default) {
-        // 1. Get observations (including user sightings + iNaturalist)
+        // ── 1. Gather all evidence sources ──────────────────────────
         val iNatObs = getObservations(species, centerLat, centerLng, radiusKm, forceRefresh)
         val userSightings = dao.getAllUserSightings().filter {
-            it.speciesId == species.id && calculateDistanceMeters(centerLat, centerLng, it.lat, it.lng) <= radiusKm * 1000.0
+            it.speciesId == species.id &&
+            calculateDistanceMeters(centerLat, centerLng, it.lat, it.lng) <= radiusKm * 1000.0
         }
+        // ── 2. Fetch detailed weather for lag analysis ──────────────
+        val weather = getDetailedWeather(centerLat, centerLng)
 
-        // 2. Fetch the weather (rainfall and max temp in last 30 days)
-        val (rainfall, maxTemp) = getWeatherLast30Days(centerLat, centerLng)
+        // ── 3. Pre-compute global (non-cell-varying) factors ────────
+        val nowMs = System.currentTimeMillis()
+        val calendar = Calendar.getInstance()
+        val currentMonth = calendar.get(Calendar.MONTH) + 1
+        val dayOfYear = calendar.get(Calendar.DAY_OF_YEAR)
 
-        // Generate grid coordinates centered on centerLat, centerLng
-        // 1 deg lat is ~111km, 500m is 0.0045 deg lat.
-        // 1 deg lng at -37.8 deg lat is ~87.7km, 500m is 0.0057 deg lng.
+        // 3a. Seasonal fitness (week-level, species-specific)
+        val seasonScore = MycoMath.seasonalFitness(dayOfYear, species.seasonStart, species.seasonEnd)
+
+        // 3b. Rainfall trigger (lag analysis: was there a trigger event 10-21 days ago?)
+        val rainTriggerScore = MycoMath.rainfallTriggerScore(weather.dailyRainfallMm)
+
+        // 3c. Temperature fitness (species-specific ideal range)
+        val tempScore = MycoMath.temperatureFitness(weather.avgTemp, species.id)
+
+        // 3d. Background moisture proxy (sustained rain, not just trigger events)
+        val recentRain30d = weather.dailyRainfallMm.takeLast(minOf(30, weather.dailyRainfallMm.size)).sum()
+        val rainMoistureScore = when {
+            recentRain30d in 40.0..180.0 -> 1.0
+            recentRain30d < 40.0 -> recentRain30d / 40.0
+            else -> maxOf(0.3, 1.0 - (recentRain30d - 180.0) / 200.0)
+        }
+        // Blend in real 0-7cm soil moisture when available — a far better
+        // dampness signal than rainfall totals alone.
+        val soilMoistureScore = weather.avgSoilMoisture?.let { MycoMath.soilMoistureFitness(it) }
+        val moistureScore = if (soilMoistureScore != null)
+            (0.4 * rainMoistureScore + 0.6 * soilMoistureScore) else rainMoistureScore
+
+        // 3e. Moon phase (low-weight traditional signal)
+        val moonScore = MycoMath.moonFruitingScore(nowMs)
+
+        // 3f. Habitat suitability (species breadth → higher baseline)
+        val habitatScore = MycoMath.habitatDiversityScore(species.habitatTypes, species.substrates)
+        val habitatWeight = MycoMath.speciesHabitatWeight(species.id)
+
+        // ── 4. Grid generation ──────────────────────────────────────
         val latStep = 0.0045
         val lngStep = 0.0057
-
-        // Number of steps in each direction based on search radius
         val latRangeSteps = ceil((radiusKm * 1000.0) / 500.0).toInt()
         val cells = mutableListOf<HotspotCell>()
 
-        val nowMs = System.currentTimeMillis()
+        val kernelRadiusMeters = 2500.0  // Wider search for evidence
+        val maxDaysBack = 5.0 * 365.0
 
-        // Pre-evaluate seasonScore
-        val calendar = Calendar.getInstance()
-        val currentMonth = calendar.get(Calendar.MONTH) + 1 // 1-12
-        val isInSeason = isMonthInSeason(currentMonth, species.seasonStart, species.seasonEnd)
-        val seasonScore = if (isInSeason) 1.0 else 0.3
-
-        // Pre-evaluate rainfallScore (concerning both 30-day precipitation and 30-day average max temperature limits)
-        // Optimal range for past 30 days rainfall: 60.0mm to 200.0mm
-        val rainfallFactor = when {
-            rainfall in 60.0..200.0 -> 1.0
-            rainfall < 60.0 -> {
-                rainfall / 60.0
-            }
-            else -> {
-                maxOf(0.0, 1.0 - (rainfall - 200.0) / 200.0)
-            }
-        }
-
-        // Optimal range for past 30 days average max temperature: 10.0C to 20.0C (ideal conditions for fungi growth)
-        val tempFactor = when {
-            maxTemp in 10.0..20.0 -> 1.0
-            maxTemp < 10.0 -> {
-                maxOf(0.0, maxTemp / 10.0)
-            }
-            else -> {
-                maxOf(0.0, 1.0 - (maxTemp - 20.0) / 12.0)
-            }
-        }
-
-        // Combine factors: Rainfall defines 60% of moisture suitability, and Temperature defines 40% of microclimate fit
-        val rainfallScore = 0.6 * rainfallFactor + 0.4 * tempFactor
-
-        // Generate grid
+        // 4a. Enumerate the in-radius cells up front so the real terrain
+        // elevation for the whole grid can be fetched in one batched call.
+        val cellIJ = mutableListOf<Pair<Int, Int>>()
+        val cellLL = mutableListOf<Pair<Double, Double>>()
         for (i in -latRangeSteps..latRangeSteps) {
             for (j in -latRangeSteps..latRangeSteps) {
-                val cellLat = centerLat + i * latStep
-                val cellLng = centerLng + j * lngStep
-
-                // Check if grid point is within the radius circle
-                val distanceToCenter = calculateDistanceMeters(centerLat, centerLng, cellLat, cellLng)
-                if (distanceToCenter <= radiusKm * 1000.0) {
-                    
-                    // A. Calculate observationScore:
-                    // Normalized count of research observations within 2km in last 5 years, weighted by exponential decay (half-life 365 days).
-                    // Halflife math: lambda = ln(2)/365 = 0.0019
-                    val lambda = ln(2.0) / 365.0
-                    var weightedCount = 0.0
-
-                    // Combine iNat + user sightings
-                    val localObsList = iNatObs.filter {
-                        calculateDistanceMeters(cellLat, cellLng, it.lat, it.lng) <= 2000.0
-                    }
-                    val localUserSightings = userSightings.filter {
-                        calculateDistanceMeters(cellLat, cellLng, it.lat, it.lng) <= 2000.0
-                    }
-
-                    // Process iNat observations
-                    for (obs in localObsList) {
-                        val diffDays = (nowMs - obs.observedAt).toDouble() / (1000.0 * 60.0 * 60.0 * 24.0)
-                        if (diffDays in 0.0..(5.0 * 365.0)) {
-                            val weight = exp(-lambda * diffDays)
-                            weightedCount += weight
-                        }
-                    }
-
-                    // Process user sightings
-                    for (sig in localUserSightings) {
-                        val diffDays = (nowMs - sig.timestamp).toDouble() / (1000.0 * 60.0 * 60.0 * 24.0)
-                        if (diffDays in 0.0..(5.0 * 365.0)) {
-                            // User sightings can have a slightly higher multiplier for validation because they are offline-first verified!
-                            val weight = exp(-lambda * diffDays) * 1.5 
-                            weightedCount += weight
-                        }
-                    }
-
-                    // Normalize weight (cap at max 5.0 weighted observations)
-                    val observationScore = minOf(1.0, weightedCount / 5.0)
-
-                    // B. Final score calculation
-                    val finalScore = 0.5 * observationScore + 0.2 * seasonScore + 0.3 * rainfallScore
-
-                    // C. Determine Tier: >=0.66 High, >=0.33 Medium, else Low
-                    val tier = when {
-                        finalScore >= 0.66 -> "High"
-                        finalScore >= 0.33 -> "Medium"
-                        else -> "Low"
-                    }
-
-                    // D. Contributing factors
-                    val factors = mutableListOf<String>()
-                    factors.add("Microhabitat Model at (${String.format(Locale.getDefault(), "%.4f", cellLat)}, ${String.format(Locale.getDefault(), "%.4f", cellLng)})")
-                    factors.add("Local Activity Index: ${String.format(Locale.getDefault(), "%.1f", weightedCount)} weighted historical records within 2km (Contribution: ${String.format(Locale.getDefault(), "%.0f%%", observationScore * 50.0)})")
-                    
-                    if (isInSeason) {
-                        factors.add("Optimal Season Window: Active in ${monthName(species.seasonStart)}-${monthName(species.seasonEnd)} (Current month: ${monthName(currentMonth)} | Contribution: +20%)")
-                    } else {
-                        factors.add("Out-of-Season Offset applied (Current month: ${monthName(currentMonth)}, Season: ${monthName(species.seasonStart)}-${monthName(species.seasonEnd)} | Contribution: +6%)")
-                    }
-
-                    factors.add("Microclimate Hydration & Temp (Past 30d): ${String.format(Locale.getDefault(), "%.1f", rainfall)}mm rain (Target 60-200mm), ${String.format(Locale.getDefault(), "%.1f", maxTemp)}C avg max temp (Target 10-20C) | Weather Contribution: ${String.format(Locale.getDefault(), "%.0f%%", rainfallScore * 30.0)}")
-
-                    cells.add(
-                        HotspotCell(
-                            lat = cellLat,
-                            lng = cellLng,
-                            score = finalScore,
-                            tier = tier,
-                            contributingFactors = factors
-                        )
-                    )
-                }
+                val cLat = centerLat + i * latStep
+                val cLng = centerLng + j * lngStep
+                if (calculateDistanceMeters(centerLat, centerLng, cLat, cLng) > radiusKm * 1000.0) continue
+                cellIJ.add(i to j)
+                cellLL.add(cLat to cLng)
             }
+        }
+
+        // 4b. Per-cell ground elevation (Open-Meteo, no key). Build a lookup
+        // so each cell can read its neighbours' elevations for slope/aspect.
+        val elevations = fetchElevations(cellLL)
+        val elevByIJ = HashMap<Pair<Int, Int>, Double>()
+        cellIJ.forEachIndexed { idx, ij -> elevations[idx]?.let { elevByIJ[ij] = it } }
+
+        // 4c. Canopy/vegetation. Prefer Earth Engine layers (land cover, tree
+        // canopy %, NDVI) when the backend is configured; otherwise fall back
+        // to free OSM forest proximity.
+        val env = fetchEnvLayers(cellLL)
+        val canopy = if (env == null && cellLL.isNotEmpty()) fetchCanopyFeatures(
+            cellLL.minOf { it.first }, cellLL.minOf { it.second },
+            cellLL.maxOf { it.first }, cellLL.maxOf { it.second }
+        ) else emptyList()
+
+        for (idx in cellIJ.indices) {
+            coroutineContext.ensureActive()
+            val (i, j) = cellIJ[idx]
+            val (cellLat, cellLng) = cellLL[idx]
+
+                // ── A. Observation evidence score ───────────────────
+                var weightedEvidence = 0.0
+                var nearbyRecords = 0
+                val sourceCounts = mutableMapOf<String, Int>()
+
+                // All observations — weighted by quality, source, recency, proximity
+                for (obs in iNatObs) {
+                    if (abs(obs.lat - cellLat) > 0.025 || abs(obs.lng - cellLng) > 0.035) continue
+                    val d = calculateDistanceMeters(cellLat, cellLng, obs.lat, obs.lng)
+                    if (d > kernelRadiusMeters) continue
+                    val diffDays = (nowMs - obs.observedAt).toDouble() / (1000.0 * 60 * 60 * 24)
+                    if (diffDays !in 0.0..maxDaysBack) continue
+
+                    val quality = MycoMath.qualityWeight(obs.qualityGrade)
+                    val sourceW = MycoMath.sourceWeight(obs.source)
+                    val recency = MycoMath.recencyWeight(diffDays, halfLifeDays = 365.0)
+                    val spatial = MycoMath.spatialKernel(d, sigma = 800.0)
+                    weightedEvidence += quality * sourceW * recency * spatial
+                    nearbyRecords++
+                    sourceCounts[obs.source] = (sourceCounts[obs.source] ?: 0) + 1
+                }
+
+                // User sightings — higher trust (first-hand, georeferenced)
+                for (sig in userSightings) {
+                    if (abs(sig.lat - cellLat) > 0.025 || abs(sig.lng - cellLng) > 0.035) continue
+                    val d = calculateDistanceMeters(cellLat, cellLng, sig.lat, sig.lng)
+                    if (d > kernelRadiusMeters) continue
+                    val diffDays = (nowMs - sig.timestamp).toDouble() / (1000.0 * 60 * 60 * 24)
+                    if (diffDays !in 0.0..maxDaysBack) continue
+
+                    val recency = MycoMath.recencyWeight(diffDays, halfLifeDays = 365.0)
+                    val spatial = MycoMath.spatialKernel(d, sigma = 800.0)
+                    weightedEvidence += 1.5 * recency * spatial // 1.5x for first-hand
+                    nearbyRecords++
+                }
+
+                // Saturate: ~4 strong, recent, nearby records max out evidence
+                val observationScore = minOf(1.0, weightedEvidence / 4.0)
+
+                // ── B. Per-cell terrain factors (real elevation) ────
+                // Elevation fitness and local slope/concavity vary cell-to-
+                // cell, so the map reflects genuine landscape rather than
+                // only observation-record density.
+                val cellElev = elevations[idx]
+                val neighbourElevs = listOf(
+                    (i - 1) to j, (i + 1) to j, i to (j - 1), i to (j + 1),
+                    (i - 1) to (j - 1), (i + 1) to (j + 1), (i - 1) to (j + 1), (i + 1) to (j - 1)
+                ).mapNotNull { elevByIJ[it] }
+                val elevationScore = if (cellElev != null)
+                    MycoMath.elevationFitness(cellElev, species.id) else 0.6
+                val terrainScore = if (cellElev != null && neighbourElevs.isNotEmpty())
+                    MycoMath.terrainMoistureScore(cellElev, neighbourElevs) else 0.5
+                // Slope aspect (south/east-facing favoured in S. Hemisphere).
+                val aspectScore = if (cellElev != null) MycoMath.slopeAspectMoistureScore(
+                    cellElev,
+                    elevByIJ[(i + 1) to j], elevByIJ[(i - 1) to j],
+                    elevByIJ[i to (j + 1)], elevByIJ[i to (j - 1)]
+                ) else 0.7
+                // Canopy/vegetation suitability — Earth Engine layers when
+                // available, else OSM forest proximity (mycorrhizal & wood-rot).
+                val canopyDist = if (canopy.isEmpty()) null else nearestFeatureMeters(cellLat, cellLng, canopy)
+                val canopyScore = if (env != null) MycoMath.richCanopyScore(
+                    env.canopyPct.getOrNull(idx), env.ndvi.getOrNull(idx), env.landcover.getOrNull(idx), species.id
+                ) else MycoMath.canopyProximityScore(canopyDist)
+
+                // ── C. Weighted factor combination ──────────────────
+                // Evidence stays dominant; terrain, elevation, aspect and
+                // canopy give real per-cell differentiation alongside the
+                // global climate factors. Weights sum to 1.0.
+                val adjustedHabitat = (habitatScore * habitatWeight).coerceIn(0.0, 1.0)
+
+                val factorWeights = mapOf(
+                    "evidence"    to 0.24,
+                    "season"      to 0.16,
+                    "rainTrigger" to 0.12,
+                    "canopy"      to 0.12,
+                    "terrain"     to 0.08,
+                    "habitat"     to 0.08,
+                    "elevation"   to 0.06,
+                    "temperature" to 0.06,
+                    "aspect"      to 0.04,
+                    "moisture"    to 0.03,
+                    "moon"        to 0.01
+                )
+                val factorScores = mapOf(
+                    "evidence"    to observationScore,
+                    "season"      to seasonScore,
+                    "rainTrigger" to rainTriggerScore,
+                    "canopy"      to canopyScore,
+                    "terrain"     to terrainScore,
+                    "habitat"     to adjustedHabitat,
+                    "elevation"   to elevationScore,
+                    "temperature" to tempScore,
+                    "aspect"      to aspectScore,
+                    "moisture"    to moistureScore,
+                    "moon"        to moonScore
+                )
+
+                // Weighted sum with multiplicative penalty:
+                // If season OR rain trigger is very low, cap the score —
+                // you won't find fungi out of season in dry conditions
+                // regardless of historical evidence.
+                val weightedSum = factorWeights.entries.sumOf { (k, w) ->
+                    w * (factorScores[k] ?: 0.0)
+                }
+                val seasonRainFloor = minOf(seasonScore, rainTriggerScore + 0.2)
+                val penaltyMultiplier = (0.3 + 0.7 * seasonRainFloor).coerceIn(0.0, 1.0)
+
+                val finalScore = (weightedSum * penaltyMultiplier).coerceIn(0.0, 1.0)
+
+                // ── D. 5-tier classification ────────────────────────
+                val tier = MycoMath.classifyTier(finalScore)
+
+                // ── E. Contributing factors (human-readable) ────────
+                val factors = mutableListOf<String>()
+                factors.add("📍 Cell (${String.format(Locale.US, "%.4f", cellLat)}, ${String.format(Locale.US, "%.4f", cellLng)})")
+
+                // Source breakdown badges
+                val sourceStr = sourceCounts.entries.joinToString(" | ") { "${it.key}: ${it.value}" }
+                val totalSources = if (sourceStr.isNotEmpty()) " [$sourceStr]" else ""
+                factors.add("🔬 Evidence: $nearbyRecords record(s) within 2.5 km$totalSources → ${String.format(Locale.US, "%.0f", observationScore * 100)}%")
+
+                factors.add("📅 Season: ${if (seasonScore > 0.5) "In window" else "Outside/shoulder"} ${monthName(species.seasonStart)}–${monthName(species.seasonEnd)} → ${String.format(Locale.US, "%.0f", seasonScore * 100)}%")
+                factors.add("🌧️ Rain trigger: ${if (rainTriggerScore > 0.5) "Trigger event detected" else "No strong trigger"} (10-21d lag) → ${String.format(Locale.US, "%.0f", rainTriggerScore * 100)}%")
+                factors.add("🌡️ Temperature: avg ${String.format(Locale.US, "%.1f", weather.avgTemp)}°C → ${String.format(Locale.US, "%.0f", tempScore * 100)}% fit for ${species.scientificName}")
+                factors.add("🌲 Habitat: ${species.habitatTypes.joinToString(", ")} → ${String.format(Locale.US, "%.0f", adjustedHabitat * 100)}%")
+                factors.add("🪵 Substrate: ${species.substrates.joinToString(", ")}")
+                factors.add("⛰️ Elevation: ${if (cellElev != null) String.format(Locale.US, "%.0f m", cellElev) else "n/a"} → ${String.format(Locale.US, "%.0f", elevationScore * 100)}% fit")
+                factors.add("🏞️ Terrain (slope/moisture): ${String.format(Locale.US, "%.0f", terrainScore * 100)}% | Aspect: ${String.format(Locale.US, "%.0f", aspectScore * 100)}%")
+                if (env != null) {
+                    val cv = env.canopyPct.getOrNull(idx)
+                    val nv = env.ndvi.getOrNull(idx)
+                    factors.add("🛰️ Earth Engine: canopy ${if (cv != null) String.format(Locale.US, "%.0f%%", cv) else "n/a"}, NDVI ${if (nv != null) String.format(Locale.US, "%.2f", nv) else "n/a"} → ${String.format(Locale.US, "%.0f", canopyScore * 100)}%")
+                } else {
+                    factors.add("🌳 Canopy: ${if (canopyDist != null) "~${String.format(Locale.US, "%.0f m", canopyDist)} to woodland" else "no map data"} → ${String.format(Locale.US, "%.0f", canopyScore * 100)}%")
+                }
+                weather.avgSoilMoisture?.let { factors.add("💧 Soil moisture: ${String.format(Locale.US, "%.2f", it)} m³/m³ → ${String.format(Locale.US, "%.0f", MycoMath.soilMoistureFitness(it) * 100)}%") }
+                if (moonScore > 0.7) factors.add("🌙 Moon phase favourable (traditional signal)")
+                factors.add("Multi-factor Bayesian estimate — not a guarantee of presence.")
+
+                cells.add(HotspotCell(cellLat, cellLng, finalScore, tier, factors))
         }
         return@withContext cells
     }
 
+
+    /**
+     * Multi-species aggregate hotspot scoring.
+     *
+     * Answers "where am I likely to find ANY fungi here?" — combining
+     * evidence and environmental factors across the entire catalogue.
+     * Diversity (how many species are recorded nearby) is a first-class
+     * signal that differentiates genuinely rich sites from monoculture spots.
+     */
+    suspend fun generateMultiSpeciesHotspots(
+        centerLat: Double,
+        centerLng: Double,
+        radiusKm: Double,
+        forceRefresh: Boolean = false
+    ): List<HotspotCell> = withContext(Dispatchers.Default) {
+        val allSpecies = dao.getAllSpecies()
+        if (allSpecies.isEmpty()) return@withContext emptyList()
+
+        // Pull observations for every species
+        val allObservations = mutableListOf<Observation>()
+        for (species in allSpecies) {
+            coroutineContext.ensureActive()
+            try {
+                val obs = getObservations(species, centerLat, centerLng, radiusKm, forceRefresh)
+                allObservations.addAll(obs)
+            } catch (e: Exception) {
+                Log.w(TAG, "Skipping ${species.scientificName} in aggregate fetch: ${e.message}")
+            }
+        }
+        val userSightings = dao.getAllUserSightings().filter {
+            calculateDistanceMeters(centerLat, centerLng, it.lat, it.lng) <= radiusKm * 1000.0
+        }
+        // Detailed weather for lag analysis
+        val weather = getDetailedWeather(centerLat, centerLng)
+
+        val nowMs = System.currentTimeMillis()
+        val calendar = Calendar.getInstance()
+        val currentMonth = calendar.get(Calendar.MONTH) + 1
+        val dayOfYear = calendar.get(Calendar.DAY_OF_YEAR)
+
+        // Aggregate seasonal fitness: fraction of catalogue currently in season
+        val inSeasonCount = allSpecies.count { isMonthInSeason(currentMonth, it.seasonStart, it.seasonEnd) }
+        val inSeasonFraction = inSeasonCount.toDouble() / allSpecies.size
+        val seasonScore = (0.3 + 0.7 * inSeasonFraction).coerceIn(0.0, 1.0)
+
+        // Weather factors (shared across grid)
+        val rainTriggerScore = MycoMath.rainfallTriggerScore(weather.dailyRainfallMm)
+        val tempScore = MycoMath.temperatureFitness(weather.avgTemp, "aggregate_default")
+        val recentRain30d = weather.dailyRainfallMm.takeLast(minOf(30, weather.dailyRainfallMm.size)).sum()
+        val rainMoistureScore = when {
+            recentRain30d in 40.0..180.0 -> 1.0
+            recentRain30d < 40.0 -> recentRain30d / 40.0
+            else -> maxOf(0.3, 1.0 - (recentRain30d - 180.0) / 200.0)
+        }
+        val soilMoistureScore = weather.avgSoilMoisture?.let { MycoMath.soilMoistureFitness(it) }
+        val moistureScore = if (soilMoistureScore != null)
+            (0.4 * rainMoistureScore + 0.6 * soilMoistureScore) else rainMoistureScore
+        val moonScore = MycoMath.moonFruitingScore(nowMs)
+
+        val latStep = 0.0045
+        val lngStep = 0.0057
+        val latRangeSteps = ceil((radiusKm * 1000.0) / 500.0).toInt()
+        val cells = mutableListOf<HotspotCell>()
+        val kernelRadiusMeters = 2500.0
+        val maxDaysBack = 5.0 * 365.0
+
+        // Enumerate in-radius cells, then batch-fetch real terrain elevation.
+        val cellIJ = mutableListOf<Pair<Int, Int>>()
+        val cellLL = mutableListOf<Pair<Double, Double>>()
+        for (i in -latRangeSteps..latRangeSteps) {
+            for (j in -latRangeSteps..latRangeSteps) {
+                val cLat = centerLat + i * latStep
+                val cLng = centerLng + j * lngStep
+                if (calculateDistanceMeters(centerLat, centerLng, cLat, cLng) > radiusKm * 1000.0) continue
+                cellIJ.add(i to j)
+                cellLL.add(cLat to cLng)
+            }
+        }
+        val elevations = fetchElevations(cellLL)
+        val elevByIJ = HashMap<Pair<Int, Int>, Double>()
+        cellIJ.forEachIndexed { idx, ij -> elevations[idx]?.let { elevByIJ[ij] = it } }
+
+        val env = fetchEnvLayers(cellLL)
+        val canopy = if (env == null && cellLL.isNotEmpty()) fetchCanopyFeatures(
+            cellLL.minOf { it.first }, cellLL.minOf { it.second },
+            cellLL.maxOf { it.first }, cellLL.maxOf { it.second }
+        ) else emptyList()
+
+        for (idx in cellIJ.indices) {
+            coroutineContext.ensureActive()
+            val (i, j) = cellIJ[idx]
+            val (cellLat, cellLng) = cellLL[idx]
+
+                var weightedEvidence = 0.0
+                var nearbyRecords = 0
+                val nearbySpecies = mutableSetOf<String>()
+
+                for (obs in allObservations) {
+                    if (abs(obs.lat - cellLat) > 0.025 || abs(obs.lng - cellLng) > 0.035) continue
+                    val d = calculateDistanceMeters(cellLat, cellLng, obs.lat, obs.lng)
+                    if (d > kernelRadiusMeters) continue
+                    val diffDays = (nowMs - obs.observedAt).toDouble() / (1000.0 * 60 * 60 * 24)
+                    if (diffDays !in 0.0..maxDaysBack) continue
+
+                    val quality = MycoMath.qualityWeight(obs.qualityGrade)
+                    val sourceW = MycoMath.sourceWeight(obs.source)
+                    val recency = MycoMath.recencyWeight(diffDays)
+                    val spatial = MycoMath.spatialKernel(d)
+                    weightedEvidence += quality * sourceW * recency * spatial
+                    nearbyRecords++
+                    nearbySpecies.add(obs.speciesId)
+                }
+
+                for (sig in userSightings) {
+                    if (abs(sig.lat - cellLat) > 0.025 || abs(sig.lng - cellLng) > 0.035) continue
+                    val d = calculateDistanceMeters(cellLat, cellLng, sig.lat, sig.lng)
+                    if (d > kernelRadiusMeters) continue
+                    val diffDays = (nowMs - sig.timestamp).toDouble() / (1000.0 * 60 * 60 * 24)
+                    if (diffDays !in 0.0..maxDaysBack) continue
+                    weightedEvidence += 1.5 * MycoMath.recencyWeight(diffDays) * MycoMath.spatialKernel(d)
+                    nearbyRecords++
+                    nearbySpecies.add(sig.speciesId)
+                }
+
+                // Diversity bonus: more species nearby → richer site
+                val diversityBonus = minOf(0.3, nearbySpecies.size * 0.06)
+                val observationScore = minOf(1.0, weightedEvidence / 6.0 + diversityBonus)
+
+                // Per-cell terrain (real elevation) — same landform logic as
+                // the single-species engine, using a broad aggregate band.
+                val cellElev = elevations[idx]
+                val neighbourElevs = listOf(
+                    (i - 1) to j, (i + 1) to j, i to (j - 1), i to (j + 1),
+                    (i - 1) to (j - 1), (i + 1) to (j + 1), (i - 1) to (j + 1), (i + 1) to (j - 1)
+                ).mapNotNull { elevByIJ[it] }
+                val elevationScore = if (cellElev != null)
+                    MycoMath.elevationFitness(cellElev, "aggregate_default") else 0.6
+                val terrainScore = if (cellElev != null && neighbourElevs.isNotEmpty())
+                    MycoMath.terrainMoistureScore(cellElev, neighbourElevs) else 0.5
+                val aspectScore = if (cellElev != null) MycoMath.slopeAspectMoistureScore(
+                    cellElev,
+                    elevByIJ[(i + 1) to j], elevByIJ[(i - 1) to j],
+                    elevByIJ[i to (j + 1)], elevByIJ[i to (j - 1)]
+                ) else 0.7
+                val canopyDist = if (canopy.isEmpty()) null else nearestFeatureMeters(cellLat, cellLng, canopy)
+                val canopyScore = if (env != null) MycoMath.richCanopyScore(
+                    env.canopyPct.getOrNull(idx), env.ndvi.getOrNull(idx), env.landcover.getOrNull(idx), "aggregate_default"
+                ) else MycoMath.canopyProximityScore(canopyDist)
+
+                // Weighted combination (weights sum to 1.0)
+                val weightedSum = 0.24 * observationScore +
+                        0.16 * seasonScore +
+                        0.12 * rainTriggerScore +
+                        0.12 * canopyScore +
+                        0.08 * terrainScore +
+                        0.08 * 0.7 + // Aggregate habitat baseline (diverse catalogue)
+                        0.06 * elevationScore +
+                        0.06 * tempScore +
+                        0.04 * aspectScore +
+                        0.03 * moistureScore +
+                        0.01 * moonScore
+
+                val seasonRainFloor = minOf(seasonScore, rainTriggerScore + 0.2)
+                val penaltyMultiplier = (0.3 + 0.7 * seasonRainFloor).coerceIn(0.0, 1.0)
+                val finalScore = (weightedSum * penaltyMultiplier).coerceIn(0.0, 1.0)
+
+                val tier = MycoMath.classifyTier(finalScore)
+
+                val factors = mutableListOf<String>()
+                factors.add("📍 Cell (${String.format(Locale.US, "%.4f", cellLat)}, ${String.format(Locale.US, "%.4f", cellLng)})")
+                factors.add("🔬 Evidence: $nearbyRecords record(s) across ${nearbySpecies.size} species within 2.5 km → ${String.format(Locale.US, "%.0f", observationScore * 100)}%")
+                factors.add("📅 $inSeasonCount of ${allSpecies.size} species fruiting in ${monthName(currentMonth)} → ${String.format(Locale.US, "%.0f", seasonScore * 100)}%")
+                factors.add("🌧️ Rain trigger (10-21d lag): ${String.format(Locale.US, "%.0f", rainTriggerScore * 100)}% | Background moisture: ${String.format(Locale.US, "%.0f", recentRain30d)}mm/30d")
+                factors.add("🌡️ Avg temp ${String.format(Locale.US, "%.1f", weather.avgTemp)}°C → ${String.format(Locale.US, "%.0f", tempScore * 100)}%")
+                factors.add("⛰️ Elevation: ${if (cellElev != null) String.format(Locale.US, "%.0f m", cellElev) else "n/a"} → ${String.format(Locale.US, "%.0f", elevationScore * 100)}% | 🏞️ Terrain: ${String.format(Locale.US, "%.0f", terrainScore * 100)}% | Aspect: ${String.format(Locale.US, "%.0f", aspectScore * 100)}%")
+                if (env != null) {
+                    val cv = env.canopyPct.getOrNull(idx)
+                    val nv = env.ndvi.getOrNull(idx)
+                    factors.add("🛰️ Earth Engine: canopy ${if (cv != null) String.format(Locale.US, "%.0f%%", cv) else "n/a"}, NDVI ${if (nv != null) String.format(Locale.US, "%.2f", nv) else "n/a"} → ${String.format(Locale.US, "%.0f", canopyScore * 100)}%")
+                } else {
+                    factors.add("🌳 Canopy: ${if (canopyDist != null) "~${String.format(Locale.US, "%.0f m", canopyDist)} to woodland" else "no map data"} → ${String.format(Locale.US, "%.0f", canopyScore * 100)}%")
+                }
+                if (nearbySpecies.size >= 3) factors.add("🌿 Diversity bonus: ${nearbySpecies.size} distinct species recorded nearby")
+                factors.add("Multi-factor aggregate estimate — not species-specific.")
+
+                cells.add(HotspotCell(cellLat, cellLng, finalScore, tier, factors))
+        }
+        return@withContext cells
+    }
+
+    // ─── Darwin Core Export ─────────────────────────────────────────
+
+    /**
+     * Exports user sightings in Darwin Core standard format (CSV).
+     * This format is accepted by Atlas of Living Australia, GBIF, and
+     * Fungimap for contribution to biodiversity databases.
+     *
+     * Returns the CSV content as a String.
+     */
+    suspend fun exportDarwinCore(): String = withContext(Dispatchers.IO) {
+        val sightings = dao.getAllUserSightings().filter { !it.isPrivate }
+        val allSpecies = dao.getAllSpecies()
+        val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
+
+        val header = "occurrenceID,basisOfRecord,scientificName,kingdom,phylum,class,order,family,genus," +
+                "decimalLatitude,decimalLongitude,coordinateUncertaintyInMeters," +
+                "eventDate,recordedBy,occurrenceRemarks,identificationVerificationStatus"
+
+        val rows = sightings.map { sighting ->
+            val species = allSpecies.find { it.id == sighting.speciesId }
+            val sciName = species?.scientificName ?: sighting.speciesId
+            val family = species?.family ?: ""
+            val genus = species?.genus ?: ""
+            val dateStr = sdf.format(Date(sighting.timestamp))
+            val notes = sighting.notes.replace("\"", "'").replace(",", ";")
+
+            "\"MM-${sighting.id}\"," +
+                    "\"HUMAN_OBSERVATION\"," +
+                    "\"$sciName\"," +
+                    "\"Fungi\"," +
+                    "\"Basidiomycota\"," +
+                    "\"Agaricomycetes\"," +
+                    "\"\"," + // order not in model
+                    "\"$family\"," +
+                    "\"$genus\"," +
+                    "${sighting.lat}," +
+                    "${sighting.lng}," +
+                    "10," + // GPS uncertainty ~10m
+                    "\"$dateStr\"," +
+                    "\"Mycilliyums User\"," +
+                    "\"$notes\"," +
+                    "\"unverified\""
+        }
+
+        return@withContext "$header\n${rows.joinToString("\n")}"
+    }
 
     // --- Support Math & Date Help Helpers ---
 
@@ -383,28 +1034,11 @@ class FungiRepository(
         }
     }
 
-    private fun calculateDistanceMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
-        val R = 6371e3 // metres of earth radius
-        val phi1 = lat1 * PI / 180.0
-        val phi2 = lat2 * PI / 180.0
-        val deltaPhi = (lat2 - lat1) * PI / 180.0
-        val deltaLambda = (lon2 - lon1) * PI / 180.0
+    private fun calculateDistanceMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double =
+        MycoMath.haversineMeters(lat1, lon1, lat2, lon2)
 
-        val a = sin(deltaPhi / 2) * sin(deltaPhi / 2) +
-                cos(phi1) * cos(phi2) *
-                sin(deltaLambda / 2) * sin(deltaLambda / 2)
-        val c = 2 * atan2(sqrt(a), sqrt(1 - a))
-
-        return R * c
-    }
-
-    private fun isMonthInSeason(month: Int, start: Int, end: Int): Boolean {
-        return if (start <= end) {
-            month in start..end
-        } else {
-            month >= start || month <= end
-        }
-    }
+    private fun isMonthInSeason(month: Int, start: Int, end: Int): Boolean =
+        MycoMath.isMonthInSeason(month, start, end)
 
     private fun monthName(month: Int): String {
         return when (month) {

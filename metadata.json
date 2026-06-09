@@ -1,6 +1,6 @@
 {
-  "name": "Mycelium Mapper",
+  "name": "Mycilliyums",
   "description": "A personal field research tool for mycology in Victoria, Australia, combining species reference data, iNaturalist observations, and weather/habitat signals to suggest probable fruiting zones.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": []
 }

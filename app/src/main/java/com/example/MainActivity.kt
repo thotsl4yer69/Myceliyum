@@ -7,9 +7,9 @@ import androidx.activity.enableEdgeToEdge
 import androidx.lifecycle.ViewModelProvider
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ManageSearch
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -30,7 +30,14 @@ class MainActivity : ComponentActivity() {
         val fungiViewModel = ViewModelProvider(this, FungiViewModel.provideFactory(application))[FungiViewModel::class.java]
 
         setContent {
-            MyApplicationTheme(darkTheme = true) { // Dark theme default for field readouts
+            val appTheme by fungiViewModel.appTheme.collectAsState()
+            val systemDark = isSystemInDarkTheme()
+            val useDark = when (appTheme) {
+                "Light" -> false
+                "Dark" -> true
+                else -> systemDark // "System"
+            }
+            MyApplicationTheme(darkTheme = useDark) {
                 MainWorkflowLayout(viewModel = fungiViewModel)
             }
         }
@@ -41,6 +48,7 @@ sealed interface SelectedTab {
     object Home : SelectedTab
     object Search : SelectedTab
     object Map : SelectedTab
+    object Identify : SelectedTab
     object Sightings : SelectedTab
     object Settings : SelectedTab
 }
@@ -58,7 +66,7 @@ fun MainWorkflowLayout(viewModel: FungiViewModel) {
     if (!splashNoticeAccepted) {
         SplashNoticeDialog(
             onDismiss = {
-                viewModel.splashNoticeAccepted.value = true
+                viewModel.acceptSplashNotice()
             }
         )
     }
@@ -87,7 +95,7 @@ fun MainWorkflowLayout(viewModel: FungiViewModel) {
                             activeTab = SelectedTab.Search
                             activeDetailSpecies = null
                         },
-                        icon = { Icon(Icons.AutoMirrored.Filled.ManageSearch, contentDescription = "Search Catalogue") },
+                        icon = { Icon(Icons.Default.ManageSearch, contentDescription = "Search Catalogue") },
                         label = { Text("Taxa") },
                         modifier = Modifier.testTag("nav_search")
                     )
@@ -104,26 +112,28 @@ fun MainWorkflowLayout(viewModel: FungiViewModel) {
                     )
 
                     NavigationBarItem(
+                        selected = activeTab is SelectedTab.Identify,
+                        onClick = {
+                            activeTab = SelectedTab.Identify
+                            activeDetailSpecies = null
+                        },
+                        icon = { Icon(Icons.Default.CameraAlt, contentDescription = "AI Identify") },
+                        label = { Text("Identify") },
+                        modifier = Modifier.testTag("nav_identify")
+                    )
+
+                    NavigationBarItem(
                         selected = activeTab is SelectedTab.Sightings,
                         onClick = {
                             activeTab = SelectedTab.Sightings
                             activeDetailSpecies = null
                         },
                         icon = { Icon(Icons.Default.History, contentDescription = "Sightings Registry") },
-                        label = { Text("Sightings") },
+                        label = { Text("Log") },
                         modifier = Modifier.testTag("nav_sightings")
                     )
 
-                    NavigationBarItem(
-                        selected = activeTab is SelectedTab.Settings,
-                        onClick = {
-                            activeTab = SelectedTab.Settings
-                            activeDetailSpecies = null
-                        },
-                        icon = { Icon(Icons.Default.Settings, contentDescription = "Terminal Settings") },
-                        label = { Text("Settings") },
-                        modifier = Modifier.testTag("nav_settings")
-                    )
+                    // Settings is accessed via the gear icon in the Home top bar
                 }
             }
         ) { innerPadding ->
@@ -140,6 +150,7 @@ fun MainWorkflowLayout(viewModel: FungiViewModel) {
                         onNavigateToSearch = { activeTab = SelectedTab.Search },
                         onNavigateToMap = { activeTab = SelectedTab.Map },
                         onNavigateToSightings = { activeTab = SelectedTab.Sightings },
+                        onNavigateToSettings = { activeTab = SelectedTab.Settings },
                         onSpeciesSelected = { spec ->
                             activeDetailSpecies = spec
                         }
@@ -153,6 +164,7 @@ fun MainWorkflowLayout(viewModel: FungiViewModel) {
                     is SelectedTab.Map -> MapScreen(
                         viewModel = viewModel
                     )
+                    is SelectedTab.Identify -> IdentifyScreen()
                     is SelectedTab.Sightings -> SightingsScreen(
                         viewModel = viewModel
                     )
