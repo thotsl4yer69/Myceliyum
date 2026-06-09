@@ -18,6 +18,14 @@ interface GeocodingApi {
         @Query("address") address: String,
         @Query("key") key: String
     ): GeocodeResponse
+
+    /** Reverse geocode: coordinates → a place name for the map header. */
+    @GET("maps/api/geocode/json")
+    suspend fun reverseGeocode(
+        @Query("latlng") latlng: String,
+        @Query("key") key: String,
+        @Query("result_type") resultType: String = "locality|administrative_area_level_2|administrative_area_level_1|natural_feature|park"
+    ): GeocodeResponse
 }
 
 data class GeocodeResponse(

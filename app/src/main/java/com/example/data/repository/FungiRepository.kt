@@ -525,6 +525,38 @@ class FungiRepository(
         }
     }
 
+    /**
+     * Reverse-geocodes coordinates to a short place name for the map header.
+     * Google Geocoding when a key is set (reliable, descriptive), else the
+     * on-device geocoder, else a GPS string.
+     */
+    suspend fun reverseGeocode(lat: Double, lng: Double): String? = withContext(Dispatchers.IO) {
+        if (geocodingApi != null && googleApiKey.isNotBlank()) {
+            try {
+                val resp = geocodingApi.reverseGeocode(String.format(Locale.US, "%.6f,%.6f", lat, lng), googleApiKey)
+                val label = resp.results?.firstOrNull()?.formattedAddress
+                if (resp.status == "OK" && !label.isNullOrBlank()) {
+                    // Trim a verbose address to its first two components.
+                    return@withContext label.split(",").take(2).joinToString(",").trim()
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Google reverse geocoding failed: ${e.message}")
+            }
+        }
+        try {
+            val geocoder = android.location.Geocoder(context, Locale.getDefault())
+            @Suppress("DEPRECATION")
+            val a = geocoder.getFromLocation(lat, lng, 1)?.firstOrNull()
+            if (a != null) {
+                val city = a.locality ?: a.subAdminArea ?: a.adminArea ?: ""
+                val country = a.countryCode ?: a.countryName ?: ""
+                listOf(city, country).filter { it.isNotEmpty() }.joinToString(", ").ifBlank { null }
+            } else null
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     /** Distance (m) to the nearest green feature, or null if none provided. */
     private fun nearestFeatureMeters(lat: Double, lng: Double, features: List<Pair<Double, Double>>): Double? {
         if (features.isEmpty()) return null
