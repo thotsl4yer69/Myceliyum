@@ -450,33 +450,42 @@ class FungiRepository(
             val landcover = arrayOfNulls<Int>(points.size)
             val canopyPct = arrayOfNulls<Double>(points.size)
             val ndvi = arrayOfNulls<Double>(points.size)
+            var haveAny = false
             val missIdx = ArrayList<Int>()
             val missPts = ArrayList<Pair<Double, Double>>()
             for (i in points.indices) {
                 val c = envCache[gridKey(points[i].first, points[i].second)]
                 if (c != null) {
                     landcover[i] = c.landcover; canopyPct[i] = c.canopyPct; ndvi[i] = c.ndvi
+                    haveAny = true
                 } else {
                     missIdx.add(i); missPts.add(points[i])
                 }
             }
-            if (missPts.isNotEmpty()) {
+            // Fetch misses in chunks — the backend caps a request at 600 points,
+            // so a large search radius must be split or EE is lost for the grid.
+            var k = 0
+            while (k < missPts.size) {
+                val end = minOf(k + 500, missPts.size)
                 try {
-                    val resp = api.envGrid(backendToken, EnvGridRequest(missPts.map { listOf(it.first, it.second) }))
-                    for (k in missPts.indices) {
-                        val lc = resp.landcover?.getOrNull(k)?.toInt()
-                        val cp = resp.canopy?.getOrNull(k)
-                        val nv = resp.ndvi?.getOrNull(k)
-                        val i = missIdx[k]
-                        landcover[i] = lc; canopyPct[i] = cp; ndvi[i] = nv
-                        envCache[gridKey(missPts[k].first, missPts[k].second)] = EnvCell(lc, cp, nv)
+                    val chunk = missPts.subList(k, end)
+                    val resp = api.envGrid(backendToken, EnvGridRequest(chunk.map { listOf(it.first, it.second) }))
+                    for (c in chunk.indices) {
+                        val lc = resp.landcover?.getOrNull(c)?.toInt()
+                        val cp = resp.canopy?.getOrNull(c)
+                        val nv = resp.ndvi?.getOrNull(c)
+                        val orig = missIdx[k + c]
+                        landcover[orig] = lc; canopyPct[orig] = cp; ndvi[orig] = nv
+                        envCache[gridKey(missPts[k + c].first, missPts[k + c].second)] = EnvCell(lc, cp, nv)
+                        haveAny = true
                     }
                 } catch (e: Exception) {
-                    Log.w(TAG, "Earth Engine backend fetch failed, using OSM canopy: ${e.message}")
-                    // Only give up entirely (→ OSM fallback) if nothing was cached.
-                    if (missIdx.size == points.size) return@withContext null
+                    Log.w(TAG, "Earth Engine chunk fetch failed: ${e.message}")
                 }
+                k = end
             }
+            // Fall back to OSM canopy only if we got nothing at all.
+            if (!haveAny) return@withContext null
             EnvLayers(landcover.toList(), canopyPct.toList(), ndvi.toList())
         }
     }
