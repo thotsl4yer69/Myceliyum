@@ -30,5 +30,6 @@ data class EnvGridRequest(
 data class EnvGridResponse(
     @Json(name = "landcover") val landcover: List<Double?>?, // ESA WorldCover class codes
     @Json(name = "canopy") val canopy: List<Double?>?,       // tree-canopy cover %
-    @Json(name = "ndvi") val ndvi: List<Double?>?            // NDVI greenness (−1..1)
+    @Json(name = "ndvi") val ndvi: List<Double?>?,           // NDVI greenness (−1..1)
+    @Json(name = "water_dist") val waterDist: List<Double?>? = null // metres to nearest surface water
 )

@@ -192,6 +192,14 @@ class MycoMathTest {
     }
 
     @Test
+    fun `riparian score rewards proximity to water and is neutral when far`() {
+        assertEquals(1.0, MycoMath.riparianScore(50.0), 1e-9)
+        assertTrue(MycoMath.riparianScore(200.0) > MycoMath.riparianScore(1500.0))
+        assertEquals(0.45, MycoMath.riparianScore(null), 1e-9)   // no data → neutral, not penalised
+        assertEquals(0.45, MycoMath.riparianScore(5000.0), 1e-9) // far → neutral
+    }
+
+    @Test
     fun `rich canopy score blends the three layers within range`() {
         val s = MycoMath.richCanopyScore(canopyPct = 75.0, ndvi = 0.7, worldCoverClass = 10, speciesId = "cortinarius_archeri")
         assertTrue("expected a strong woodland score, got $s", s > 0.8)

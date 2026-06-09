@@ -416,6 +416,21 @@ object MycoMath {
     }
 
     /**
+     * Riparian suitability (0.0–1.0) from distance to surface water (metres).
+     * Many fungi favour the damp, organic-rich ground along creeks and gully
+     * lines, so cells near water score up. This is a mild positive signal —
+     * being far from water (or having no data) is neutral, not penalised.
+     */
+    fun riparianScore(distanceMeters: Double?): Double = when {
+        distanceMeters == null -> 0.45           // no water within range / no data → neutral
+        distanceMeters <= 100.0 -> 1.0           // creek/river bank — prime
+        distanceMeters <= 500.0 -> 0.80
+        distanceMeters <= 1000.0 -> 0.60
+        distanceMeters <= 2000.0 -> 0.50
+        else -> 0.45
+    }.coerceIn(0.0, 1.0)
+
+    /**
      * Multiplicative HABITAT GATE (0.05–1.0) — the counter-weight that stops
      * cities, roads, car parks and water from scoring high.
      *

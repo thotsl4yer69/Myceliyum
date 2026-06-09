@@ -350,7 +350,7 @@ class FungiRepository(
     // makes re-scoring the same area (species/radius changes, revisits, small
     // pans) instant and avoids repeat network / Earth-Engine cost.
     private val elevCache = java.util.concurrent.ConcurrentHashMap<Long, Double>()
-    private data class EnvCell(val landcover: Int?, val canopyPct: Double?, val ndvi: Double?)
+    private data class EnvCell(val landcover: Int?, val canopyPct: Double?, val ndvi: Double?, val waterDistM: Double?)
     private val envCache = java.util.concurrent.ConcurrentHashMap<Long, EnvCell>()
 
     /** Snap a coordinate to a global grid index so the same place always keys the same. */
@@ -382,8 +382,8 @@ class FungiRepository(
             try {
                 if (envCacheFile.exists()) envCacheFile.forEachLine { line ->
                     val p = line.split('\t')
-                    if (p.size == 4) p[0].toLongOrNull()?.let { k ->
-                        envCache[k] = EnvCell(p[1].toIntOrNull(), p[2].toDoubleOrNull(), p[3].toDoubleOrNull())
+                    if (p.size == 5) p[0].toLongOrNull()?.let { k ->
+                        envCache[k] = EnvCell(p[1].toIntOrNull(), p[2].toDoubleOrNull(), p[3].toDoubleOrNull(), p[4].toDoubleOrNull())
                     }
                 }
             } catch (e: Exception) { Log.w(TAG, "env cache load failed: ${e.message}") }
@@ -403,7 +403,7 @@ class FungiRepository(
         try {
             envCacheFile.bufferedWriter().use { w ->
                 envCache.entries.asSequence().take(CACHE_MAX).forEach { (k, v) ->
-                    w.write("$k\t${v.landcover ?: ""}\t${v.canopyPct ?: ""}\t${v.ndvi ?: ""}\n")
+                    w.write("$k\t${v.landcover ?: ""}\t${v.canopyPct ?: ""}\t${v.ndvi ?: ""}\t${v.waterDistM ?: ""}\n")
                 }
             }
         } catch (e: Exception) { Log.w(TAG, "env cache save failed: ${e.message}") }
@@ -486,7 +486,8 @@ class FungiRepository(
     data class EnvLayers(
         val landcover: List<Int?>,
         val canopyPct: List<Double?>,
-        val ndvi: List<Double?>
+        val ndvi: List<Double?>,
+        val waterDistM: List<Double?>
     )
 
     /**
@@ -502,13 +503,14 @@ class FungiRepository(
             val landcover = arrayOfNulls<Int>(points.size)
             val canopyPct = arrayOfNulls<Double>(points.size)
             val ndvi = arrayOfNulls<Double>(points.size)
+            val waterDist = arrayOfNulls<Double>(points.size)
             var haveAny = false
             val missIdx = ArrayList<Int>()
             val missPts = ArrayList<Pair<Double, Double>>()
             for (i in points.indices) {
                 val c = envCache[gridKey(points[i].first, points[i].second)]
                 if (c != null) {
-                    landcover[i] = c.landcover; canopyPct[i] = c.canopyPct; ndvi[i] = c.ndvi
+                    landcover[i] = c.landcover; canopyPct[i] = c.canopyPct; ndvi[i] = c.ndvi; waterDist[i] = c.waterDistM
                     haveAny = true
                 } else {
                     missIdx.add(i); missPts.add(points[i])
@@ -526,9 +528,10 @@ class FungiRepository(
                         val lc = resp.landcover?.getOrNull(c)?.toInt()
                         val cp = resp.canopy?.getOrNull(c)
                         val nv = resp.ndvi?.getOrNull(c)
+                        val wd = resp.waterDist?.getOrNull(c)
                         val orig = missIdx[k + c]
-                        landcover[orig] = lc; canopyPct[orig] = cp; ndvi[orig] = nv
-                        envCache[gridKey(missPts[k + c].first, missPts[k + c].second)] = EnvCell(lc, cp, nv)
+                        landcover[orig] = lc; canopyPct[orig] = cp; ndvi[orig] = nv; waterDist[orig] = wd
+                        envCache[gridKey(missPts[k + c].first, missPts[k + c].second)] = EnvCell(lc, cp, nv, wd)
                         haveAny = true
                     }
                 } catch (e: Exception) {
@@ -539,7 +542,7 @@ class FungiRepository(
             if (missPts.isNotEmpty()) persistEnvCache()
             // Fall back to OSM canopy only if we got nothing at all.
             if (!haveAny) return@withContext null
-            EnvLayers(landcover.toList(), canopyPct.toList(), ndvi.toList())
+            EnvLayers(landcover.toList(), canopyPct.toList(), ndvi.toList(), waterDist.toList())
         }
     }
 
@@ -659,22 +662,23 @@ class FungiRepository(
      * Multi-factor Bayesian hotspot prediction engine (500m resolution).
      *
      * Scoring factors and weights (sum to 1.0):
-     *   1. Observation evidence (iNat + ALA + GBIF + user)          — 0.24
+     *   1. Observation evidence (iNat + ALA + GBIF + user)          — 0.22
      *   2. Seasonal fitness (week-level precision)                 — 0.16
-     *   3. Rainfall trigger (20mm+ event 10-21 days ago with lag)  — 0.12
-     *   4. Canopy/forest proximity (per-cell, OSM Overpass)        — 0.12
+     *   3. Rainfall trigger (20mm+ event 10-21 days ago with lag)  — 0.11
+     *   4. Canopy/forest (EE land cover/canopy/NDVI, or OSM)       — 0.11
      *   5. Terrain moisture (per-cell slope/concavity from DEM)    — 0.08
      *   6. Habitat suitability (species substrate/habitat breadth) — 0.08
      *   7. Elevation fitness (per-cell altitude vs species band)   — 0.06
      *   8. Temperature fitness (species-specific ideal range)      — 0.06
-     *   9. Slope aspect (per-cell; south/east-facing favoured)     — 0.04
-     *  10. Background moisture (rainfall + real 0-7cm soil moisture)— 0.03
-     *  11. Moon phase (optional, traditional forager signal)       — 0.01
+     *   9. Riparian (per-cell distance to surface water, EE)       — 0.04
+     *  10. Slope aspect (per-cell; south/east-facing favoured)     — 0.04
+     *  11. Background moisture (rainfall + real 0-7cm soil moisture)— 0.03
+     *  12. Moon phase (optional, traditional forager signal)       — 0.01
      *
-     * Factors 4, 5, 7 and 9 vary cell-to-cell (real elevation + OSM canopy),
+     * Factors 4, 5, 7, 9 and 10 vary cell-to-cell (real elevation + EE/OSM),
      * so the map reflects genuine landscape instead of only record density.
-     * Each factor produces a 0.0–1.0 score; the final score is their weighted
-     * combination, then gated by a season/rain penalty multiplier.
+     * The weighted score is then multiplied by a season/rain penalty AND a
+     * habitat gate that collapses built-up/water/bare cells toward zero.
      */
     suspend fun generateHotspots(
         species: Species,
@@ -834,6 +838,8 @@ class FungiRepository(
                 val canopyScore = if (env != null) MycoMath.richCanopyScore(
                     env.canopyPct.getOrNull(idx), env.ndvi.getOrNull(idx), env.landcover.getOrNull(idx), species.id
                 ) else MycoMath.canopyProximityScore(canopyDist)
+                // Riparian: closeness to surface water (EE only; neutral otherwise).
+                val riparianScore = if (env != null) MycoMath.riparianScore(env.waterDistM.getOrNull(idx)) else 0.45
 
                 // ── C. Weighted factor combination ──────────────────
                 // Evidence stays dominant; terrain, elevation, aspect and
@@ -842,14 +848,15 @@ class FungiRepository(
                 val adjustedHabitat = (habitatScore * habitatWeight).coerceIn(0.0, 1.0)
 
                 val factorWeights = mapOf(
-                    "evidence"    to 0.24,
+                    "evidence"    to 0.22,
                     "season"      to 0.16,
-                    "rainTrigger" to 0.12,
-                    "canopy"      to 0.12,
+                    "rainTrigger" to 0.11,
+                    "canopy"      to 0.11,
                     "terrain"     to 0.08,
                     "habitat"     to 0.08,
                     "elevation"   to 0.06,
                     "temperature" to 0.06,
+                    "riparian"    to 0.04,
                     "aspect"      to 0.04,
                     "moisture"    to 0.03,
                     "moon"        to 0.01
@@ -863,6 +870,7 @@ class FungiRepository(
                     "habitat"     to adjustedHabitat,
                     "elevation"   to elevationScore,
                     "temperature" to tempScore,
+                    "riparian"    to riparianScore,
                     "aspect"      to aspectScore,
                     "moisture"    to moistureScore,
                     "moon"        to moonScore
@@ -915,6 +923,10 @@ class FungiRepository(
                     factors.add("🛰️ Earth Engine: canopy ${if (cv != null) String.format(Locale.US, "%.0f%%", cv) else "n/a"}, NDVI ${if (nv != null) String.format(Locale.US, "%.2f", nv) else "n/a"} → ${String.format(Locale.US, "%.0f", canopyScore * 100)}%")
                 } else {
                     factors.add("🌳 Canopy: ${if (canopyDist != null) "~${String.format(Locale.US, "%.0f m", canopyDist)} to woodland" else "no map data"} → ${String.format(Locale.US, "%.0f", canopyScore * 100)}%")
+                }
+                if (env != null) {
+                    val wd = env.waterDistM.getOrNull(idx)
+                    factors.add("🌊 Water: ${if (wd != null) "~${String.format(Locale.US, "%.0f m", wd)} to water" else ">2 km away"} → ${String.format(Locale.US, "%.0f", riparianScore * 100)}%")
                 }
                 weather.avgSoilMoisture?.let { factors.add("💧 Soil moisture: ${String.format(Locale.US, "%.2f", it)} m³/m³ → ${String.format(Locale.US, "%.0f", MycoMath.soilMoistureFitness(it) * 100)}%") }
                 if (moonScore > 0.7) factors.add("🌙 Moon phase favourable (traditional signal)")
@@ -1074,16 +1086,18 @@ class FungiRepository(
                 val canopyScore = if (env != null) MycoMath.richCanopyScore(
                     env.canopyPct.getOrNull(idx), env.ndvi.getOrNull(idx), env.landcover.getOrNull(idx), "aggregate_default"
                 ) else MycoMath.canopyProximityScore(canopyDist)
+                val riparianScore = if (env != null) MycoMath.riparianScore(env.waterDistM.getOrNull(idx)) else 0.45
 
                 // Weighted combination (weights sum to 1.0)
-                val weightedSum = 0.24 * observationScore +
+                val weightedSum = 0.22 * observationScore +
                         0.16 * seasonScore +
-                        0.12 * rainTriggerScore +
-                        0.12 * canopyScore +
+                        0.11 * rainTriggerScore +
+                        0.11 * canopyScore +
                         0.08 * terrainScore +
                         0.08 * 0.7 + // Aggregate habitat baseline (diverse catalogue)
                         0.06 * elevationScore +
                         0.06 * tempScore +
+                        0.04 * riparianScore +
                         0.04 * aspectScore +
                         0.03 * moistureScore +
                         0.01 * moonScore
