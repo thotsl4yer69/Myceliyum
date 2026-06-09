@@ -415,6 +415,42 @@ object MycoMath {
         return (0.40 * tree + 0.35 * land + 0.25 * veg).coerceIn(0.0, 1.0)
     }
 
+    /**
+     * Multiplicative HABITAT GATE (0.05–1.0) — the counter-weight that stops
+     * cities, roads, car parks and water from scoring high.
+     *
+     * Fungi simply don't fruit on sealed/built-up, bare, or open-water ground
+     * no matter how good the season, rainfall, or how many citizen-science
+     * records cluster nearby (records are densest where people are — cities).
+     * So land cover and NDVI act as a *gate* applied on top of the weighted
+     * score, rather than just another additive term that urban factors can
+     * outvote. Woodland/wetland pass through (≈1.0); built-up/water/bare
+     * collapse toward zero, dropping those cells to the "Unlikely" tier so
+     * they neither mislead nor clutter the map.
+     */
+    fun habitatGate(worldCoverClass: Int?, ndvi: Double?, speciesId: String): Double {
+        val base = when (worldCoverClass) {
+            10 -> 1.0          // tree cover
+            90, 95 -> 0.9      // wetland / mangrove
+            20, 100 -> 0.8     // shrubland / moss-lichen
+            30 -> 0.50         // grassland / pasture
+            40 -> 0.40         // cropland
+            60 -> 0.18         // bare / sparse
+            70 -> 0.10         // snow / ice
+            80 -> 0.05         // permanent water
+            50 -> 0.12         // built-up — roads, buildings, car parks
+            null -> 0.70       // unknown (no EE data) — mild, don't over-penalise
+            else -> 0.60
+        }
+        // Psilocybe subaeruginosa genuinely fruits in urban woodchip/mulch and
+        // pasture, so it keeps a modest floor where pure-forest species get gated.
+        val adjusted = if (speciesId.startsWith("psilocybe") && (worldCoverClass == 50 || worldCoverClass == 30))
+            maxOf(base, 0.45) else base
+        // Hard non-vegetation veto: NDVI well below zero = pavement/water/rooftops.
+        val vetoed = if (ndvi != null && ndvi < 0.05) minOf(adjusted, 0.20) else adjusted
+        return vetoed.coerceIn(0.05, 1.0)
+    }
+
     // ─── Moon phase (optional factor) ────────────────────────────────
 
     /**

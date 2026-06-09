@@ -541,9 +541,15 @@ fun MapScreen(
                     tonalElevation = 6.dp,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .wrapContentHeight()
+                        // Cap the panel so it never dominates the map; scroll if
+                        // the Parameters content is taller than this.
+                        .heightIn(max = 300.dp)
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                    Column(
+                        modifier = Modifier
+                            .padding(16.dp)
+                            .verticalScroll(rememberScrollState())
+                    ) {
                         // Section Switcher Tab Row
                         TabRow(
                             selectedTabIndex = currentBottomTab,
