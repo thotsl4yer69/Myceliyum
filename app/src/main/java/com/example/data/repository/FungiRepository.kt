@@ -332,6 +332,31 @@ class FungiRepository(
     }
 
     /**
+     * Fetches ground elevation for a list of coordinates, batched into
+     * requests of ≤100 points (Open-Meteo's per-call limit). Returns a list
+     * aligned 1:1 with [coords]; entries are null where elevation could not
+     * be resolved, so callers can fall back to neutral terrain scoring.
+     */
+    suspend fun fetchElevations(coords: List<Pair<Double, Double>>): List<Double?> = withContext(Dispatchers.IO) {
+        if (coords.isEmpty()) return@withContext emptyList()
+        val result = ArrayList<Double?>(coords.size)
+        try {
+            for (chunk in coords.chunked(100)) {
+                val latCsv = chunk.joinToString(",") { String.format(Locale.US, "%.5f", it.first) }
+                val lngCsv = chunk.joinToString(",") { String.format(Locale.US, "%.5f", it.second) }
+                val resp = openMeteoApi.getElevation(latCsv, lngCsv)
+                val elevs = resp.elevation ?: emptyList()
+                for (k in chunk.indices) result.add(elevs.getOrNull(k))
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Elevation fetch failed, using neutral terrain: ${e.message}")
+        }
+        // Guarantee 1:1 alignment even on partial/failed responses.
+        while (result.size < coords.size) result.add(null)
+        result
+    }
+
+    /**
      * Fetches rainfall and temperature in past 30 days from Open-Meteo.
      * Returns total rainfall in mm, and average max recorded temperature in C.
      * (Legacy method — kept for weather summary display in UI)
@@ -368,17 +393,21 @@ class FungiRepository(
     /**
      * Multi-factor Bayesian hotspot prediction engine (500m resolution).
      *
-     * Scoring factors and weights:
-     *   1. Observation evidence (iNat + ALA + GBIF + user)          — 0.30
-     *   2. Habitat suitability (species substrate/habitat breadth) — 0.15
-     *   3. Seasonal fitness (week-level precision)                 — 0.20
-     *   4. Rainfall trigger (20mm+ event 10-21 days ago with lag)  — 0.15
-     *   5. Temperature fitness (species-specific ideal range)      — 0.10
-     *   6. Background moisture (sustained soil moisture proxy)     — 0.05
-     *   7. Moon phase (optional, traditional forager signal)       — 0.05
+     * Scoring factors and weights (sum to 1.0):
+     *   1. Observation evidence (iNat + ALA + GBIF + user)          — 0.27
+     *   2. Seasonal fitness (week-level precision)                 — 0.18
+     *   3. Rainfall trigger (20mm+ event 10-21 days ago with lag)  — 0.14
+     *   4. Terrain moisture (per-cell slope/concavity from DEM)    — 0.10
+     *   5. Habitat suitability (species substrate/habitat breadth) — 0.10
+     *   6. Temperature fitness (species-specific ideal range)      — 0.08
+     *   7. Elevation fitness (per-cell altitude vs species band)   — 0.06
+     *   8. Background moisture (sustained soil moisture proxy)     — 0.04
+     *   9. Moon phase (optional, traditional forager signal)       — 0.03
      *
-     * Each factor produces a 0.0–1.0 score. The final score is a weighted
-     * combination that ensures meaningful variation across the map.
+     * Factors 4 and 7 use real per-cell ground elevation, so the map varies
+     * with genuine landform instead of only observation-record density.
+     * Each factor produces a 0.0–1.0 score; the final score is their weighted
+     * combination, then gated by a season/rain penalty multiplier.
      */
     suspend fun generateHotspots(
         species: Species,
@@ -435,14 +464,30 @@ class FungiRepository(
         val kernelRadiusMeters = 2500.0  // Wider search for evidence
         val maxDaysBack = 5.0 * 365.0
 
+        // 4a. Enumerate the in-radius cells up front so the real terrain
+        // elevation for the whole grid can be fetched in one batched call.
+        val cellIJ = mutableListOf<Pair<Int, Int>>()
+        val cellLL = mutableListOf<Pair<Double, Double>>()
         for (i in -latRangeSteps..latRangeSteps) {
-            coroutineContext.ensureActive()
             for (j in -latRangeSteps..latRangeSteps) {
-                val cellLat = centerLat + i * latStep
-                val cellLng = centerLng + j * lngStep
+                val cLat = centerLat + i * latStep
+                val cLng = centerLng + j * lngStep
+                if (calculateDistanceMeters(centerLat, centerLng, cLat, cLng) > radiusKm * 1000.0) continue
+                cellIJ.add(i to j)
+                cellLL.add(cLat to cLng)
+            }
+        }
 
-                val distanceToCenter = calculateDistanceMeters(centerLat, centerLng, cellLat, cellLng)
-                if (distanceToCenter > radiusKm * 1000.0) continue
+        // 4b. Per-cell ground elevation (Open-Meteo, no key). Build a lookup
+        // so each cell can read its neighbours' elevations for slope/concavity.
+        val elevations = fetchElevations(cellLL)
+        val elevByIJ = HashMap<Pair<Int, Int>, Double>()
+        cellIJ.forEachIndexed { idx, ij -> elevations[idx]?.let { elevByIJ[ij] = it } }
+
+        for (idx in cellIJ.indices) {
+            coroutineContext.ensureActive()
+            val (i, j) = cellIJ[idx]
+            val (cellLat, cellLng) = cellLL[idx]
 
                 // ── A. Observation evidence score ───────────────────
                 var weightedEvidence = 0.0
@@ -483,27 +528,45 @@ class FungiRepository(
                 // Saturate: ~4 strong, recent, nearby records max out evidence
                 val observationScore = minOf(1.0, weightedEvidence / 4.0)
 
-                // ── B. Weighted factor combination ──────────────────
-                // Uses a weighted sum where evidence is dominant, but
-                // environmental factors create meaningful differentiation
-                // even in areas with sparse observation data.
+                // ── B. Per-cell terrain factors (real elevation) ────
+                // Elevation fitness and local slope/concavity vary cell-to-
+                // cell, so the map reflects genuine landscape rather than
+                // only observation-record density.
+                val cellElev = elevations[idx]
+                val neighbourElevs = listOf(
+                    (i - 1) to j, (i + 1) to j, i to (j - 1), i to (j + 1),
+                    (i - 1) to (j - 1), (i + 1) to (j + 1), (i - 1) to (j + 1), (i + 1) to (j - 1)
+                ).mapNotNull { elevByIJ[it] }
+                val elevationScore = if (cellElev != null)
+                    MycoMath.elevationFitness(cellElev, species.id) else 0.6
+                val terrainScore = if (cellElev != null && neighbourElevs.isNotEmpty())
+                    MycoMath.terrainMoistureScore(cellElev, neighbourElevs) else 0.5
+
+                // ── C. Weighted factor combination ──────────────────
+                // Evidence stays dominant; terrain + elevation now add real
+                // per-cell differentiation alongside the global climate
+                // factors. Weights sum to 1.0.
                 val adjustedHabitat = (habitatScore * habitatWeight).coerceIn(0.0, 1.0)
 
                 val factorWeights = mapOf(
-                    "evidence"    to 0.30,
-                    "habitat"     to 0.15,
-                    "season"      to 0.20,
-                    "rainTrigger" to 0.15,
-                    "temperature" to 0.10,
-                    "moisture"    to 0.05,
-                    "moon"        to 0.05
+                    "evidence"    to 0.27,
+                    "season"      to 0.18,
+                    "rainTrigger" to 0.14,
+                    "terrain"     to 0.10,
+                    "habitat"     to 0.10,
+                    "temperature" to 0.08,
+                    "elevation"   to 0.06,
+                    "moisture"    to 0.04,
+                    "moon"        to 0.03
                 )
                 val factorScores = mapOf(
                     "evidence"    to observationScore,
-                    "habitat"     to adjustedHabitat,
                     "season"      to seasonScore,
                     "rainTrigger" to rainTriggerScore,
+                    "terrain"     to terrainScore,
+                    "habitat"     to adjustedHabitat,
                     "temperature" to tempScore,
+                    "elevation"   to elevationScore,
                     "moisture"    to moistureScore,
                     "moon"        to moonScore
                 )
@@ -520,10 +583,10 @@ class FungiRepository(
 
                 val finalScore = (weightedSum * penaltyMultiplier).coerceIn(0.0, 1.0)
 
-                // ── C. 5-tier classification ────────────────────────
+                // ── D. 5-tier classification ────────────────────────
                 val tier = MycoMath.classifyTier(finalScore)
 
-                // ── D. Contributing factors (human-readable) ────────
+                // ── E. Contributing factors (human-readable) ────────
                 val factors = mutableListOf<String>()
                 factors.add("📍 Cell (${String.format(Locale.US, "%.4f", cellLat)}, ${String.format(Locale.US, "%.4f", cellLng)})")
 
@@ -537,11 +600,12 @@ class FungiRepository(
                 factors.add("🌡️ Temperature: avg ${String.format(Locale.US, "%.1f", weather.avgTemp)}°C → ${String.format(Locale.US, "%.0f", tempScore * 100)}% fit for ${species.scientificName}")
                 factors.add("🌲 Habitat: ${species.habitatTypes.joinToString(", ")} → ${String.format(Locale.US, "%.0f", adjustedHabitat * 100)}%")
                 factors.add("🪵 Substrate: ${species.substrates.joinToString(", ")}")
+                factors.add("⛰️ Elevation: ${if (cellElev != null) String.format(Locale.US, "%.0f m", cellElev) else "n/a"} → ${String.format(Locale.US, "%.0f", elevationScore * 100)}% fit")
+                factors.add("🏞️ Terrain (slope/moisture): ${String.format(Locale.US, "%.0f", terrainScore * 100)}%")
                 if (moonScore > 0.7) factors.add("🌙 Moon phase favourable (traditional signal)")
                 factors.add("Multi-factor Bayesian estimate — not a guarantee of presence.")
 
                 cells.add(HotspotCell(cellLat, cellLng, finalScore, tier, factors))
-            }
         }
         return@withContext cells
     }
@@ -609,12 +673,26 @@ class FungiRepository(
         val kernelRadiusMeters = 2500.0
         val maxDaysBack = 5.0 * 365.0
 
+        // Enumerate in-radius cells, then batch-fetch real terrain elevation.
+        val cellIJ = mutableListOf<Pair<Int, Int>>()
+        val cellLL = mutableListOf<Pair<Double, Double>>()
         for (i in -latRangeSteps..latRangeSteps) {
-            coroutineContext.ensureActive()
             for (j in -latRangeSteps..latRangeSteps) {
-                val cellLat = centerLat + i * latStep
-                val cellLng = centerLng + j * lngStep
-                if (calculateDistanceMeters(centerLat, centerLng, cellLat, cellLng) > radiusKm * 1000.0) continue
+                val cLat = centerLat + i * latStep
+                val cLng = centerLng + j * lngStep
+                if (calculateDistanceMeters(centerLat, centerLng, cLat, cLng) > radiusKm * 1000.0) continue
+                cellIJ.add(i to j)
+                cellLL.add(cLat to cLng)
+            }
+        }
+        val elevations = fetchElevations(cellLL)
+        val elevByIJ = HashMap<Pair<Int, Int>, Double>()
+        cellIJ.forEachIndexed { idx, ij -> elevations[idx]?.let { elevByIJ[ij] = it } }
+
+        for (idx in cellIJ.indices) {
+            coroutineContext.ensureActive()
+            val (i, j) = cellIJ[idx]
+            val (cellLat, cellLng) = cellLL[idx]
 
                 var weightedEvidence = 0.0
                 var nearbyRecords = 0
@@ -651,14 +729,28 @@ class FungiRepository(
                 val diversityBonus = minOf(0.3, nearbySpecies.size * 0.06)
                 val observationScore = minOf(1.0, weightedEvidence / 6.0 + diversityBonus)
 
-                // Weighted combination
-                val weightedSum = 0.30 * observationScore +
-                        0.15 * 0.7 + // Aggregate habitat baseline (diverse catalogue)
-                        0.20 * seasonScore +
-                        0.15 * rainTriggerScore +
-                        0.10 * tempScore +
-                        0.05 * moistureScore +
-                        0.05 * moonScore
+                // Per-cell terrain (real elevation) — same landform logic as
+                // the single-species engine, using a broad aggregate band.
+                val cellElev = elevations[idx]
+                val neighbourElevs = listOf(
+                    (i - 1) to j, (i + 1) to j, i to (j - 1), i to (j + 1),
+                    (i - 1) to (j - 1), (i + 1) to (j + 1), (i - 1) to (j + 1), (i + 1) to (j - 1)
+                ).mapNotNull { elevByIJ[it] }
+                val elevationScore = if (cellElev != null)
+                    MycoMath.elevationFitness(cellElev, "aggregate_default") else 0.6
+                val terrainScore = if (cellElev != null && neighbourElevs.isNotEmpty())
+                    MycoMath.terrainMoistureScore(cellElev, neighbourElevs) else 0.5
+
+                // Weighted combination (weights sum to 1.0)
+                val weightedSum = 0.27 * observationScore +
+                        0.18 * seasonScore +
+                        0.14 * rainTriggerScore +
+                        0.10 * terrainScore +
+                        0.10 * 0.7 + // Aggregate habitat baseline (diverse catalogue)
+                        0.08 * tempScore +
+                        0.06 * elevationScore +
+                        0.04 * moistureScore +
+                        0.03 * moonScore
 
                 val seasonRainFloor = minOf(seasonScore, rainTriggerScore + 0.2)
                 val penaltyMultiplier = (0.3 + 0.7 * seasonRainFloor).coerceIn(0.0, 1.0)
@@ -672,11 +764,11 @@ class FungiRepository(
                 factors.add("📅 $inSeasonCount of ${allSpecies.size} species fruiting in ${monthName(currentMonth)} → ${String.format(Locale.US, "%.0f", seasonScore * 100)}%")
                 factors.add("🌧️ Rain trigger (10-21d lag): ${String.format(Locale.US, "%.0f", rainTriggerScore * 100)}% | Background moisture: ${String.format(Locale.US, "%.0f", recentRain30d)}mm/30d")
                 factors.add("🌡️ Avg temp ${String.format(Locale.US, "%.1f", weather.avgTemp)}°C → ${String.format(Locale.US, "%.0f", tempScore * 100)}%")
+                factors.add("⛰️ Elevation: ${if (cellElev != null) String.format(Locale.US, "%.0f m", cellElev) else "n/a"} → ${String.format(Locale.US, "%.0f", elevationScore * 100)}% | 🏞️ Terrain: ${String.format(Locale.US, "%.0f", terrainScore * 100)}%")
                 if (nearbySpecies.size >= 3) factors.add("🌿 Diversity bonus: ${nearbySpecies.size} distinct species recorded nearby")
                 factors.add("Multi-factor aggregate estimate — not species-specific.")
 
                 cells.add(HotspotCell(cellLat, cellLng, finalScore, tier, factors))
-            }
         }
         return@withContext cells
     }

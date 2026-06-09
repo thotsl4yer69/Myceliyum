@@ -226,6 +226,76 @@ object MycoMath {
         else -> 1.0
     }
 
+    // ─── Terrain & elevation (per-cell landscape) ────────────────────
+
+    /**
+     * Species-specific elevation suitability (0.0–1.0).
+     *
+     * Real ground elevation at the cell is matched against the species'
+     * preferred altitude band. Unlike the global climate factors, this
+     * varies cell-to-cell, so the map reflects genuine terrain.
+     */
+    fun elevationFitness(elevationM: Double, speciesId: String): Double {
+        val (lo, hi) = speciesElevationBand(speciesId)
+        val mid = (lo + hi) / 2.0
+        val half = (hi - lo) / 2.0
+        val dist = abs(elevationM - mid)
+        return when {
+            dist <= half -> 1.0
+            dist <= half + 300.0 -> 1.0 - (dist - half) / 600.0
+            else -> maxOf(0.0, 0.5 - (dist - half - 300.0) / 1200.0)
+        }.coerceIn(0.0, 1.0)
+    }
+
+    /** Species-specific ideal elevation band (metres ASL) for fruiting. */
+    private fun speciesElevationBand(speciesId: String): Pair<Double, Double> = when {
+        // Lowland pastures, urban mulch and coastal scrub
+        speciesId.startsWith("psilocybe") -> 0.0 to 700.0
+        speciesId.startsWith("coprinellus") || speciesId.startsWith("coprinus") -> 0.0 to 600.0
+        // Montane wet forest specialists
+        speciesId.startsWith("cortinarius") -> 200.0 to 1400.0
+        speciesId.startsWith("boletus") || speciesId.startsWith("suillus") -> 100.0 to 1200.0
+        speciesId.startsWith("amanita") -> 50.0 to 1100.0
+        speciesId.startsWith("mycena") -> 0.0 to 1200.0
+        speciesId.startsWith("gymnopilus") || speciesId.startsWith("omphalotus") -> 0.0 to 1000.0
+        else -> 0.0 to 1000.0 // Broad Victorian default
+    }
+
+    /**
+     * Terrain moisture/landform suitability (0.0–1.0) from local relief.
+     *
+     * Derived from the cell's elevation relative to its neighbours:
+     *  - Gentle-to-moderate slopes drain well yet hold leaf-litter moisture.
+     *  - Concave hollows / gully heads accumulate moisture and organic matter
+     *    (prime fruiting ground), so sitting *below* the local mean scores up.
+     *  - Exposed local highs / very steep faces are drier and score down.
+     *
+     * @param cellElevation elevation of this cell (m)
+     * @param neighbourElevations elevations of the surrounding grid cells (m)
+     */
+    fun terrainMoistureScore(cellElevation: Double, neighbourElevations: List<Double>): Double {
+        if (neighbourElevations.isEmpty()) return 0.5
+        val meanNbr = neighbourElevations.average()
+        val relief = (neighbourElevations.maxOrNull()!! - neighbourElevations.minOrNull()!!)
+        val concavity = meanNbr - cellElevation // >0 ⇒ cell sits in a hollow
+
+        // Local slope (relief over ~500 m cells) — gentle/moderate is best.
+        val slopeScore = when {
+            relief < 8.0 -> 0.6            // very flat — can be waterlogged or exposed
+            relief <= 40.0 -> 1.0          // gentle–moderate — ideal drainage + moisture
+            relief <= 80.0 -> 0.7          // steeper
+            else -> 0.4                    // ridge/cliff — poor footing for fruiting
+        }
+        // Landform position — hollows hold moisture, local highs shed it.
+        val concavityScore = when {
+            concavity > 6.0 -> 1.0
+            concavity > 1.0 -> 0.8
+            concavity > -3.0 -> 0.6        // ~flat / mid-slope
+            else -> 0.45                   // exposed local high
+        }
+        return (0.5 * slopeScore + 0.5 * concavityScore).coerceIn(0.0, 1.0)
+    }
+
     // ─── Moon phase (optional factor) ────────────────────────────────
 
     /**

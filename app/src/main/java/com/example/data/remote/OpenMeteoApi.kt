@@ -21,7 +21,23 @@ interface OpenMeteoApi {
         @Query("forecast_days") forecastDays: Int = 0,
         @Query("timezone") timezone: String = "auto"
     ): OpenMeteoResponse
+
+    /**
+     * Fetches ground elevation (metres above sea level) for one or more
+     * coordinates in a single call. Open-Meteo's elevation API is free,
+     * needs no API key, and accepts up to 100 comma-separated coordinate
+     * pairs per request — ideal for scoring a whole hotspot grid at once.
+     */
+    @GET("v1/elevation")
+    suspend fun getElevation(
+        @Query("latitude") latitudeCsv: String,
+        @Query("longitude") longitudeCsv: String
+    ): OpenMeteoElevationResponse
 }
+
+data class OpenMeteoElevationResponse(
+    @Json(name = "elevation") val elevation: List<Double?>?
+)
 
 data class OpenMeteoResponse(
     @Json(name = "latitude") val latitude: Double,

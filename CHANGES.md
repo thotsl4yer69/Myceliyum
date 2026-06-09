@@ -1,5 +1,28 @@
 # Changes — completion & stabilization pass
 
+## Prediction engine — per-cell terrain (accuracy upgrade)
+
+Previously, only **observation density** varied between grid cells; season,
+rain, temperature, moisture, moon and habitat were computed once for the map
+centre and applied uniformly, so the map only looked "hot" where records
+clustered. Two genuinely per-cell inputs were added so scores reflect real
+landscape:
+
+- **Elevation fitness** — real ground elevation per cell (Open-Meteo's free,
+  no-key elevation API, batched ≤100 points/request) matched against a
+  species-specific altitude band.
+- **Terrain moisture** — local slope and concavity derived from neighbouring
+  cells' elevations: gentle slopes and concave hollows/gully heads (which hold
+  moisture and litter) score up; exposed local highs and steep faces score down.
+
+Factor weights were rebalanced to sum to 1.0 (evidence 0.27, season 0.18, rain
+0.14, **terrain 0.10**, habitat 0.10, temperature 0.08, **elevation 0.06**,
+moisture 0.04, moon 0.03). Elevation fetch failures degrade gracefully to
+neutral terrain so scoring never breaks offline. New pure helpers
+(`elevationFitness`, `terrainMoistureScore`) are unit-tested in `MycoMathTest`.
+
+---
+
 This document records the changes made to take Mycelium Mapper from its original
 Google AI Studio export to a buildable, cleaned-up project on stable tooling.
 
