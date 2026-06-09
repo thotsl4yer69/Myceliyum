@@ -112,11 +112,27 @@ def env_grid():
     def col(name):
         return [by_idx.get(i, {}).get(name) for i in range(n)]
 
+    # Distance (m) to surface water — a riparian signal. Computed and sampled
+    # separately and guarded, so any failure here never breaks the core layers.
+    water_col = [None] * n
+    try:
+        water_mask = (
+            ee.Image("JRC/GSW1_4/GlobalSurfaceWater")
+            .select("occurrence").gte(20).selfMask()
+        )
+        wd = water_mask.distance(ee.Kernel.euclidean(2000, "meters"), False).rename("water_dist")
+        wfeat = wd.reduceRegions(collection=fc, reducer=ee.Reducer.first(), scale=30).getInfo()["features"]
+        wby = {f["properties"].get("idx"): f["properties"].get("water_dist") for f in wfeat}
+        water_col = [wby.get(i) for i in range(n)]
+    except Exception as exc:  # noqa: BLE001
+        app.logger.warning("water distance failed: %s", exc)
+
     return jsonify(
         {
             "landcover": col("landcover"),
             "canopy": col("canopy"),
             "ndvi": col("ndvi"),
+            "water_dist": water_col,
         }
     )
 
