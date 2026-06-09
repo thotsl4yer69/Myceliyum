@@ -133,6 +133,28 @@ class FungiViewModel(
      * Recomputes hotspot overlay + pins for the current map parameters.
      * Branches between single-species and aggregate "all species" mode.
      */
+    /**
+     * Geocodes [query] (Google Geocoding when a key is set, else the device
+     * geocoder), recentres the map, recomputes hotspots, and reports a
+     * human-readable label via [onResult] (null when nothing was found).
+     */
+    fun searchLocation(query: String, onResult: (String?) -> Unit) {
+        if (query.isBlank()) {
+            onResult(null)
+            return
+        }
+        viewModelScope.launch {
+            val place = repository.geocodePlace(query)
+            if (place != null) {
+                mapCenter.value = Pair(place.lat, place.lng)
+                computeHotspots()
+                onResult(place.label)
+            } else {
+                onResult(null)
+            }
+        }
+    }
+
     fun computeHotspots() {
         val (lat, lng) = mapCenter.value
         val radius = searchRadiusKm.value

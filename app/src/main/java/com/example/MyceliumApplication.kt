@@ -7,6 +7,7 @@ import com.example.data.remote.ALAApi
 import com.example.data.remote.GBIFApi
 import com.example.data.remote.INaturalistApi
 import com.example.data.remote.EnvLayersApi
+import com.example.data.remote.GeocodingApi
 import com.example.data.remote.OpenMeteoApi
 import com.example.data.remote.OverpassApi
 import com.example.data.repository.FungiRepository
@@ -90,6 +91,13 @@ class MyceliumApplication : Application() {
         val gbifApi = gbifRetrofit.create(GBIFApi::class.java)
         val overpassApi = overpassRetrofit.create(OverpassApi::class.java)
 
+        val geocodingApi = Retrofit.Builder()
+            .baseUrl("https://maps.googleapis.com/")
+            .client(okHttpClient)
+            .addConverterFactory(MoshiConverterFactory.create(moshi))
+            .build()
+            .create(GeocodingApi::class.java)
+
         // Optional Earth Engine backend — only built when a base URL is set,
         // so the app works keylessly out of the box.
         val envLayersApi: EnvLayersApi? = BuildConfig.BACKEND_BASE_URL
@@ -105,7 +113,8 @@ class MyceliumApplication : Application() {
 
         repository = FungiRepository(
             this, database.fungiDao(), iNatApi, openMeteoApi, alaApi, gbifApi,
-            overpassApi, envLayersApi, BuildConfig.BACKEND_TOKEN
+            overpassApi, envLayersApi, BuildConfig.BACKEND_TOKEN,
+            geocodingApi, BuildConfig.GOOGLE_API_KEY
         )
     }
 }

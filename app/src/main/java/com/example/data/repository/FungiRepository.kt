@@ -8,6 +8,7 @@ import com.example.data.remote.GBIFApi
 import com.example.data.remote.INatObservation
 import com.example.data.remote.EnvGridRequest
 import com.example.data.remote.EnvLayersApi
+import com.example.data.remote.GeocodingApi
 import com.example.data.remote.INaturalistApi
 import com.example.data.remote.OpenMeteoApi
 import com.example.data.remote.OverpassApi
@@ -39,7 +40,9 @@ class FungiRepository(
     private val gbifApi: GBIFApi,
     private val overpassApi: OverpassApi,
     private val envLayersApi: EnvLayersApi? = null,
-    private val backendToken: String = ""
+    private val backendToken: String = "",
+    private val geocodingApi: GeocodingApi? = null,
+    private val googleApiKey: String = ""
 ) {
     private val moshi = Moshi.Builder()
         .add(KotlinJsonAdapterFactory())
@@ -428,6 +431,41 @@ class FungiRepository(
                 Log.w(TAG, "Earth Engine backend fetch failed, using OSM canopy: ${e.message}")
                 null
             }
+        }
+    }
+
+    /** A geocoded place: coordinates plus a human-readable label. */
+    data class GeoPlace(val lat: Double, val lng: Double, val label: String)
+
+    /**
+     * Resolves a place name to coordinates for the map's "Area" search.
+     * Prefers the Google Geocoding API when a key is configured (reliable),
+     * and falls back to the on-device Android Geocoder otherwise.
+     */
+    suspend fun geocodePlace(query: String): GeoPlace? = withContext(Dispatchers.IO) {
+        if (query.isBlank()) return@withContext null
+        if (geocodingApi != null && googleApiKey.isNotBlank()) {
+            try {
+                val resp = geocodingApi.geocode(query, googleApiKey)
+                val result = resp.results?.firstOrNull()
+                val loc = result?.geometry?.location
+                if (resp.status == "OK" && loc?.lat != null && loc.lng != null) {
+                    return@withContext GeoPlace(loc.lat, loc.lng, result.formattedAddress ?: query)
+                }
+                Log.w(TAG, "Google geocoding returned status=${resp.status}; falling back")
+            } catch (e: Exception) {
+                Log.w(TAG, "Google geocoding failed, trying device geocoder: ${e.message}")
+            }
+        }
+        try {
+            val geocoder = android.location.Geocoder(context, Locale.getDefault())
+            @Suppress("DEPRECATION")
+            val res = geocoder.getFromLocationName(query, 1)
+            val a = res?.firstOrNull()
+            if (a != null) GeoPlace(a.latitude, a.longitude, a.locality ?: a.subAdminArea ?: a.adminArea ?: query) else null
+        } catch (e: Exception) {
+            Log.w(TAG, "Device geocoder failed: ${e.message}")
+            null
         }
     }
 

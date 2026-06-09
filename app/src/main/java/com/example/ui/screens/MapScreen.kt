@@ -135,26 +135,16 @@ fun MapScreen(
         }
     }
 
-    // Geocode Search execution
+    // Geocode Search execution — geocoding (Google when a key is configured,
+    // else the device geocoder) is handled in the ViewModel/repository; here
+    // we just surface the result to the user.
     fun searchLocation(query: String) {
         if (query.isBlank()) return
-        coroutineScope.launch {
-            try {
-                val result = withContext(Dispatchers.IO) {
-                    val geocoder = android.location.Geocoder(context, Locale.getDefault())
-                    geocoder.getFromLocationName(query, 1)
-                }
-                if (!result.isNullOrEmpty()) {
-                    val address = result[0]
-                    viewModel.mapCenter.value = Pair(address.latitude, address.longitude)
-                    viewModel.computeHotspots()
-                    val city = address.locality ?: address.subAdminArea ?: address.adminArea ?: query
-                    Toast.makeText(context, "Centered on: $city", Toast.LENGTH_SHORT).show()
-                } else {
-                    Toast.makeText(context, "Location not found. Try coordinates directly.", Toast.LENGTH_SHORT).show()
-                }
-            } catch (e: Exception) {
-                Toast.makeText(context, "Search failed. Check network connectivity.", Toast.LENGTH_SHORT).show()
+        viewModel.searchLocation(query) { label ->
+            if (label != null) {
+                Toast.makeText(context, "Centered on: $label", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(context, "Location not found. Try coordinates directly.", Toast.LENGTH_SHORT).show()
             }
         }
     }
