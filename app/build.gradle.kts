@@ -31,6 +31,13 @@ android {
       "ANTHROPIC_API_KEY",
       "\"${localProps.getProperty("ANTHROPIC_API_KEY", "")}\""
     )
+    // Google Cloud API key (Geocoding / Elevation / Vision). Read from
+    // local.properties or the GOOGLE_API_KEY env var (CI) — never committed.
+    buildConfigField(
+      "String",
+      "GOOGLE_API_KEY",
+      "\"${localProps.getProperty("GOOGLE_API_KEY", System.getenv("GOOGLE_API_KEY") ?: "")}\""
+    )
   }
 
   signingConfigs {
