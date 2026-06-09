@@ -360,6 +360,55 @@ class FungiRepository(
         return la * 10_000_000L + ln
     }
 
+    // ── Persistent (disk) backing for the session caches ────────────────
+    // Elevation and land cover are static, so persisting them across app
+    // restarts makes revisiting a region instant and free (no re-fetch). All
+    // file I/O is guarded — on any error it silently behaves like in-memory.
+    @Volatile private var cachesLoaded = false
+    private val elevCacheFile by lazy { java.io.File(context.cacheDir, "elev_cache.tsv") }
+    private val envCacheFile by lazy { java.io.File(context.cacheDir, "env_cache.tsv") }
+    private val CACHE_MAX = 8000
+
+    private fun ensureCachesLoaded() {
+        if (cachesLoaded) return
+        synchronized(this) {
+            if (cachesLoaded) return
+            try {
+                if (elevCacheFile.exists()) elevCacheFile.forEachLine { line ->
+                    val p = line.split('\t')
+                    if (p.size == 2) p[0].toLongOrNull()?.let { k -> p[1].toDoubleOrNull()?.let { v -> elevCache[k] = v } }
+                }
+            } catch (e: Exception) { Log.w(TAG, "elev cache load failed: ${e.message}") }
+            try {
+                if (envCacheFile.exists()) envCacheFile.forEachLine { line ->
+                    val p = line.split('\t')
+                    if (p.size == 4) p[0].toLongOrNull()?.let { k ->
+                        envCache[k] = EnvCell(p[1].toIntOrNull(), p[2].toDoubleOrNull(), p[3].toDoubleOrNull())
+                    }
+                }
+            } catch (e: Exception) { Log.w(TAG, "env cache load failed: ${e.message}") }
+            cachesLoaded = true
+        }
+    }
+
+    private fun persistElevCache() {
+        try {
+            elevCacheFile.bufferedWriter().use { w ->
+                elevCache.entries.asSequence().take(CACHE_MAX).forEach { w.write("${it.key}\t${it.value}\n") }
+            }
+        } catch (e: Exception) { Log.w(TAG, "elev cache save failed: ${e.message}") }
+    }
+
+    private fun persistEnvCache() {
+        try {
+            envCacheFile.bufferedWriter().use { w ->
+                envCache.entries.asSequence().take(CACHE_MAX).forEach { (k, v) ->
+                    w.write("$k\t${v.landcover ?: ""}\t${v.canopyPct ?: ""}\t${v.ndvi ?: ""}\n")
+                }
+            }
+        } catch (e: Exception) { Log.w(TAG, "env cache save failed: ${e.message}") }
+    }
+
     /**
      * Fetches ground elevation for a list of coordinates, batched into
      * requests of ≤100 points (Open-Meteo's per-call limit) and served from a
@@ -369,6 +418,7 @@ class FungiRepository(
      */
     suspend fun fetchElevations(coords: List<Pair<Double, Double>>): List<Double?> = withContext(Dispatchers.IO) {
         if (coords.isEmpty()) return@withContext emptyList()
+        ensureCachesLoaded()
         val out = MutableList<Double?>(coords.size) { null }
         val missIdx = ArrayList<Int>()
         val missCoords = ArrayList<Pair<Double, Double>>()
@@ -394,6 +444,7 @@ class FungiRepository(
             } catch (e: Exception) {
                 Log.w(TAG, "Elevation fetch failed, using neutral terrain: ${e.message}")
             }
+            persistElevCache()
         }
         out
     }
@@ -447,6 +498,7 @@ class FungiRepository(
         val api = envLayersApi ?: return null
         if (points.isEmpty()) return null
         return withContext(Dispatchers.IO) {
+            ensureCachesLoaded()
             val landcover = arrayOfNulls<Int>(points.size)
             val canopyPct = arrayOfNulls<Double>(points.size)
             val ndvi = arrayOfNulls<Double>(points.size)
@@ -484,6 +536,7 @@ class FungiRepository(
                 }
                 k = end
             }
+            if (missPts.isNotEmpty()) persistEnvCache()
             // Fall back to OSM canopy only if we got nothing at all.
             if (!haveAny) return@withContext null
             EnvLayers(landcover.toList(), canopyPct.toList(), ndvi.toList())
