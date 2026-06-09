@@ -1,5 +1,19 @@
 # Changes — completion & stabilization pass
 
+## Optional Earth Engine backend (highest-fidelity layers)
+
+A small Cloud Run service (`backend/`) exposes Google Earth Engine layers —
+ESA WorldCover **land cover**, Hansen **tree-canopy %**, and Sentinel-2
+**NDVI** greenness — to the app over HTTPS. When `BACKEND_BASE_URL` is set in
+`local.properties`, the engine replaces the OSM canopy heuristic with these
+real per-cell layers (blended via `richCanopyScore`); when unset, the app runs
+exactly as before on free, keyless sources.
+
+Security: the GCP **service-account credential never ships in the app**. Earth
+Engine runs server-side under the Cloud Run service identity (Application
+Default Credentials — no key file needed). See `backend/README.md` to deploy
+and `curl`-test it. A `BACKEND_TOKEN` shared secret gates the endpoint.
+
 ## Prediction engine — real per-cell environment (accuracy upgrade)
 
 Previously, only **observation density** varied between grid cells; every

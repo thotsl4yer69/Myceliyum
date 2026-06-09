@@ -6,6 +6,7 @@ import com.example.data.local.SettingsStore
 import com.example.data.remote.ALAApi
 import com.example.data.remote.GBIFApi
 import com.example.data.remote.INaturalistApi
+import com.example.data.remote.EnvLayersApi
 import com.example.data.remote.OpenMeteoApi
 import com.example.data.remote.OverpassApi
 import com.example.data.repository.FungiRepository
@@ -89,6 +90,22 @@ class MyceliumApplication : Application() {
         val gbifApi = gbifRetrofit.create(GBIFApi::class.java)
         val overpassApi = overpassRetrofit.create(OverpassApi::class.java)
 
-        repository = FungiRepository(this, database.fungiDao(), iNatApi, openMeteoApi, alaApi, gbifApi, overpassApi)
+        // Optional Earth Engine backend — only built when a base URL is set,
+        // so the app works keylessly out of the box.
+        val envLayersApi: EnvLayersApi? = BuildConfig.BACKEND_BASE_URL
+            .takeIf { it.isNotBlank() }
+            ?.let { baseUrl ->
+                Retrofit.Builder()
+                    .baseUrl(baseUrl)
+                    .client(okHttpClient)
+                    .addConverterFactory(MoshiConverterFactory.create(moshi))
+                    .build()
+                    .create(EnvLayersApi::class.java)
+            }
+
+        repository = FungiRepository(
+            this, database.fungiDao(), iNatApi, openMeteoApi, alaApi, gbifApi,
+            overpassApi, envLayersApi, BuildConfig.BACKEND_TOKEN
+        )
     }
 }

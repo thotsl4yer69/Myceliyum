@@ -355,6 +355,66 @@ object MycoMath {
         else -> 0.1
     }.coerceIn(0.0, 1.0)
 
+    // ─── Earth Engine layers (optional backend) ──────────────────────
+
+    /**
+     * Land-cover suitability (0.0–1.0) from an ESA WorldCover class code.
+     * Woodland/wetland favoured; most species avoid bare/water/built ground —
+     * except pasture/urban-mulch specialists like Psilocybe subaeruginosa.
+     */
+    fun landCoverSuitability(worldCoverClass: Int?, speciesId: String): Double {
+        if (worldCoverClass == null) return 0.6
+        val psilocybe = speciesId.startsWith("psilocybe")
+        return when (worldCoverClass) {
+            10 -> 1.0                               // tree cover
+            90, 95 -> 0.9                           // wetland / mangrove
+            20, 100 -> 0.8                          // shrubland / moss-lichen
+            30 -> if (psilocybe) 0.85 else 0.6      // grassland / pasture
+            40 -> 0.45                              // cropland
+            50 -> if (psilocybe) 0.70 else 0.40     // built-up (urban mulch beds)
+            60 -> 0.20                              // bare / sparse
+            70 -> 0.10                              // snow / ice
+            80 -> 0.05                              // permanent water
+            else -> 0.5
+        }
+    }
+
+    /** Tree-canopy suitability (0.0–1.0) from a canopy-cover percentage (0–100). */
+    fun treeCanopyFitness(percent: Double?): Double {
+        if (percent == null) return 0.6
+        val p = percent.coerceIn(0.0, 100.0)
+        return when {
+            p >= 60.0 -> 1.0
+            p >= 20.0 -> 0.6 + (p - 20.0) / 40.0 * 0.4
+            p >= 5.0 -> 0.3 + (p - 5.0) / 15.0 * 0.3
+            else -> 0.2 + p / 5.0 * 0.1
+        }.coerceIn(0.0, 1.0)
+    }
+
+    /** Vegetation-greenness suitability (0.0–1.0) from an NDVI value (−1..1). */
+    fun ndviFitness(ndvi: Double?): Double {
+        if (ndvi == null) return 0.6
+        return when {
+            ndvi < 0.0 -> 0.05                              // water / built / bare
+            ndvi < 0.2 -> 0.2 + ndvi / 0.2 * 0.2            // sparse
+            ndvi < 0.4 -> 0.4 + (ndvi - 0.2) / 0.2 * 0.3    // moderate
+            ndvi <= 0.8 -> 1.0                              // lush vegetation
+            else -> 0.9
+        }.coerceIn(0.0, 1.0)
+    }
+
+    /**
+     * Blends the Earth Engine layers (tree canopy %, NDVI, land-cover class)
+     * into a single per-cell canopy/vegetation suitability. Used in place of
+     * the OSM proximity heuristic when the backend is configured.
+     */
+    fun richCanopyScore(canopyPct: Double?, ndvi: Double?, worldCoverClass: Int?, speciesId: String): Double {
+        val tree = treeCanopyFitness(canopyPct)
+        val veg = ndviFitness(ndvi)
+        val land = landCoverSuitability(worldCoverClass, speciesId)
+        return (0.40 * tree + 0.35 * land + 0.25 * veg).coerceIn(0.0, 1.0)
+    }
+
     // ─── Moon phase (optional factor) ────────────────────────────────
 
     /**

@@ -6,6 +6,8 @@ import com.example.data.local.FungiDao
 import com.example.data.remote.ALAApi
 import com.example.data.remote.GBIFApi
 import com.example.data.remote.INatObservation
+import com.example.data.remote.EnvGridRequest
+import com.example.data.remote.EnvLayersApi
 import com.example.data.remote.INaturalistApi
 import com.example.data.remote.OpenMeteoApi
 import com.example.data.remote.OverpassApi
@@ -35,7 +37,9 @@ class FungiRepository(
     private val openMeteoApi: OpenMeteoApi,
     private val alaApi: ALAApi,
     private val gbifApi: GBIFApi,
-    private val overpassApi: OverpassApi
+    private val overpassApi: OverpassApi,
+    private val envLayersApi: EnvLayersApi? = null,
+    private val backendToken: String = ""
 ) {
     private val moshi = Moshi.Builder()
         .add(KotlinJsonAdapterFactory())
@@ -396,6 +400,37 @@ class FungiRepository(
         }
     }
 
+    /** Per-cell Earth Engine layers, aligned 1:1 with the grid points. */
+    data class EnvLayers(
+        val landcover: List<Int?>,
+        val canopyPct: List<Double?>,
+        val ndvi: List<Double?>
+    )
+
+    /**
+     * Fetches Earth Engine land-cover / tree-canopy / NDVI for the grid from
+     * the optional Cloud Run backend. Returns null when the backend isn't
+     * configured or the call fails, so callers fall back to free OSM canopy.
+     */
+    suspend fun fetchEnvLayers(points: List<Pair<Double, Double>>): EnvLayers? {
+        val api = envLayersApi ?: return null
+        if (points.isEmpty()) return null
+        return withContext(Dispatchers.IO) {
+            try {
+                val resp = api.envGrid(backendToken, EnvGridRequest(points.map { listOf(it.first, it.second) }))
+                val n = points.size
+                EnvLayers(
+                    landcover = (0 until n).map { resp.landcover?.getOrNull(it)?.toInt() },
+                    canopyPct = (0 until n).map { resp.canopy?.getOrNull(it) },
+                    ndvi = (0 until n).map { resp.ndvi?.getOrNull(it) }
+                )
+            } catch (e: Exception) {
+                Log.w(TAG, "Earth Engine backend fetch failed, using OSM canopy: ${e.message}")
+                null
+            }
+        }
+    }
+
     /** Distance (m) to the nearest green feature, or null if none provided. */
     private fun nearestFeatureMeters(lat: Double, lng: Double, features: List<Pair<Double, Double>>): Double? {
         if (features.isEmpty()) return null
@@ -542,8 +577,11 @@ class FungiRepository(
         val elevByIJ = HashMap<Pair<Int, Int>, Double>()
         cellIJ.forEachIndexed { idx, ij -> elevations[idx]?.let { elevByIJ[ij] = it } }
 
-        // 4c. Canopy/forest features across the grid (OSM Overpass, no key).
-        val canopy = if (cellLL.isNotEmpty()) fetchCanopyFeatures(
+        // 4c. Canopy/vegetation. Prefer Earth Engine layers (land cover, tree
+        // canopy %, NDVI) when the backend is configured; otherwise fall back
+        // to free OSM forest proximity.
+        val env = fetchEnvLayers(cellLL)
+        val canopy = if (env == null && cellLL.isNotEmpty()) fetchCanopyFeatures(
             cellLL.minOf { it.first }, cellLL.minOf { it.second },
             cellLL.maxOf { it.first }, cellLL.maxOf { it.second }
         ) else emptyList()
@@ -611,9 +649,12 @@ class FungiRepository(
                     elevByIJ[(i + 1) to j], elevByIJ[(i - 1) to j],
                     elevByIJ[i to (j + 1)], elevByIJ[i to (j - 1)]
                 ) else 0.7
-                // Canopy/forest proximity (mycorrhizal & wood-rotting species).
+                // Canopy/vegetation suitability — Earth Engine layers when
+                // available, else OSM forest proximity (mycorrhizal & wood-rot).
                 val canopyDist = if (canopy.isEmpty()) null else nearestFeatureMeters(cellLat, cellLng, canopy)
-                val canopyScore = MycoMath.canopyProximityScore(canopyDist)
+                val canopyScore = if (env != null) MycoMath.richCanopyScore(
+                    env.canopyPct.getOrNull(idx), env.ndvi.getOrNull(idx), env.landcover.getOrNull(idx), species.id
+                ) else MycoMath.canopyProximityScore(canopyDist)
 
                 // ── C. Weighted factor combination ──────────────────
                 // Evidence stays dominant; terrain, elevation, aspect and
@@ -679,7 +720,13 @@ class FungiRepository(
                 factors.add("🪵 Substrate: ${species.substrates.joinToString(", ")}")
                 factors.add("⛰️ Elevation: ${if (cellElev != null) String.format(Locale.US, "%.0f m", cellElev) else "n/a"} → ${String.format(Locale.US, "%.0f", elevationScore * 100)}% fit")
                 factors.add("🏞️ Terrain (slope/moisture): ${String.format(Locale.US, "%.0f", terrainScore * 100)}% | Aspect: ${String.format(Locale.US, "%.0f", aspectScore * 100)}%")
-                factors.add("🌳 Canopy: ${if (canopyDist != null) "~${String.format(Locale.US, "%.0f m", canopyDist)} to woodland" else "no map data"} → ${String.format(Locale.US, "%.0f", canopyScore * 100)}%")
+                if (env != null) {
+                    val cv = env.canopyPct.getOrNull(idx)
+                    val nv = env.ndvi.getOrNull(idx)
+                    factors.add("🛰️ Earth Engine: canopy ${if (cv != null) String.format(Locale.US, "%.0f%%", cv) else "n/a"}, NDVI ${if (nv != null) String.format(Locale.US, "%.2f", nv) else "n/a"} → ${String.format(Locale.US, "%.0f", canopyScore * 100)}%")
+                } else {
+                    factors.add("🌳 Canopy: ${if (canopyDist != null) "~${String.format(Locale.US, "%.0f m", canopyDist)} to woodland" else "no map data"} → ${String.format(Locale.US, "%.0f", canopyScore * 100)}%")
+                }
                 weather.avgSoilMoisture?.let { factors.add("💧 Soil moisture: ${String.format(Locale.US, "%.2f", it)} m³/m³ → ${String.format(Locale.US, "%.0f", MycoMath.soilMoistureFitness(it) * 100)}%") }
                 if (moonScore > 0.7) factors.add("🌙 Moon phase favourable (traditional signal)")
                 factors.add("Multi-factor Bayesian estimate — not a guarantee of presence.")
@@ -771,7 +818,8 @@ class FungiRepository(
         val elevByIJ = HashMap<Pair<Int, Int>, Double>()
         cellIJ.forEachIndexed { idx, ij -> elevations[idx]?.let { elevByIJ[ij] = it } }
 
-        val canopy = if (cellLL.isNotEmpty()) fetchCanopyFeatures(
+        val env = fetchEnvLayers(cellLL)
+        val canopy = if (env == null && cellLL.isNotEmpty()) fetchCanopyFeatures(
             cellLL.minOf { it.first }, cellLL.minOf { it.second },
             cellLL.maxOf { it.first }, cellLL.maxOf { it.second }
         ) else emptyList()
@@ -833,7 +881,9 @@ class FungiRepository(
                     elevByIJ[i to (j + 1)], elevByIJ[i to (j - 1)]
                 ) else 0.7
                 val canopyDist = if (canopy.isEmpty()) null else nearestFeatureMeters(cellLat, cellLng, canopy)
-                val canopyScore = MycoMath.canopyProximityScore(canopyDist)
+                val canopyScore = if (env != null) MycoMath.richCanopyScore(
+                    env.canopyPct.getOrNull(idx), env.ndvi.getOrNull(idx), env.landcover.getOrNull(idx), "aggregate_default"
+                ) else MycoMath.canopyProximityScore(canopyDist)
 
                 // Weighted combination (weights sum to 1.0)
                 val weightedSum = 0.24 * observationScore +
@@ -861,7 +911,13 @@ class FungiRepository(
                 factors.add("🌧️ Rain trigger (10-21d lag): ${String.format(Locale.US, "%.0f", rainTriggerScore * 100)}% | Background moisture: ${String.format(Locale.US, "%.0f", recentRain30d)}mm/30d")
                 factors.add("🌡️ Avg temp ${String.format(Locale.US, "%.1f", weather.avgTemp)}°C → ${String.format(Locale.US, "%.0f", tempScore * 100)}%")
                 factors.add("⛰️ Elevation: ${if (cellElev != null) String.format(Locale.US, "%.0f m", cellElev) else "n/a"} → ${String.format(Locale.US, "%.0f", elevationScore * 100)}% | 🏞️ Terrain: ${String.format(Locale.US, "%.0f", terrainScore * 100)}% | Aspect: ${String.format(Locale.US, "%.0f", aspectScore * 100)}%")
-                factors.add("🌳 Canopy: ${if (canopyDist != null) "~${String.format(Locale.US, "%.0f m", canopyDist)} to woodland" else "no map data"} → ${String.format(Locale.US, "%.0f", canopyScore * 100)}%")
+                if (env != null) {
+                    val cv = env.canopyPct.getOrNull(idx)
+                    val nv = env.ndvi.getOrNull(idx)
+                    factors.add("🛰️ Earth Engine: canopy ${if (cv != null) String.format(Locale.US, "%.0f%%", cv) else "n/a"}, NDVI ${if (nv != null) String.format(Locale.US, "%.2f", nv) else "n/a"} → ${String.format(Locale.US, "%.0f", canopyScore * 100)}%")
+                } else {
+                    factors.add("🌳 Canopy: ${if (canopyDist != null) "~${String.format(Locale.US, "%.0f m", canopyDist)} to woodland" else "no map data"} → ${String.format(Locale.US, "%.0f", canopyScore * 100)}%")
+                }
                 if (nearbySpecies.size >= 3) factors.add("🌿 Diversity bonus: ${nearbySpecies.size} distinct species recorded nearby")
                 factors.add("Multi-factor aggregate estimate — not species-specific.")
 

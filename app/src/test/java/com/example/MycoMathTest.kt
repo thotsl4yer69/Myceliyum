@@ -133,4 +133,41 @@ class MycoMathTest {
         assertTrue(MycoMath.canopyProximityScore(100.0) > MycoMath.canopyProximityScore(2000.0))
         assertEquals(0.6, MycoMath.canopyProximityScore(null), 1e-9)
     }
+
+    // ─── Earth Engine layers ─────────────────────────────────────────
+
+    @Test
+    fun `dense tree cover scores higher than sparse`() {
+        assertEquals(1.0, MycoMath.treeCanopyFitness(85.0), 1e-9)
+        assertTrue(MycoMath.treeCanopyFitness(70.0) > MycoMath.treeCanopyFitness(8.0))
+    }
+
+    @Test
+    fun `lush ndvi scores high, water scores low`() {
+        assertEquals(1.0, MycoMath.ndviFitness(0.6), 1e-9)
+        assertTrue(MycoMath.ndviFitness(-0.2) < 0.2)
+    }
+
+    @Test
+    fun `forest land cover beats built-up for a generalist`() {
+        val tree = MycoMath.landCoverSuitability(10, "amanita_muscaria")   // tree cover
+        val built = MycoMath.landCoverSuitability(50, "amanita_muscaria")  // built-up
+        assertTrue("tree ($tree) should beat built ($built)", tree > built)
+    }
+
+    @Test
+    fun `psilocybe tolerates pasture and urban mulch better than a generalist`() {
+        val psiGrass = MycoMath.landCoverSuitability(30, "psilocybe_subaeruginosa")
+        val genGrass = MycoMath.landCoverSuitability(30, "amanita_muscaria")
+        assertTrue("psilocybe ($psiGrass) should beat generalist ($genGrass) on grassland", psiGrass > genGrass)
+    }
+
+    @Test
+    fun `rich canopy score blends the three layers within range`() {
+        val s = MycoMath.richCanopyScore(canopyPct = 75.0, ndvi = 0.7, worldCoverClass = 10, speciesId = "cortinarius_archeri")
+        assertTrue("expected a strong woodland score, got $s", s > 0.8)
+        // All-null inputs collapse to the neutral midpoints, never out of range.
+        val neutral = MycoMath.richCanopyScore(null, null, null, "amanita_muscaria")
+        assertTrue(neutral in 0.0..1.0)
+    }
 }

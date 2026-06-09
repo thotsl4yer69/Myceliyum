@@ -38,6 +38,17 @@ android {
       "GOOGLE_API_KEY",
       "\"${localProps.getProperty("GOOGLE_API_KEY", System.getenv("GOOGLE_API_KEY") ?: "")}\""
     )
+    // Earth Engine layers backend (Cloud Run). Blank = use free OSM canopy.
+    buildConfigField(
+      "String",
+      "BACKEND_BASE_URL",
+      "\"${localProps.getProperty("BACKEND_BASE_URL", System.getenv("BACKEND_BASE_URL") ?: "")}\""
+    )
+    buildConfigField(
+      "String",
+      "BACKEND_TOKEN",
+      "\"${localProps.getProperty("BACKEND_TOKEN", System.getenv("BACKEND_TOKEN") ?: "")}\""
+    )
   }
 
   signingConfigs {
