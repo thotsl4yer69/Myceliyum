@@ -1135,12 +1135,14 @@ fun OSMMapView(
 
                 val cellPoly = Polygon(mapView).apply {
                     points = pts
+                    // Translucent fills so the basemap stays navigable — only
+                    // the top tiers are emphasised; Promising/Possible are faint.
                     fillColor = when (cell.tier) {
-                        "Excellent" -> android.graphics.Color.argb(140, 255, 107, 107)  // warm red — hotspot
-                        "VeryGood"  -> android.graphics.Color.argb(120, 77, 223, 172)   // mint green
-                        "Promising" -> android.graphics.Color.argb(95, 232, 200, 107)   // chanterelle gold
-                        "Possible"  -> android.graphics.Color.argb(60, 139, 157, 147)   // muted sage
-                        else -> android.graphics.Color.argb(30, 107, 135, 117)          // dim sage
+                        "Excellent" -> android.graphics.Color.argb(115, 255, 107, 107)  // warm red — hotspot
+                        "VeryGood"  -> android.graphics.Color.argb(85, 77, 223, 172)    // mint green
+                        "Promising" -> android.graphics.Color.argb(45, 232, 200, 107)   // chanterelle gold
+                        "Possible"  -> android.graphics.Color.argb(20, 139, 157, 147)   // muted sage
+                        else -> android.graphics.Color.argb(14, 107, 135, 117)          // dim sage
                     }
                     strokeColor = when (cell.tier) {
                         "Excellent" -> android.graphics.Color.parseColor("#FF6B6B")

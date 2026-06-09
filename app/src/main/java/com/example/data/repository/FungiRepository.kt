@@ -345,29 +345,57 @@ class FungiRepository(
         }
     }
 
+    // ── Session caches, keyed by a global ~500 m grid index ─────────────
+    // Elevation and land cover are static; canopy/NDVI drift slowly. Caching
+    // makes re-scoring the same area (species/radius changes, revisits, small
+    // pans) instant and avoids repeat network / Earth-Engine cost.
+    private val elevCache = java.util.concurrent.ConcurrentHashMap<Long, Double>()
+    private data class EnvCell(val landcover: Int?, val canopyPct: Double?, val ndvi: Double?)
+    private val envCache = java.util.concurrent.ConcurrentHashMap<Long, EnvCell>()
+
+    /** Snap a coordinate to a global grid index so the same place always keys the same. */
+    private fun gridKey(lat: Double, lng: Double): Long {
+        val la = Math.round(lat / 0.0045) + 4_000_000L
+        val ln = Math.round(lng / 0.0057) + 4_000_000L
+        return la * 10_000_000L + ln
+    }
+
     /**
      * Fetches ground elevation for a list of coordinates, batched into
-     * requests of ≤100 points (Open-Meteo's per-call limit). Returns a list
-     * aligned 1:1 with [coords]; entries are null where elevation could not
-     * be resolved, so callers can fall back to neutral terrain scoring.
+     * requests of ≤100 points (Open-Meteo's per-call limit) and served from a
+     * session cache where possible. Returns a list aligned 1:1 with [coords];
+     * entries are null where elevation could not be resolved, so callers can
+     * fall back to neutral terrain scoring.
      */
     suspend fun fetchElevations(coords: List<Pair<Double, Double>>): List<Double?> = withContext(Dispatchers.IO) {
         if (coords.isEmpty()) return@withContext emptyList()
-        val result = ArrayList<Double?>(coords.size)
-        try {
-            for (chunk in coords.chunked(100)) {
-                val latCsv = chunk.joinToString(",") { String.format(Locale.US, "%.5f", it.first) }
-                val lngCsv = chunk.joinToString(",") { String.format(Locale.US, "%.5f", it.second) }
-                val resp = openMeteoApi.getElevation(latCsv, lngCsv)
-                val elevs = resp.elevation ?: emptyList()
-                for (k in chunk.indices) result.add(elevs.getOrNull(k))
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Elevation fetch failed, using neutral terrain: ${e.message}")
+        val out = MutableList<Double?>(coords.size) { null }
+        val missIdx = ArrayList<Int>()
+        val missCoords = ArrayList<Pair<Double, Double>>()
+        for (i in coords.indices) {
+            val cached = elevCache[gridKey(coords[i].first, coords[i].second)]
+            if (cached != null) out[i] = cached else { missIdx.add(i); missCoords.add(coords[i]) }
         }
-        // Guarantee 1:1 alignment even on partial/failed responses.
-        while (result.size < coords.size) result.add(null)
-        result
+        if (missCoords.isNotEmpty()) {
+            try {
+                val fetched = ArrayList<Double?>(missCoords.size)
+                for (chunk in missCoords.chunked(100)) {
+                    val latCsv = chunk.joinToString(",") { String.format(Locale.US, "%.5f", it.first) }
+                    val lngCsv = chunk.joinToString(",") { String.format(Locale.US, "%.5f", it.second) }
+                    val resp = openMeteoApi.getElevation(latCsv, lngCsv)
+                    val elevs = resp.elevation ?: emptyList()
+                    for (k in chunk.indices) fetched.add(elevs.getOrNull(k))
+                }
+                for (k in missIdx.indices) {
+                    val v = fetched.getOrNull(k)
+                    out[missIdx[k]] = v
+                    if (v != null) elevCache[gridKey(missCoords[k].first, missCoords[k].second)] = v
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Elevation fetch failed, using neutral terrain: ${e.message}")
+            }
+        }
+        out
     }
 
     /**
@@ -419,18 +447,37 @@ class FungiRepository(
         val api = envLayersApi ?: return null
         if (points.isEmpty()) return null
         return withContext(Dispatchers.IO) {
-            try {
-                val resp = api.envGrid(backendToken, EnvGridRequest(points.map { listOf(it.first, it.second) }))
-                val n = points.size
-                EnvLayers(
-                    landcover = (0 until n).map { resp.landcover?.getOrNull(it)?.toInt() },
-                    canopyPct = (0 until n).map { resp.canopy?.getOrNull(it) },
-                    ndvi = (0 until n).map { resp.ndvi?.getOrNull(it) }
-                )
-            } catch (e: Exception) {
-                Log.w(TAG, "Earth Engine backend fetch failed, using OSM canopy: ${e.message}")
-                null
+            val landcover = arrayOfNulls<Int>(points.size)
+            val canopyPct = arrayOfNulls<Double>(points.size)
+            val ndvi = arrayOfNulls<Double>(points.size)
+            val missIdx = ArrayList<Int>()
+            val missPts = ArrayList<Pair<Double, Double>>()
+            for (i in points.indices) {
+                val c = envCache[gridKey(points[i].first, points[i].second)]
+                if (c != null) {
+                    landcover[i] = c.landcover; canopyPct[i] = c.canopyPct; ndvi[i] = c.ndvi
+                } else {
+                    missIdx.add(i); missPts.add(points[i])
+                }
             }
+            if (missPts.isNotEmpty()) {
+                try {
+                    val resp = api.envGrid(backendToken, EnvGridRequest(missPts.map { listOf(it.first, it.second) }))
+                    for (k in missPts.indices) {
+                        val lc = resp.landcover?.getOrNull(k)?.toInt()
+                        val cp = resp.canopy?.getOrNull(k)
+                        val nv = resp.ndvi?.getOrNull(k)
+                        val i = missIdx[k]
+                        landcover[i] = lc; canopyPct[i] = cp; ndvi[i] = nv
+                        envCache[gridKey(missPts[k].first, missPts[k].second)] = EnvCell(lc, cp, nv)
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Earth Engine backend fetch failed, using OSM canopy: ${e.message}")
+                    // Only give up entirely (→ OSM fallback) if nothing was cached.
+                    if (missIdx.size == points.size) return@withContext null
+                }
+            }
+            EnvLayers(landcover.toList(), canopyPct.toList(), ndvi.toList())
         }
     }
 
