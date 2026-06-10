@@ -122,7 +122,6 @@ def env_grid():
     # Distance (m) to surface water — a riparian signal. Computed and sampled
     # separately and guarded, so any failure here never breaks the core layers.
     water_col = [None] * n
-    water_dbg = None
     try:
         occ = ee.Image("JRC/GSW1_4/GlobalSurfaceWater").select("occurrence")
         proj = occ.projection()  # native 30 m grid
@@ -144,25 +143,17 @@ def env_grid():
         # yields null for every cell.
         wby = {f["properties"].get("idx"): f["properties"].get("first") for f in wfeat}
         water_col = [wby.get(i) for i in range(n)]
-        water_dbg = {
-            "n_feats": len(wfeat),
-            "sample_props": (wfeat[0]["properties"] if wfeat else None),
-        }
     except Exception as exc:  # noqa: BLE001
-        water_dbg = {"err": repr(exc)}
         app.logger.warning("water distance failed: %s", exc)
 
-    payload = {
-        "landcover": col("landcover"),
-        "canopy": col("canopy"),
-        "ndvi": col("ndvi"),
-        "water_dist": water_col,
-    }
-    # Temporary diagnostic — surface it whenever any cell is null so we can see
-    # the no-exception failure mode too. App ignores unknown keys; remove later.
-    if any(v is None for v in water_col):
-        payload["_water_debug"] = water_dbg
-    return jsonify(payload)
+    return jsonify(
+        {
+            "landcover": col("landcover"),
+            "canopy": col("canopy"),
+            "ndvi": col("ndvi"),
+            "water_dist": water_col,
+        }
+    )
 
 
 if __name__ == "__main__":
