@@ -122,32 +122,34 @@ def env_grid():
     # Distance (m) to surface water — a riparian signal. Computed and sampled
     # separately and guarded, so any failure here never breaks the core layers.
     water_col = [None] * n
-    water_err = None
+    water_dbg = None
     try:
-        # JRC permanent-ish surface water (≥20% occurrence), 0 = water, 1 = land.
-        # unmask(0) keeps the image fully valid so the transform is defined
-        # everywhere (water cells read 0 rather than masked/null). The single
-        # band is named "occurrence" all the way through — do NOT .select() a
-        # different name, fastDistanceTransform preserves the input band name.
-        land = (
-            ee.Image("JRC/GSW1_4/GlobalSurfaceWater")
-            .select("occurrence").gte(20).unmask(0).Not()
-        )
-        # fastDistanceTransform → squared euclidean distance (in pixels) to the
-        # nearest zero pixel (= nearest water). Cheap and bounded, unlike
-        # Image.distance() over a 2 km kernel, which exceeds EE compute limits
-        # and silently yields null for every cell. neighbourhood 256 px ≈ 7.6 km
-        # at the dataset's 30 m scale — well beyond the app's 2 km cap.
+        occ = ee.Image("JRC/GSW1_4/GlobalSurfaceWater").select("occurrence")
+        proj = occ.projection()  # native 30 m grid
+        # 0 = water (≥20% occurrence), 1 = land. unmask(0) drops the fixed
+        # projection, so reproject back to the native 30 m grid — otherwise
+        # fastDistanceTransform runs in the default 1° projection and the
+        # sampled value comes back null even though nothing throws.
+        land = occ.gte(20).unmask(0).Not().reproject(proj)
+        # fastDistanceTransform → squared euclidean distance (pixels) to nearest
+        # zero pixel (= nearest water). √ → pixels, × nominalScale → metres.
         wd = (
             land.fastDistanceTransform(256)
-            .sqrt().multiply(30)          # √(px²) · 30 m/px → metres
+            .sqrt().multiply(ee.Number(proj.nominalScale()))
             .rename("water_dist")
         )
         wfeat = wd.reduceRegions(collection=fc, reducer=ee.Reducer.first(), scale=30).getInfo()["features"]
         wby = {f["properties"].get("idx"): f["properties"].get("water_dist") for f in wfeat}
         water_col = [wby.get(i) for i in range(n)]
+        # Always-on diagnostic until confirmed working: shows whether reduce
+        # returned features and what properties they carry.
+        water_dbg = {
+            "n_feats": len(wfeat),
+            "scale": float(proj.nominalScale().getInfo()),
+            "sample_props": (wfeat[0]["properties"] if wfeat else None),
+        }
     except Exception as exc:  # noqa: BLE001
-        water_err = repr(exc)
+        water_dbg = {"err": repr(exc)}
         app.logger.warning("water distance failed: %s", exc)
 
     payload = {
@@ -156,10 +158,10 @@ def env_grid():
         "ndvi": col("ndvi"),
         "water_dist": water_col,
     }
-    # Temporary diagnostic: surface why water distance failed, if it did. The
-    # app ignores unknown keys, so this is harmless; remove once confirmed.
-    if water_err is not None:
-        payload["_water_debug"] = water_err
+    # Temporary diagnostic — surface it whenever any cell is null so we can see
+    # the no-exception failure mode too. App ignores unknown keys; remove later.
+    if any(v is None for v in water_col):
+        payload["_water_debug"] = water_dbg
     return jsonify(payload)
 
 
