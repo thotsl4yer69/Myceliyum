@@ -40,6 +40,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.HotspotCell
+import com.example.model.MapObservation
 import com.example.model.Observation
 import com.example.model.Species
 import com.example.ui.viewmodel.FungiViewModel
@@ -83,6 +84,8 @@ fun MapScreen(
 
     val hotspotState by viewModel.hotspotState.collectAsState()
     val pins by viewModel.observationPins.collectAsState()
+    val allFungiPins by viewModel.allFungiPins.collectAsState()
+    val showAllSightings by viewModel.showAllSightings.collectAsState()
     val weatherSummary by viewModel.weatherSummary.collectAsState()
     val isRunning by viewModel.isRecomputationsRunning.collectAsState()
 
@@ -196,6 +199,10 @@ fun MapScreen(
                         // evidence; pinning one species' records on top is noisy
                         // and misleading, so skip them.
                         observationPins = if (allSpeciesMode) emptyList() else pins,
+                        // Every nearby fungal sighting (any species) from
+                        // iNaturalist, rendered as labelled pins independent of
+                        // the selected species / mode.
+                        allFungiPins = if (showAllSightings) allFungiPins else emptyList(),
                         onCellSelected = { clickedCell ->
                             selectedHotspotCell = clickedCell
                         },
@@ -530,6 +537,45 @@ fun MapScreen(
                             }
                         }
                     }
+
+                    // Error state — surface failures instead of a silent blank map
+                    val errState = hotspotState as? HotspotState.Error
+                    if (!isRunning && errState != null) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .padding(top = 12.dp, start = 12.dp, end = 12.dp)
+                        ) {
+                            Card(
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.errorContainer
+                                )
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Warning,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onErrorContainer,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(
+                                        text = "Couldn't compute hotspots — check your connection.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onErrorContainer,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    TextButton(onClick = { viewModel.computeHotspots() }) {
+                                        Text("Retry")
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
 
                 // 2. Control center bottom drawer (Parameters, Slider, Microclimate signal, Details)
@@ -616,6 +662,36 @@ fun MapScreen(
                                     checked = allSpeciesMode,
                                     onCheckedChange = { viewModel.setAllSpeciesMode(it) },
                                     modifier = Modifier.testTag("all_species_toggle")
+                                )
+                            }
+
+                            // All-fungi sightings layer toggle
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Show iNaturalist sightings",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = if (showAllSightings)
+                                            "${allFungiPins.size} nearby fungal records on the map — tap a pin for details"
+                                        else
+                                            "Hide recorded fungal sightings",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Switch(
+                                    checked = showAllSightings,
+                                    onCheckedChange = { viewModel.setShowAllSightings(it) },
+                                    modifier = Modifier.testTag("all_sightings_toggle")
                                 )
                             }
 
@@ -1064,6 +1140,7 @@ fun OSMMapView(
     mapTheme: String,
     hotspotCells: List<HotspotCell>,
     observationPins: List<Observation>,
+    allFungiPins: List<MapObservation> = emptyList(),
     onCellSelected: (HotspotCell) -> Unit,
     onPointSelected: (Double, Double) -> Unit
 ) {
@@ -1165,12 +1242,32 @@ fun OSMMapView(
                 mapView.overlays.add(cellPoly)
             }
             
-            // 3. Add Observation Markers
+            // 3a. Selected-species observation markers (single-species mode)
             for (pin in observationPins) {
                 val marker = Marker(mapView).apply {
                     position = GeoPoint(pin.lat, pin.lng)
                     setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
                     title = "Observation"
+                    subDescription = "${pin.source} · ${pin.qualityGrade}"
+                }
+                mapView.overlays.add(marker)
+            }
+
+            // 3b. All-fungi sightings layer — every nearby fungal observation,
+            // labelled with its taxon, common name, place and date. Tapping a
+            // pin opens an info window. Capped so dense areas stay responsive.
+            val dateFmt = java.text.SimpleDateFormat("d MMM yyyy", java.util.Locale.getDefault())
+            for (pin in allFungiPins.take(250)) {
+                val marker = Marker(mapView).apply {
+                    position = GeoPoint(pin.lat, pin.lng)
+                    setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                    title = pin.commonName?.takeIf { it.isNotBlank() } ?: pin.taxonName
+                    snippet = buildString {
+                        append(pin.taxonName)
+                        if (pin.observedAt > 0) append("\n${dateFmt.format(java.util.Date(pin.observedAt))}")
+                        pin.placeGuess?.let { append("\n$it") }
+                        append("\niNaturalist · ${pin.qualityGrade}")
+                    }
                 }
                 mapView.overlays.add(marker)
             }

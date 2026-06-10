@@ -9,6 +9,7 @@ import com.example.MyceliumApplication
 import com.example.data.local.SettingsStore
 import com.example.data.repository.FungiRepository
 import com.example.model.HotspotCell
+import com.example.model.MapObservation
 import com.example.model.Observation
 import com.example.model.Species
 import com.example.model.UserSighting
@@ -101,6 +102,15 @@ class FungiViewModel(
     private val _observationPins = MutableStateFlow<List<Observation>>(emptyList())
     val observationPins: StateFlow<List<Observation>> = _observationPins.asStateFlow()
 
+    // "All fungi" map layer — every nearby fungal sighting from iNaturalist,
+    // labelled by taxon. Shown on the map independent of the selected species.
+    private val _allFungiPins = MutableStateFlow<List<MapObservation>>(emptyList())
+    val allFungiPins: StateFlow<List<MapObservation>> = _allFungiPins.asStateFlow()
+
+    // User toggle for the all-sightings layer (default on — the user asked for
+    // all iNaturalist sightings to be visible).
+    val showAllSightings = MutableStateFlow(true)
+
     private val _weatherSummary = MutableStateFlow<Pair<Double, Double>?>(null) // Rainfall, MaxTemp
     val weatherSummary: StateFlow<Pair<Double, Double>?> = _weatherSummary.asStateFlow()
 
@@ -182,6 +192,16 @@ class FungiViewModel(
         computeJob = viewModelScope.launch {
             _hotspotState.value = HotspotState.Loading
             _isRecomputationsRunning.value = true
+
+            // Refresh the all-fungi sightings layer in parallel — independent of
+            // the hotspot computation, so the map populates pins quickly and a
+            // hotspot failure never blocks the sightings (and vice versa).
+            launch {
+                _allFungiPins.value =
+                    if (showAllSightings.value) repository.getAllFungiObservations(lat, lng, radius)
+                    else emptyList()
+            }
+
             try {
                 val cells = if (multiSpecies) {
                     repository.generateMultiSpeciesHotspots(lat, lng, radius)
@@ -214,6 +234,19 @@ class FungiViewModel(
     fun setAllSpeciesMode(enabled: Boolean) {
         isAllSpeciesMode.value = enabled
         computeHotspots()
+    }
+
+    /** Toggle the "all fungi sightings" map layer. */
+    fun setShowAllSightings(enabled: Boolean) {
+        showAllSightings.value = enabled
+        if (!enabled) {
+            _allFungiPins.value = emptyList()
+        } else {
+            val (lat, lng) = mapCenter.value
+            viewModelScope.launch {
+                _allFungiPins.value = repository.getAllFungiObservations(lat, lng, searchRadiusKm.value)
+            }
+        }
     }
 
     /**
