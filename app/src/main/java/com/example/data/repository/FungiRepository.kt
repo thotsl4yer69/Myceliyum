@@ -252,36 +252,48 @@ class FungiRepository(
         result
     }
 
-    // Reference-photo gallery per species (scientific name → image URLs),
-    // pulled from iNaturalist taxon photos. Cached for the process lifetime so
-    // revisiting a species detail is instant and free.
-    private val speciesImageCache = java.util.concurrent.ConcurrentHashMap<String, List<String>>()
+    // Reference-photo gallery per species (scientific name → photos with
+    // attribution), pulled from iNaturalist taxon photos. Cached for the
+    // process lifetime so revisiting a species detail is instant and free.
+    private val speciesPhotoCache = java.util.concurrent.ConcurrentHashMap<String, List<com.example.model.SpeciesPhoto>>()
+
+    /** Tidy iNaturalist's attribution string for compact on-image display. */
+    private fun cleanAttribution(raw: String?): String? =
+        raw?.replace("(c)", "©")?.replace(Regex("\\s+"), " ")?.trim()?.takeIf { it.isNotBlank() }
 
     /**
-     * A gallery of reference photos for a species, sourced from iNaturalist's
-     * curated taxon photos (CC-licensed, attributed). Returns medium-size image
-     * URLs that Coil loads directly — no images bundled in the APK. Fails soft
-     * to an empty list (the detail screen then shows bundled images or a
-     * styled placeholder), so it never breaks the UI offline.
+     * A gallery of reference photos (with CC attribution) for a species,
+     * sourced from iNaturalist's curated taxon photos. URLs load directly via
+     * Coil — no images bundled in the APK. Fails soft to an empty list.
      */
-    suspend fun fetchSpeciesImages(scientificName: String): List<String> =
+    suspend fun fetchSpeciesPhotos(scientificName: String): List<com.example.model.SpeciesPhoto> =
         withContext(Dispatchers.IO) {
-            speciesImageCache[scientificName]?.let { return@withContext it }
-            val urls = try {
+            speciesPhotoCache[scientificName]?.let { return@withContext it }
+            val photos = try {
                 val taxon = iNatApi.getTaxa(scientificName).results?.firstOrNull()
-                val gallery = taxon?.taxonPhotos.orEmpty()
-                    .mapNotNull { it.photo?.mediumUrl ?: it.photo?.url }
-                val withDefault =
-                    if (gallery.isEmpty()) listOfNotNull(taxon?.defaultPhoto?.mediumUrl ?: taxon?.defaultPhoto?.url)
-                    else gallery
-                withDefault.distinct().take(12)
+                val gallery = taxon?.taxonPhotos.orEmpty().mapNotNull { wrap ->
+                    val p = wrap.photo ?: return@mapNotNull null
+                    val url = p.mediumUrl ?: p.url ?: return@mapNotNull null
+                    com.example.model.SpeciesPhoto(url, cleanAttribution(p.attribution))
+                }
+                val withDefault = if (gallery.isEmpty()) {
+                    val dp = taxon?.defaultPhoto
+                    val url = dp?.mediumUrl ?: dp?.url
+                    if (url != null) listOf(com.example.model.SpeciesPhoto(url, cleanAttribution(dp?.attribution)))
+                    else emptyList()
+                } else gallery
+                withDefault.distinctBy { it.url }.take(12)
             } catch (e: Exception) {
-                Log.w(TAG, "species images fetch failed for $scientificName: ${e.message}")
+                Log.w(TAG, "species photos fetch failed for $scientificName: ${e.message}")
                 emptyList()
             }
-            speciesImageCache[scientificName] = urls
-            urls
+            speciesPhotoCache[scientificName] = photos
+            photos
         }
+
+    /** Image URLs only — used for list thumbnails and the global-search filter. */
+    suspend fun fetchSpeciesImages(scientificName: String): List<String> =
+        fetchSpeciesPhotos(scientificName).map { it.url }
 
     /**
      * Fetch iNaturalist observations with offline-first Room cache with TTL.

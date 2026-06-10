@@ -43,15 +43,18 @@ fun DetailScreen(
     val context = LocalContext.current
     val currentMonth = remember { Calendar.getInstance().get(Calendar.MONTH) + 1 }
 
-    // Pull a gallery of reference photos for this species from iNaturalist and
-    // merge with any bundled images, so every species shows multiple photos.
-    var remoteImages by remember(species.id) { mutableStateOf<List<String>>(emptyList()) }
+    // Pull a gallery of reference photos (with CC attribution) for this species
+    // from iNaturalist and merge with any bundled images, so every species
+    // shows multiple photos each crediting its source.
+    var remotePhotos by remember(species.id) { mutableStateOf<List<com.example.model.SpeciesPhoto>>(emptyList()) }
     LaunchedEffect(species.id) {
-        remoteImages = viewModel.fetchSpeciesImages(species.scientificName)
+        remotePhotos = viewModel.fetchSpeciesPhotos(species.scientificName)
     }
-    val images = remember(species.imageUrls, remoteImages) {
-        (species.imageUrls + remoteImages).distinct()
+    val photos = remember(species.imageUrls, remotePhotos) {
+        (species.imageUrls.map { com.example.model.SpeciesPhoto(it, null) } + remotePhotos)
+            .distinctBy { it.url }
     }
+    val images = photos.map { it.url }
 
     Scaffold(
         topBar = {
@@ -153,6 +156,24 @@ fun DetailScreen(
                                         )
                                     }
                                 }
+                            }
+
+                            // Photo attribution (CC credit) for iNaturalist images
+                            val credit = photos.getOrNull(page)?.attribution
+                            if (!isError && !credit.isNullOrBlank()) {
+                                Text(
+                                    text = credit,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color.White.copy(alpha = 0.85f),
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                    modifier = Modifier
+                                        .align(Alignment.BottomStart)
+                                        .padding(8.dp)
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(Color.Black.copy(alpha = 0.45f))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
                             }
                         }
                     }
