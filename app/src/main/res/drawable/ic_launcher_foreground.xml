@@ -1,95 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  MyceliYUMS brand v3 logomark — radar-contour mushroom with amber signal core.
+  Ported from the site's 48x48 logomark SVG; the group maps it into the
+  adaptive-icon safe zone (scale 1.35, centred in the 108dp viewport). The
+  outer ring's SVG dash pattern isn't supported by VectorDrawable, so it
+  renders as a solid stroke at the same low opacity — visually equivalent at
+  launcher sizes.
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-
-    <!-- Outer glow halo (very soft neon mint) -->
-    <path
-        android:fillColor="#0A4FFFB0"
-        android:pathData="M54,20 C34,20 20,34 20,54 C20,60 22,64 24,66 L30,62 C28,58 28,56 28,54 C28,38 38,26 54,26 C70,26 80,38 80,54 C80,56 80,58 78,62 L84,66 C86,64 88,60 88,54 C88,34 74,20 54,20 Z" />
-
-    <!-- Inner glow ring (neon mint, subtle) -->
-    <path
-        android:fillColor="#154FFFB0"
-        android:pathData="M54,24 C37,24 25,36 25,54 C25,58 26,61 27,63 L31,60 C30,58 29,56 29,54 C29,39 39,28 54,28 C69,28 79,39 79,54 C79,56 78,58 77,60 L81,63 C82,61 83,58 83,54 C83,36 71,24 54,24 Z" />
-
-    <!-- Mushroom cap - main body (chanterelle gold, slightly asymmetric) -->
-    <path
-        android:fillColor="#FFB347"
-        android:pathData="M29,60 C29,44 36,30 54,29 C72,30 79,44 79,60 Z" />
-
-    <!-- Cap top highlight (lighter gold crescent for depth) -->
-    <path
-        android:fillColor="#22FFFFFF"
-        android:pathData="M38,52 C38,42 43,33 54,32 C65,33 70,42 70,52 Q54,47 38,52 Z" />
-
-    <!-- Cap edge glow - neon mint stroke -->
-    <path
-        android:fillColor="#00000000"
-        android:strokeColor="#4FFFB0"
-        android:strokeWidth="1.8"
-        android:pathData="M29,60 C29,44 36,30 54,29 C72,30 79,44 79,60" />
-
-    <!-- Gill lines under cap (subtle dark lines radiating from center) -->
-    <path
-        android:fillColor="#00000000"
-        android:strokeColor="#18000000"
-        android:strokeWidth="0.6"
-        android:pathData="M36,60 L54,56 M42,60 L54,56 M48,60 L54,56 M54,60 L54,56 M60,60 L54,56 M66,60 L54,56 M72,60 L54,56" />
-
-    <!-- Stem (warm gold, slight taper with organic curve) -->
-    <path
-        android:fillColor="#E09838"
-        android:pathData="M46,60 C45.5,66 45,72 44.5,78 Q54,83 63.5,78 C63,72 62.5,66 62,60 Z" />
-
-    <!-- Stem center highlight -->
-    <path
-        android:fillColor="#15FFFFFF"
-        android:pathData="M50,60 C49.5,66 49,72 49,77 Q54,80 59,77 C59,72 58.5,66 58,60 Z" />
-
-    <!-- Cap spots - bioluminescent neon mint dots -->
-    <!-- Large spot upper-left -->
-    <path
-        android:fillColor="#4FFFB0"
-        android:pathData="M42,41 m-2.5,0 a2.5,2.5 0 1,0 5,0 a2.5,2.5 0 1,0 -5,0" />
-    <!-- Large spot upper-right -->
-    <path
-        android:fillColor="#4FFFB0"
-        android:pathData="M57,36 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0" />
-    <!-- Medium spot right -->
-    <path
-        android:fillColor="#4FFFB0"
-        android:pathData="M66,46 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0" />
-    <!-- Small spot center -->
-    <path
-        android:fillColor="#BB4FFFB0"
-        android:pathData="M50,49 m-1.5,0 a1.5,1.5 0 1,0 3,0 a1.5,1.5 0 1,0 -3,0" />
-    <!-- Small spot left -->
-    <path
-        android:fillColor="#BB4FFFB0"
-        android:pathData="M36,51 m-1.5,0 a1.5,1.5 0 1,0 3,0 a1.5,1.5 0 1,0 -3,0" />
-    <!-- Tiny spot right edge -->
-    <path
-        android:fillColor="#884FFFB0"
-        android:pathData="M70,54 m-1.2,0 a1.2,1.2 0 1,0 2.4,0 a1.2,1.2 0 1,0 -2.4,0" />
-    <!-- Tiny spot upper center -->
-    <path
-        android:fillColor="#884FFFB0"
-        android:pathData="M48,38 m-1,0 a1,1 0 1,0 2,0 a1,1 0 1,0 -2,0" />
-
-    <!-- Falling spore dots (progressively fading) -->
-    <path
-        android:fillColor="#4FFFB0"
-        android:pathData="M48,86 m-1.2,0 a1.2,1.2 0 1,0 2.4,0 a1.2,1.2 0 1,0 -2.4,0" />
-    <path
-        android:fillColor="#884FFFB0"
-        android:pathData="M58,88 m-0.9,0 a0.9,0.9 0 1,0 1.8,0 a0.9,0.9 0 1,0 -1.8,0" />
-    <path
-        android:fillColor="#554FFFB0"
-        android:pathData="M52,91 m-0.7,0 a0.7,0.7 0 1,0 1.4,0 a0.7,0.7 0 1,0 -1.4,0" />
-    <path
-        android:fillColor="#334FFFB0"
-        android:pathData="M44,90 m-0.5,0 a0.5,0.5 0 1,0 1,0 a0.5,0.5 0 1,0 -1,0" />
-
+    <group
+        android:translateX="21.6"
+        android:translateY="21.6"
+        android:scaleX="1.35"
+        android:scaleY="1.35">
+        <!-- outer (dashed in SVG) contour -->
+        <path
+            android:pathData="M24,4C12,4 4.5,11.5 4.5,20.5c0,3.4 2.6,5.2 6.2,5.6 2.5,0.3 4.3,1.6 4.6,4.2l0.9,7.2c0.3,2.7 3.4,4.5 7.8,4.5s7.5,-1.8 7.8,-4.5l0.9,-7.2c0.3,-2.6 2.1,-3.9 4.6,-4.2 3.6,-0.4 6.2,-2.2 6.2,-5.6C43.5,11.5 36,4 24,4Z"
+            android:strokeColor="#1f9e6c"
+            android:strokeWidth="1.1"
+            android:strokeAlpha="0.35" />
+        <!-- second contour -->
+        <path
+            android:pathData="M24,5.75C13,5.75 6.15,12.6 6.15,20.7c0,3 2.35,4.6 5.7,5.05 2.7,0.35 4.65,1.8 4.95,4.55l0.8,6.4c0.3,2.45 2.9,4.05 6.4,4.05s6.1,-1.6 6.4,-4.05l0.8,-6.4c0.3,-2.75 2.25,-4.2 4.95,-4.55 3.35,-0.45 5.7,-2.05 5.7,-5.05C41.85,12.6 35,5.75 24,5.75Z"
+            android:strokeColor="#1f9e6c"
+            android:strokeWidth="1.1"
+            android:strokeAlpha="0.5" />
+        <!-- main signal contour -->
+        <path
+            android:pathData="M24,7.5C14,7.5 7.8,13.7 7.8,20.9c0,2.6 2.1,4 5.2,4.5 2.9,0.4 5,2 5.3,4.9l0.7,5.6c0.3,2.2 2.4,3.6 5,3.6s4.7,-1.4 5,-3.6l0.7,-5.6c0.3,-2.9 2.4,-4.5 5.3,-4.9 3.1,-0.5 5.2,-1.9 5.2,-4.5C40.2,13.7 34,7.5 24,7.5Z"
+            android:strokeColor="#54E0A0"
+            android:strokeWidth="1.9" />
+        <!-- inner contour -->
+        <path
+            android:pathData="M24,11c-7.8,0 -12.8,4.8 -12.8,10.3 0,1.9 1.6,3 4.2,3.5 3.3,0.6 5.6,2.4 5.9,5.5l0.5,3.9c0.2,1.7 1,2.7 2.2,2.7s2,-1 2.2,-2.7l0.5,-3.9c0.3,-3.1 2.6,-4.9 5.9,-5.5 2.6,-0.5 4.2,-1.6 4.2,-3.5C36.8,15.8 31.8,11 24,11Z"
+            android:strokeColor="#1f9e6c"
+            android:strokeWidth="1.2"
+            android:strokeAlpha="0.6" />
+        <!-- cap tick marks -->
+        <path
+            android:pathData="M24,13.7L24,11.8M27.9,14.75L28.85,13.1M20.1,14.75L19.15,13.1M30.75,17.6L32.4,16.65M17.25,17.6L15.6,16.65"
+            android:strokeColor="#1f9e6c"
+            android:strokeWidth="1"
+            android:strokeAlpha="0.55"
+            android:strokeLineCap="round" />
+        <!-- filled inner cap -->
+        <path
+            android:pathData="M24,14.5c-5.4,0 -8.9,3.3 -8.9,7 0,1.3 1.1,2 2.9,2.4 2.7,0.55 4.6,2 5,4.6 0.1,0.8 0.5,1.2 1,1.2s0.9,-0.4 1,-1.2c0.4,-2.6 2.3,-4.05 5,-4.6 1.8,-0.4 2.9,-1.1 2.9,-2.4 0,-3.7 -3.5,-7 -8.9,-7Z"
+            android:fillColor="#54E0A0" />
+        <!-- core well -->
+        <path
+            android:pathData="M24,19.6a2.4,2.4 0,1 1,0,4.8a2.4,2.4 0,1 1,0,-4.8Z"
+            android:fillColor="#0B0D0B" />
+        <!-- amber cross ticks -->
+        <path
+            android:pathData="M24,18.1L24,19.2M24,24.8L24,25.9M20.2,22L21.3,22M26.7,22L27.8,22"
+            android:strokeColor="#E6B24C"
+            android:strokeWidth="1"
+            android:strokeAlpha="0.9" />
+        <!-- amber signal core -->
+        <path
+            android:pathData="M24,20.6a1.4,1.4 0,1 1,0,2.8a1.4,1.4 0,1 1,0,-2.8Z"
+            android:fillColor="#E6B24C" />
+    </group>
 </vector>

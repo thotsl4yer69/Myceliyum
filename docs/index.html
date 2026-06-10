@@ -3,18 +3,22 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Myceliyum — Field Signal Terminal</title>
+<title>MyceliYUMS — Field Signal Terminal</title>
 <meta name="description" content="A field-research terminal for wild mycology. Fuses iNaturalist observations, Open-Meteo weather, Google place-search and Google Earth Engine satellite layers (land cover, tree-canopy %, NDVI) into a grid model that scores where fungi are likely fruiting — anywhere on Earth.">
 <meta name="theme-color" content="#0B0D0B">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://myceliyums.xyz/">
-<meta property="og:title" content="Myceliyum — Field Signal Terminal">
+<meta property="og:title" content="MyceliYUMS — Field Signal Terminal">
 <meta property="og:description" content="Read the forest before it fruits. A field terminal fusing satellite layers, weather and observations to score probable fungal hotspots anywhere on Earth.">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Myceliyum — Field Signal Terminal">
+<meta name="twitter:title" content="MyceliYUMS — Field Signal Terminal">
 <meta name="twitter:description" content="Read the forest before it fruits. Satellite-aware fungal hotspot prediction, anywhere on Earth.">
+<meta property="og:image" content="https://myceliyums.xyz/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:image" content="https://myceliyums.xyz/og-image.png">
 <link rel="canonical" href="https://myceliyums.xyz/">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' fill='%230B0D0B'/%3E%3Cpath d='M20 7C12 7 6 12.5 6 19.2c0 1.2.9 2 2.3 2h23.4c1.4 0 2.3-.8 2.3-2C30 12.5 28 7 20 7Z' fill='%2354E0A0'/%3E%3Cpath d='M16.8 21.5h6.4l-.9 11c-.13 1.7-1.3 2.8-2.3 2.8s-2.17-1.1-2.3-2.8z' fill='%238E9583'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48' fill='none'%3E%3Crect width='48' height='48' fill='%230B0D0B'/%3E%3Cpath d='M24 7.5C14 7.5 7.8 13.7 7.8 20.9c0 2.6 2.1 4 5.2 4.5 2.9.4 5 2 5.3 4.9l.7 5.6c.3 2.2 2.4 3.6 5 3.6s4.7-1.4 5-3.6l.7-5.6c.3-2.9 2.4-4.5 5.3-4.9 3.1-.5 5.2-1.9 5.2-4.5C40.2 13.7 34 7.5 24 7.5Z' stroke='%2354E0A0' stroke-width='2.6'/%3E%3Cpath d='M24 11c-7.8 0-12.8 4.8-12.8 10.3 0 1.9 1.6 3 4.2 3.5 3.3.6 5.6 2.4 5.9 5.5l.5 3.9c.2 1.7 1 2.7 2.2 2.7s2-1 2.2-2.7l.5-3.9c.3-3.1 2.6-4.9 5.9-5.5 2.6-.5 4.2-1.6 4.2-3.5C36.8 15.8 31.8 11 24 11Z' stroke='%231f9e6c' stroke-width='1.5' opacity='0.6'/%3E%3Cpath d='M24 14.5c-5.4 0-8.9 3.3-8.9 7 0 1.3 1.1 2 2.9 2.4 2.7.55 4.6 2 5 4.6.1.8.5 1.2 1 1.2s.9-.4 1-1.2c.4-2.6 2.3-4.05 5-4.6 1.8-.4 2.9-1.1 2.9-2.4 0-3.7-3.5-7-8.9-7Z' fill='%2354E0A0'/%3E%3Ccircle cx='24' cy='22' r='2.6' fill='%230B0D0B'/%3E%3Ccircle cx='24' cy='22' r='1.6' fill='%23E6B24C'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="styles.css">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
@@ -44,12 +48,12 @@
   </div>
   <div class="wrap nav-inner">
     <a class="brand" href="#top">
-      <svg class="logomark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-        <path d="M20 6C11 6 4 12.5 4 20.2c0 1.4 1 2.3 2.6 2.3h26.8c1.6 0 2.6-.9 2.6-2.3C36 12.5 29 6 20 6Z" fill="#54E0A0"/>
-        <path d="M16.4 22.5h7.2l-1 12.4c-.15 1.9-1.5 3.1-2.6 3.1s-2.45-1.2-2.6-3.1l-1-12.4Z" fill="#8E9583"/>
+      <svg class="logomark" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M24 4C12 4 4.5 11.5 4.5 20.5c0 3.4 2.6 5.2 6.2 5.6 2.5.3 4.3 1.6 4.6 4.2l.9 7.2c.3 2.7 3.4 4.5 7.8 4.5s7.5-1.8 7.8-4.5l.9-7.2c.3-2.6 2.1-3.9 4.6-4.2 3.6-.4 6.2-2.2 6.2-5.6C43.5 11.5 36 4 24 4Z" stroke="#1f9e6c" stroke-width="1.1" opacity="0.35" stroke-dasharray="3 2.5"/><path d="M24 5.75C13 5.75 6.15 12.6 6.15 20.7c0 3 2.35 4.6 5.7 5.05 2.7.35 4.65 1.8 4.95 4.55l.8 6.4c.3 2.45 2.9 4.05 6.4 4.05s6.1-1.6 6.4-4.05l.8-6.4c.3-2.75 2.25-4.2 4.95-4.55 3.35-.45 5.7-2.05 5.7-5.05C41.85 12.6 35 5.75 24 5.75Z" stroke="#1f9e6c" stroke-width="1.1" opacity="0.5"/><path d="M24 7.5C14 7.5 7.8 13.7 7.8 20.9c0 2.6 2.1 4 5.2 4.5 2.9.4 5 2 5.3 4.9l.7 5.6c.3 2.2 2.4 3.6 5 3.6s4.7-1.4 5-3.6l.7-5.6c.3-2.9 2.4-4.5 5.3-4.9 3.1-.5 5.2-1.9 5.2-4.5C40.2 13.7 34 7.5 24 7.5Z" stroke="#54E0A0" stroke-width="1.9"/><path d="M24 11c-7.8 0-12.8 4.8-12.8 10.3 0 1.9 1.6 3 4.2 3.5 3.3.6 5.6 2.4 5.9 5.5l.5 3.9c.2 1.7 1 2.7 2.2 2.7s2-1 2.2-2.7l.5-3.9c.3-3.1 2.6-4.9 5.9-5.5 2.6-.5 4.2-1.6 4.2-3.5C36.8 15.8 31.8 11 24 11Z" stroke="#1f9e6c" stroke-width="1.2" opacity="0.6"/><path d="M24 13.7V11.8M27.9 14.75 28.85 13.1M20.1 14.75 19.15 13.1M30.75 17.6 32.4 16.65M17.25 17.6 15.6 16.65" stroke="#1f9e6c" stroke-width="1" opacity="0.55" stroke-linecap="round"/>
+        <path d="M24 14.5c-5.4 0-8.9 3.3-8.9 7 0 1.3 1.1 2 2.9 2.4 2.7.55 4.6 2 5 4.6.1.8.5 1.2 1 1.2s.9-.4 1-1.2c.4-2.6 2.3-4.05 5-4.6 1.8-.4 2.9-1.1 2.9-2.4 0-3.7-3.5-7-8.9-7Z" fill="#54E0A0"/><circle cx="24" cy="22" r="2.4" fill="#0B0D0B"/><path d="M24 18.1v1.1M24 24.8v1.1M20.2 22h1.1M26.7 22h1.1" stroke="#E6B24C" stroke-width="1" opacity="0.9"/><circle cx="24" cy="22" r="1.4" fill="#E6B24C"/>
       </svg>
       <span class="brand-txt">
-        <span class="wordmark">Myceli<b>yum</b></span>
+        <span class="wordmark">Myceli<b>yums</b></span>
         <span class="unit">FIELD SIGNAL TERMINAL</span>
       </span>
     </a>
@@ -86,7 +90,7 @@
           <span class="tag">SAT <b>EARTH ENGINE</b></span>
         </div>
         <h1>Read the forest<br>before it <span class="em">fruits.</span></h1>
-        <p class="hero-sub">Myceliyum fuses <b>five live data sources</b> — a curated species catalogue, iNaturalist observations, Open-Meteo weather, Google place-search and <b>Earth Engine satellite layers</b> (land cover, tree-canopy %, NDVI) — into a grid model that scores <b>where fungi are likely fruiting</b>. Quality first: every signal that drives a flush, on every cell.</p>
+        <p class="hero-sub">MyceliYUMS fuses <b>five live data sources</b> — a curated species catalogue, iNaturalist observations, Open-Meteo weather, Google place-search and <b>Earth Engine satellite layers</b> (land cover, tree-canopy %, NDVI) — into a grid model that scores <b>where fungi are likely fruiting</b>. Quality first: every signal that drives a flush, on every cell.</p>
         <div class="hero-actions">
           <a class="btn btn-primary" href="#download">
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.6 9.5 19 7a.4.4 0 0 0-.7-.4L16.9 9a9.9 9.9 0 0 0-9.8 0L5.7 6.6A.4.4 0 0 0 5 7l1.4 2.5A8 8 0 0 0 2 16h20a8 8 0 0 0-4.4-6.5ZM7 13.8a1 1 0 1 1 0-2 1 1 0 0 1 0 2Zm10 0a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"/></svg>
@@ -95,7 +99,7 @@
           <a class="btn btn-ghost" href="#hotspots">Open the scope</a>
         </div>
         <div class="spec-strip">
-          <div class="cell"><div class="n">05</div><div class="k">Catalogued taxa</div></div>
+          <div class="cell"><div class="n">28</div><div class="k">Catalogued taxa</div></div>
           <div class="cell"><div class="n">10</div><div class="k">Weighted signals</div></div>
           <div class="cell"><div class="n">05</div><div class="k">Live data sources</div></div>
           <div class="cell"><div class="n">30<span class="u">m</span></div><div class="k">Satellite resolution</div></div>
@@ -114,7 +118,7 @@
           <div class="screen scan">
             <div class="screen-scroll">
               <div class="app-bar">
-                <div class="title">MYCELIUM MAPPER</div>
+                <div class="title">MYCELIYUMS</div>
                 <div class="sub">FIELD MYCOLOGY TERMINAL · ANY GRID</div>
               </div>
               <div class="app-body">
@@ -391,10 +395,12 @@
     <div class="block-head reveal">
       <span class="fig">SEC 03 / SPECIMEN INDEX</span>
       <h2 class="section-h">The species file.</h2>
-      <p class="section-lead">Field-grade reference cards for notable wild fungi — the spectacular, the toxic, and the invasive. Bundled and fully offline.</p>
+      <p class="section-lead">Twenty-eight field-grade reference cards — the edible, the deadly, and every dangerous twin in between. Each dossier carries field marks, spore print, season and a lookalike warning; tap any photo to expand it for side-by-side comparison in the field.</p>
     </div>
     <div class="filter-row reveal">
       <button class="chip active" data-filter="all">All taxa</button>
+      <button class="chip" data-filter="edible">Edible</button>
+      <button class="chip" data-filter="deadly">Deadly</button>
       <button class="chip" data-filter="toxic">Toxic</button>
       <button class="chip" data-filter="psy">Psychoactive</button>
       <button class="chip" data-filter="bio">Bioluminescent</button>
@@ -520,12 +526,12 @@
     <div class="foot-grid">
       <div class="foot-brand">
         <a class="brand" href="#top">
-          <svg class="logomark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <path d="M20 6C11 6 4 12.5 4 20.2c0 1.4 1 2.3 2.6 2.3h26.8c1.6 0 2.6-.9 2.6-2.3C36 12.5 29 6 20 6Z" fill="#54E0A0"/>
-            <path d="M16.4 22.5h7.2l-1 12.4c-.15 1.9-1.5 3.1-2.6 3.1s-2.45-1.2-2.6-3.1l-1-12.4Z" fill="#8E9583"/>
+          <svg class="logomark" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M24 4C12 4 4.5 11.5 4.5 20.5c0 3.4 2.6 5.2 6.2 5.6 2.5.3 4.3 1.6 4.6 4.2l.9 7.2c.3 2.7 3.4 4.5 7.8 4.5s7.5-1.8 7.8-4.5l.9-7.2c.3-2.6 2.1-3.9 4.6-4.2 3.6-.4 6.2-2.2 6.2-5.6C43.5 11.5 36 4 24 4Z" stroke="#1f9e6c" stroke-width="1.1" opacity="0.35" stroke-dasharray="3 2.5"/><path d="M24 5.75C13 5.75 6.15 12.6 6.15 20.7c0 3 2.35 4.6 5.7 5.05 2.7.35 4.65 1.8 4.95 4.55l.8 6.4c.3 2.45 2.9 4.05 6.4 4.05s6.1-1.6 6.4-4.05l.8-6.4c.3-2.75 2.25-4.2 4.95-4.55 3.35-.45 5.7-2.05 5.7-5.05C41.85 12.6 35 5.75 24 5.75Z" stroke="#1f9e6c" stroke-width="1.1" opacity="0.5"/><path d="M24 7.5C14 7.5 7.8 13.7 7.8 20.9c0 2.6 2.1 4 5.2 4.5 2.9.4 5 2 5.3 4.9l.7 5.6c.3 2.2 2.4 3.6 5 3.6s4.7-1.4 5-3.6l.7-5.6c.3-2.9 2.4-4.5 5.3-4.9 3.1-.5 5.2-1.9 5.2-4.5C40.2 13.7 34 7.5 24 7.5Z" stroke="#54E0A0" stroke-width="1.9"/><path d="M24 11c-7.8 0-12.8 4.8-12.8 10.3 0 1.9 1.6 3 4.2 3.5 3.3.6 5.6 2.4 5.9 5.5l.5 3.9c.2 1.7 1 2.7 2.2 2.7s2-1 2.2-2.7l.5-3.9c.3-3.1 2.6-4.9 5.9-5.5 2.6-.5 4.2-1.6 4.2-3.5C36.8 15.8 31.8 11 24 11Z" stroke="#1f9e6c" stroke-width="1.2" opacity="0.6"/><path d="M24 13.7V11.8M27.9 14.75 28.85 13.1M20.1 14.75 19.15 13.1M30.75 17.6 32.4 16.65M17.25 17.6 15.6 16.65" stroke="#1f9e6c" stroke-width="1" opacity="0.55" stroke-linecap="round"/>
+            <path d="M24 14.5c-5.4 0-8.9 3.3-8.9 7 0 1.3 1.1 2 2.9 2.4 2.7.55 4.6 2 5 4.6.1.8.5 1.2 1 1.2s.9-.4 1-1.2c.4-2.6 2.3-4.05 5-4.6 1.8-.4 2.9-1.1 2.9-2.4 0-3.7-3.5-7-8.9-7Z" fill="#54E0A0"/><circle cx="24" cy="22" r="2.4" fill="#0B0D0B"/><path d="M24 18.1v1.1M24 24.8v1.1M20.2 22h1.1M26.7 22h1.1" stroke="#E6B24C" stroke-width="1" opacity="0.9"/><circle cx="24" cy="22" r="1.4" fill="#E6B24C"/>
           </svg>
           <span class="brand-txt">
-            <span class="wordmark">Myceli<b>yum</b></span>
+            <span class="wordmark">Myceli<b>yums</b></span>
             <span class="unit">FIELD SIGNAL TERMINAL</span>
           </span>
         </a>
@@ -554,7 +560,7 @@
       </div>
     </div>
     <div class="foot-bottom">
-      <p>MYCELIUM MAPPER · FIELD MYCOLOGY DIVISION — RESEARCH TOOL ONLY, NOT AN ID AUTHORITY · NEVER EAT WILD FUNGI BASED ON THIS APP</p>
+      <p>MYCELIYUMS · FIELD MYCOLOGY DIVISION — RESEARCH TOOL ONLY, NOT AN ID AUTHORITY · NEVER EAT WILD FUNGI BASED ON THIS APP</p>
       <p class="foot-status"><i></i>PREDICTION ENGINE ONLINE</p>
     </div>
     <p class="foot-credits">Species photos © Wikimedia Commons &amp; iNaturalist contributors (CC BY-SA / CC0). Map data © OpenStreetMap, tiles © CARTO &amp; OpenTopoMap, hillshade © Esri. Satellite layers via Google Earth Engine — ESA WorldCover, Hansen Global Forest Change &amp; Copernicus Sentinel-2. Built on the open-source Mycelium Mapper project.</p>
@@ -564,11 +570,12 @@
 <template id="__bundler_thumbnail">
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
 <rect width="100" height="100" fill="#0B0D0B"/>
-<path d="M50 30C36 30 26 39 26 51c0 2.2 1.5 3.6 4 3.6h40c2.5 0 4-1.4 4-3.6C74 39 64 30 50 30Z" fill="#54E0A0"/>
-<path d="M44 55h12l-1.7 19c-.2 3-2.3 5-4.3 5s-4.1-2-4.3-5L44 55Z" fill="#8E9583"/>
+<g transform="translate(2 2) scale(2)" fill="none"><path d="M24 4C12 4 4.5 11.5 4.5 20.5c0 3.4 2.6 5.2 6.2 5.6 2.5.3 4.3 1.6 4.6 4.2l.9 7.2c.3 2.7 3.4 4.5 7.8 4.5s7.5-1.8 7.8-4.5l.9-7.2c.3-2.6 2.1-3.9 4.6-4.2 3.6-.4 6.2-2.2 6.2-5.6C43.5 11.5 36 4 24 4Z" stroke="#1f9e6c" stroke-width="1.1" opacity="0.35" stroke-dasharray="3 2.5"></path><path d="M24 5.75C13 5.75 6.15 12.6 6.15 20.7c0 3 2.35 4.6 5.7 5.05 2.7.35 4.65 1.8 4.95 4.55l.8 6.4c.3 2.45 2.9 4.05 6.4 4.05s6.1-1.6 6.4-4.05l.8-6.4c.3-2.75 2.25-4.2 4.95-4.55 3.35-.45 5.7-2.05 5.7-5.05C41.85 12.6 35 5.75 24 5.75Z" stroke="#1f9e6c" stroke-width="1.1" opacity="0.5"></path><path d="M24 7.5C14 7.5 7.8 13.7 7.8 20.9c0 2.6 2.1 4 5.2 4.5 2.9.4 5 2 5.3 4.9l.7 5.6c.3 2.2 2.4 3.6 5 3.6s4.7-1.4 5-3.6l.7-5.6c.3-2.9 2.4-4.5 5.3-4.9 3.1-.5 5.2-1.9 5.2-4.5C40.2 13.7 34 7.5 24 7.5Z" stroke="#54E0A0" stroke-width="1.9"></path><path d="M24 11c-7.8 0-12.8 4.8-12.8 10.3 0 1.9 1.6 3 4.2 3.5 3.3.6 5.6 2.4 5.9 5.5l.5 3.9c.2 1.7 1 2.7 2.2 2.7s2-1 2.2-2.7l.5-3.9c.3-3.1 2.6-4.9 5.9-5.5 2.6-.5 4.2-1.6 4.2-3.5C36.8 15.8 31.8 11 24 11Z" stroke="#1f9e6c" stroke-width="1.2" opacity="0.6"></path><path d="M24 13.7V11.8M27.9 14.75 28.85 13.1M20.1 14.75 19.15 13.1M30.75 17.6 32.4 16.65M17.25 17.6 15.6 16.65" stroke="#1f9e6c" stroke-width="1" opacity="0.55" stroke-linecap="round"></path><path d="M24 14.5c-5.4 0-8.9 3.3-8.9 7 0 1.3 1.1 2 2.9 2.4 2.7.55 4.6 2 5 4.6.1.8.5 1.2 1 1.2s.9-.4 1-1.2c.4-2.6 2.3-4.05 5-4.6 1.8-.4 2.9-1.1 2.9-2.4 0-3.7-3.5-7-8.9-7Z" fill="#54E0A0"></path><circle cx="24" cy="22" r="2.4" fill="#0B0D0B"></circle><path d="M24 18.1v1.1M24 24.8v1.1M20.2 22h1.1M26.7 22h1.1" stroke="#E6B24C" stroke-width="1" opacity="0.9"></path><circle cx="24" cy="22" r="1.4" fill="#E6B24C"></circle></g>
+
 </svg>
 </template>
 
+<script src="hyphae-bg.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -79,6 +79,10 @@ body::after {
   background-size: 96px 100%;
 }
 
+/* ---------- hyphae ambient layer (live shader background) ---------- */
+#hyphae-bg { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+section, footer, .ticker { position: relative; z-index: 1; }
+
 img { display: block; max-width: 100%; }
 a { color: inherit; text-decoration: none; }
 
@@ -490,8 +494,10 @@ header.nav { position: sticky; top: 0; z-index: 50; background: var(--bg); borde
   padding: 4px 8px; background: rgba(8,10,8,0.85); border: 1px solid;
 }
 .sb-toxic { color: #ff8f8f; border-color: var(--alert); }
+.sb-deadly { color: #fff; border-color: var(--alert); background: rgba(242,85,61,0.55); }
+.sb-edible { color: var(--sig); border-color: var(--sig-deep); }
 .sb-psy { color: var(--violet); border-color: var(--violet); }
-.sb-bio { color: var(--sig); border-color: var(--sig-deep); }
+.sb-bio { color: var(--ice); border-color: var(--ice); }
 .sb-invasive { color: var(--amber); border-color: var(--amber-deep); }
 .species .ph .specno { position: absolute; top: 11px; right: 11px; z-index: 3; font-family: var(--mono); font-size: 9px; letter-spacing: 0.1em; color: var(--ink-dim); background: rgba(8,10,8,0.85); padding: 4px 7px; border: 1px solid var(--rule-2); }
 
@@ -504,6 +510,40 @@ header.nav { position: sticky; top: 0; z-index: 50; background: var(--bg); borde
 .spec-meta .k { font-family: var(--mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); }
 .spec-meta .v { font-family: var(--mono); font-size: 11px; color: var(--ink); text-align: right; }
 .spore-dot { display: inline-block; width: 9px; height: 9px; border: 1px solid rgba(255,255,255,0.3); vertical-align: middle; margin-right: 5px; }
+
+/* field-ID notes on each dossier */
+.species .ph { cursor: zoom-in; }
+.spec-notes { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; border-top: 1px solid var(--rule); padding-top: 11px; }
+.spec-notes .fm { font-size: 12.5px; line-height: 1.45; color: var(--ink-dim); }
+.spec-notes .fm b { font-family: var(--mono); font-size: 8.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-faint); display: block; margin-bottom: 2px; font-weight: 500; }
+.spec-notes .fm.warn { color: #cfa49a; }
+.spec-notes .fm.warn b { color: var(--alert); opacity: 0.8; }
+
+/* specimen lens — expanded field-comparison view */
+.lens { position: fixed; inset: 0; z-index: 300; background: rgba(8,10,8,0.93); display: none; align-items: center; justify-content: center; padding: 34px; cursor: zoom-out; }
+.lens.open { display: flex; }
+.lens-card { position: relative; max-width: 1080px; width: 100%; max-height: 90vh; display: grid; grid-template-columns: 1.45fr 1fr; background: var(--chassis); border: 1px solid var(--rule-2); cursor: default; }
+.lens-ph { position: relative; background: var(--screen); min-height: 340px; border-right: 1px solid var(--rule-2); }
+.lens-ph img { width: 100%; height: 100%; max-height: 90vh; object-fit: contain; display: block; }
+.lens-no { position: absolute; top: 12px; left: 14px; font-family: var(--mono); font-size: 9px; letter-spacing: 0.16em; color: var(--ink-dim); background: rgba(8,10,8,0.85); padding: 4px 8px; }
+.lens-info { padding: 26px; display: flex; flex-direction: column; gap: 14px; overflow: auto; }
+.lens-sci { font-family: var(--sans); font-style: italic; font-weight: 600; font-size: 27px; line-height: 1.1; }
+.lens-com { font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--sig); margin-top: 5px; }
+.lens-tax { font-family: var(--mono); font-size: 11px; color: var(--ink-dim); letter-spacing: 0.02em; }
+.lens-badge { position: static !important; display: inline-block; }
+.lens-marks, .lens-look { font-size: 13.5px; line-height: 1.5; color: var(--ink-dim); border-top: 1px solid var(--rule); padding-top: 12px; }
+.lens-marks b, .lens-look b { font-family: var(--mono); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-faint); display: block; margin-bottom: 4px; font-weight: 500; }
+.lens-look { color: #cfa49a; }
+.lens-look b { color: var(--alert); opacity: 0.8; }
+.lens-hint { font-family: var(--mono); font-size: 8.5px; letter-spacing: 0.12em; color: var(--ink-faint); line-height: 1.8; margin-top: auto; border-top: 1px solid var(--rule); padding-top: 12px; }
+.lens-close { position: absolute; top: 10px; right: 10px; width: 34px; height: 34px; background: rgba(8,10,8,0.85); border: 1px solid var(--rule-2); color: var(--ink-dim); font-size: 14px; cursor: pointer; }
+.lens-close:hover { color: var(--ink); border-color: var(--cut); }
+@media (max-width: 860px) {
+  .lens { padding: 14px; }
+  .lens-card { grid-template-columns: 1fr; overflow: auto; }
+  .lens-ph { border-right: 0; border-bottom: 1px solid var(--rule-2); min-height: 220px; }
+  .lens-ph img { max-height: 44vh; }
+}
 
 .season { display: flex; gap: 2px; margin-top: 3px; }
 .season span { flex: 1; height: 7px; background: var(--chassis-3); border: 1px solid var(--rule); }
