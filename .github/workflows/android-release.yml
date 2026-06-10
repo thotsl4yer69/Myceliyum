@@ -62,6 +62,7 @@ jobs:
           STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
           KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          BUILD_NUMBER: ${{ github.run_number }}
         run: ./gradlew assembleRelease --stacktrace
 
       - name: Upload release APK
