@@ -26,8 +26,22 @@ and lets you keep a private, offline-first logbook of your own sightings.
    `gradle wrapper --gradle-version 8.11.1` once, if you have a system Gradle.)
 3. Run the **app** configuration on an emulator or device.
 
-No API keys are required — both the iNaturalist and Open-Meteo APIs used here
-are public and keyless.
+The core app needs no API keys — iNaturalist, Open-Meteo, and OpenStreetMap
+Overpass are public and keyless. Optional keys in `local.properties`
+(git-ignored, see `.env.example`) unlock extras:
+
+- `ANTHROPIC_API_KEY` — the AI Identify tab (Claude vision + chat)
+- `GOOGLE_API_KEY` — Google Geocoding for nicer map headers
+- `BACKEND_BASE_URL` / `BACKEND_TOKEN` — the Earth Engine layers backend
+  (see `backend/README.md`); without it the app falls back to free OSM canopy
+
+## Website & releases
+
+- The marketing site in `docs/` deploys automatically to Cloudflare Workers on
+  every push to `main` (`wrangler.jsonc`).
+- Every push to `main` also refreshes a rolling **`latest`** GitHub release
+  with the freshly built debug APK — the site's download button points there.
+- See `docs/DEPLOY.md` for the full pipeline and release-signing options.
 
 ### Signing
 
