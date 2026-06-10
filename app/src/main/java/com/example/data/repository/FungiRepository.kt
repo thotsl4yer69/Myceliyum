@@ -159,39 +159,89 @@ class FungiRepository(
                 if (now - ts < AREA_OBS_TTL_MS) return@withContext value
             }
         }
-        val result = try {
-            val cal = Calendar.getInstance().apply { add(Calendar.YEAR, -5) }
-            val since = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(cal.time)
-            val resp = retryIO {
-                iNatApi.getAreaObservations(
-                    lat = lat, lng = lng, radiusKm = radiusKm, sinceDate = since
-                )
+        val cal = Calendar.getInstance().apply { add(Calendar.YEAR, -5) }
+        val since = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(cal.time)
+        // Bounding box for GBIF (it ranges by min,max lat/lng, not radius).
+        val latDelta = radiusKm / 111.0
+        val lngDelta = radiusKm / (111.0 * cos(Math.toRadians(lat)).coerceAtLeast(0.05))
+        val latRange = "${"%.4f".format(lat - latDelta)},${"%.4f".format(lat + latDelta)}"
+        val lngRange = "${"%.4f".format(lng - lngDelta)},${"%.4f".format(lng + lngDelta)}"
+
+        val result = coroutineScope {
+            // iNaturalist citizen-science sightings (one kingdom-wide call)
+            val iNatDeferred = async {
+                try {
+                    val resp = retryIO {
+                        iNatApi.getAreaObservations(lat = lat, lng = lng, radiusKm = radiusKm, sinceDate = since)
+                    }
+                    resp.results.mapNotNull { o ->
+                        val geoLng = o.geojson?.coordinates?.getOrNull(0)
+                        val geoLat = o.geojson?.coordinates?.getOrNull(1)
+                        val pLat = o.latitude ?: o.location?.split(",")?.getOrNull(0)?.trim()?.toDoubleOrNull() ?: geoLat
+                        val pLng = o.longitude ?: o.location?.split(",")?.getOrNull(1)?.trim()?.toDoubleOrNull() ?: geoLng
+                        if (pLat == null || pLng == null) return@mapNotNull null
+                        MapObservation(
+                            id = o.id, lat = pLat, lng = pLng,
+                            taxonName = o.taxon?.name ?: "Unidentified fungus",
+                            commonName = o.taxon?.commonName,
+                            source = "iNaturalist",
+                            observedAt = parseObsDate(o.observedOn),
+                            qualityGrade = o.qualityGrade ?: "needs_id",
+                            photoUrl = o.photos?.firstOrNull()?.url,
+                            placeGuess = o.placeGuess
+                        )
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "all-fungi iNat fetch failed: ${e.message}"); emptyList()
+                }
             }
-            resp.results.mapNotNull { o ->
-                val geoLng = o.geojson?.coordinates?.getOrNull(0)
-                val geoLat = o.geojson?.coordinates?.getOrNull(1)
-                val pLat = o.latitude ?: o.location?.split(",")?.getOrNull(0)?.trim()?.toDoubleOrNull() ?: geoLat
-                val pLng = o.longitude ?: o.location?.split(",")?.getOrNull(1)?.trim()?.toDoubleOrNull() ?: geoLng
-                if (pLat == null || pLng == null) return@mapNotNull null
-                MapObservation(
-                    id = o.id,
-                    lat = pLat,
-                    lng = pLng,
-                    taxonName = o.taxon?.name ?: "Unidentified fungus",
-                    commonName = o.taxon?.commonName,
-                    source = "iNaturalist",
-                    observedAt = parseObsDate(o.observedOn),
-                    qualityGrade = o.qualityGrade ?: "needs_id",
-                    photoUrl = o.photos?.firstOrNull()?.url,
-                    placeGuess = o.placeGuess
-                )
+            // GBIF museum/herbarium + research occurrences in the same box
+            val gbifDeferred = async {
+                try {
+                    val resp = retryIO { gbifApi.searchAreaOccurrences(lat = latRange, lon = lngRange) }
+                    (resp.results ?: emptyList()).mapNotNull { o ->
+                        val pLat = o.decimalLatitude ?: return@mapNotNull null
+                        val pLng = o.decimalLongitude ?: return@mapNotNull null
+                        val whenMs = parseObsDate(o.eventDate) // null-safe; falls back to ~30d ago
+                        MapObservation(
+                            id = (o.key ?: (pLat * 1e6 + pLng).toLong()),
+                            lat = pLat, lng = pLng,
+                            taxonName = o.scientificName ?: "Fungus (GBIF record)",
+                            commonName = null,
+                            source = "GBIF",
+                            observedAt = whenMs,
+                            qualityGrade = o.basisOfRecord ?: "GBIF record",
+                            photoUrl = null,
+                            placeGuess = o.institutionCode ?: o.datasetName
+                        )
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "all-fungi GBIF fetch failed: ${e.message}"); emptyList()
+                }
             }
-        } catch (e: Exception) {
-            Log.w(TAG, "all-fungi observations fetch failed: ${e.message}")
-            emptyList()
+            (iNatDeferred.await() + gbifDeferred.await())
         }
         areaObsCache[key] = now to result
         result
+    }
+
+    // Per-species global GBIF record count, cached.
+    private val recordCountCache = java.util.concurrent.ConcurrentHashMap<String, Int>()
+
+    /**
+     * Total worldwide GBIF occurrence records for a species (museum, herbarium
+     * and observation records). Surfaced on the detail screen as a measure of
+     * how widely the species has been recorded. Fails soft to null.
+     */
+    suspend fun getGlobalRecordCount(scientificName: String): Int? = withContext(Dispatchers.IO) {
+        recordCountCache[scientificName]?.let { return@withContext it }
+        val count = try {
+            retryIO { gbifApi.countOccurrences(scientificName) }.count
+        } catch (e: Exception) {
+            Log.w(TAG, "GBIF record count failed for $scientificName: ${e.message}"); null
+        }
+        if (count != null) recordCountCache[scientificName] = count
+        count
     }
 
     // Global fungal taxonomy search results, cached per query.
