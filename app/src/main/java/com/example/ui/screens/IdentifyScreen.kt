@@ -724,13 +724,36 @@ private fun createTempImageUri(context: Context): Uri {
     )
 }
 
-private fun imageUriToBase64(context: Context, uri: Uri): String {
-    val inputStream = context.contentResolver.openInputStream(uri) ?: throw Exception("Cannot read image")
-    val bitmap = BitmapFactory.decodeStream(inputStream)
-    inputStream.close()
+// One client for both Anthropic endpoints: reuses the connection pool and
+// threads instead of building a fresh client (and pool) per request.
+private val anthropicHttpClient: OkHttpClient by lazy {
+    OkHttpClient.Builder()
+        .connectTimeout(60, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
+        .build()
+}
 
-    // Resize to max 1024px on longest side
+private const val ANTHROPIC_MODEL = "claude-sonnet-4-6"
+
+private fun imageUriToBase64(context: Context, uri: Uri): String {
+    // Two-pass decode: read only the dimensions first, then decode subsampled.
+    // Decoding a full 48MP camera photo just to scale it down can OOM on
+    // low-RAM devices; inSampleSize keeps the in-memory bitmap near the target.
     val maxSize = 1024
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+        ?: throw Exception("Cannot read image")
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) throw Exception("Cannot decode image")
+
+    var sampleSize = 1
+    while (bounds.outWidth / (sampleSize * 2) >= maxSize && bounds.outHeight / (sampleSize * 2) >= maxSize) {
+        sampleSize *= 2
+    }
+    val opts = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+    val bitmap = context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) }
+        ?: throw Exception("Cannot read image")
+
+    // Fine-tune to exactly maxSize on the longest side
     val scale = minOf(maxSize.toFloat() / bitmap.width, maxSize.toFloat() / bitmap.height, 1f)
     val scaledBitmap = if (scale < 1f) {
         Bitmap.createScaledBitmap(bitmap, (bitmap.width * scale).toInt(), (bitmap.height * scale).toInt(), true)
@@ -738,6 +761,7 @@ private fun imageUriToBase64(context: Context, uri: Uri): String {
 
     val outputStream = ByteArrayOutputStream()
     scaledBitmap.compress(Bitmap.CompressFormat.JPEG, 85, outputStream)
+    if (scaledBitmap !== bitmap) bitmap.recycle()
     return Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
 }
 
@@ -792,16 +816,11 @@ IMPORTANT: Always emphasize that AI identification should NEVER be used as the s
     }
 
     val requestBody = JSONObject().apply {
-        put("model", "claude-sonnet-4-20250514")
+        put("model", ANTHROPIC_MODEL)
         put("max_tokens", 1500)
         put("system", systemPrompt)
         put("messages", messagesArray)
     }
-
-    val client = OkHttpClient.Builder()
-        .connectTimeout(60, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .build()
 
     val request = Request.Builder()
         .url("https://api.anthropic.com/v1/messages")
@@ -811,7 +830,7 @@ IMPORTANT: Always emphasize that AI identification should NEVER be used as the s
         .post(requestBody.toString().toRequestBody("application/json".toMediaType()))
         .build()
 
-    val response = client.newCall(request).execute()
+    val response = anthropicHttpClient.newCall(request).execute()
     val responseBody = response.body?.string() ?: throw Exception("Empty response")
 
     if (!response.isSuccessful) {
@@ -883,16 +902,11 @@ Be concise but thorough. Always emphasize safety — never encourage eating unid
     }
 
     val requestBody = JSONObject().apply {
-        put("model", "claude-sonnet-4-20250514")
+        put("model", ANTHROPIC_MODEL)
         put("max_tokens", 1000)
         put("system", systemPrompt)
         put("messages", messagesArray)
     }
-
-    val client = OkHttpClient.Builder()
-        .connectTimeout(60, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .build()
 
     val request = Request.Builder()
         .url("https://api.anthropic.com/v1/messages")
@@ -902,7 +916,7 @@ Be concise but thorough. Always emphasize safety — never encourage eating unid
         .post(requestBody.toString().toRequestBody("application/json".toMediaType()))
         .build()
 
-    val response = client.newCall(request).execute()
+    val response = anthropicHttpClient.newCall(request).execute()
     val responseBody = response.body?.string() ?: throw Exception("Empty response")
 
     if (!response.isSuccessful) {
