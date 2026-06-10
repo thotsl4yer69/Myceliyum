@@ -13,6 +13,8 @@ import com.example.model.MapObservation
 import com.example.model.Observation
 import com.example.model.Species
 import com.example.model.UserSighting
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -86,6 +88,37 @@ class FungiViewModel(
             matchesQuery && matchesHabitat && matchesSeason && matchesSpore
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // Whether a global (worldwide) taxonomy search is in flight.
+    private val _isGlobalSearching = MutableStateFlow(false)
+    val isGlobalSearching: StateFlow<Boolean> = _isGlobalSearching.asStateFlow()
+
+    /**
+     * Worldwide fungal results from the GBIF taxonomy backbone, driven by the
+     * same search box (debounced). Excludes anything already in the curated
+     * local catalogue so the two lists don't duplicate. Makes the catalogue a
+     * searchable front-end over every described fungus on Earth.
+     */
+    @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
+    val globalResults: StateFlow<List<Species>> = searchQuery
+        .debounce(350)
+        .combine(speciesList) { query, local -> query.trim() to local }
+        .mapLatest { (query, local) ->
+            if (query.length < 3) {
+                _isGlobalSearching.value = false
+                emptyList()
+            } else {
+                _isGlobalSearching.value = true
+                try {
+                    val localNames = local.map { it.scientificName.lowercase() }.toSet()
+                    repository.searchGlobalFungi(query)
+                        .filter { it.scientificName.lowercase() !in localNames }
+                } finally {
+                    _isGlobalSearching.value = false
+                }
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // 4. Map & Hotspots Calculation View State
     val mapCenter = MutableStateFlow(Pair(-37.8136, 144.9631)) // Default to Melbourne, Victoria

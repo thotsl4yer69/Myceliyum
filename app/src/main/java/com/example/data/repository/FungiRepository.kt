@@ -194,6 +194,64 @@ class FungiRepository(
         result
     }
 
+    // Global fungal taxonomy search results, cached per query.
+    private val globalSearchCache = java.util.concurrent.ConcurrentHashMap<String, List<Species>>()
+
+    /**
+     * Search the ENTIRE described fungal kingdom via the GBIF species backbone
+     * (~150k species worldwide), returning lightweight Species records that
+     * reuse the normal detail screen (photos load live from iNaturalist by
+     * scientific name). This makes the catalogue a front-end over every
+     * described fungus on Earth, not just the bundled field guide. Fails soft.
+     */
+    suspend fun searchGlobalFungi(query: String): List<Species> = withContext(Dispatchers.IO) {
+        val q = query.trim()
+        if (q.length < 3) return@withContext emptyList()
+        globalSearchCache[q.lowercase()]?.let { return@withContext it }
+        val result = try {
+            val resp = retryIO { gbifApi.searchSpecies(query = q) }
+            (resp.results ?: emptyList()).mapNotNull { g ->
+                val sci = (g.canonicalName ?: g.scientificName)?.takeIf { it.isNotBlank() }
+                    ?: return@mapNotNull null
+                val key = g.key ?: sci.hashCode().toLong()
+                val common = g.vernacularNames
+                    ?.firstOrNull { it.language.equals("eng", true) || it.language.equals("en", true) }
+                    ?.vernacularName
+                    ?: g.vernacularNames?.firstOrNull()?.vernacularName
+                Species(
+                    id = "gbif_$key",
+                    scientificName = sci,
+                    commonNames = listOfNotNull(common?.takeIf { it.isNotBlank() }),
+                    genus = g.genus?.takeIf { it.isNotBlank() } ?: sci.substringBefore(" "),
+                    family = g.family?.takeIf { it.isNotBlank() } ?: "Unknown family",
+                    habitatTypes = emptyList(),
+                    substrates = emptyList(),
+                    seasonStart = 1,
+                    seasonEnd = 12,
+                    capDescription = "No curated field description yet — this is a global " +
+                        "taxonomy record. Swipe the reference photos below (live from " +
+                        "iNaturalist) and always cross-check with an expert before relying " +
+                        "on any identification.",
+                    gillDescription = "Not catalogued.",
+                    stemDescription = "Not catalogued.",
+                    sporeColor = "—",
+                    bruisingReaction = "—",
+                    lookAlikes = emptyList(),
+                    notes = "Global catalogue entry from the GBIF fungal taxonomy" +
+                        (g.family?.let { " · $it" } ?: "") +
+                        (g.order?.let { " · $it" } ?: "") + ". Photos and observations are " +
+                        "pulled live from iNaturalist.",
+                    imageUrls = emptyList()
+                )
+            }.distinctBy { it.scientificName.lowercase() }
+        } catch (e: Exception) {
+            Log.w(TAG, "global fungi search failed for '$q': ${e.message}")
+            emptyList()
+        }
+        globalSearchCache[q.lowercase()] = result
+        result
+    }
+
     // Reference-photo gallery per species (scientific name → image URLs),
     // pulled from iNaturalist taxon photos. Cached for the process lifetime so
     // revisiting a species detail is instant and free.

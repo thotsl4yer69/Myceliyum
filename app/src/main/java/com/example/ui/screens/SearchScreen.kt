@@ -46,6 +46,8 @@ fun SearchScreen(
 
     val filteredList by viewModel.filteredSpecies.collectAsState()
     val fullList by viewModel.speciesList.collectAsState()
+    val globalResults by viewModel.globalResults.collectAsState()
+    val isGlobalSearching by viewModel.isGlobalSearching.collectAsState()
 
     var showFiltersPanel by remember { mutableStateOf(false) }
 
@@ -286,46 +288,62 @@ fun SearchScreen(
             )
         }
 
-        // Search Results List
-        if (filteredList.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .padding(24.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        imageVector = Icons.Default.SearchOff,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                        modifier = Modifier.size(64.dp)
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = "Nothing matches your filters",
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.titleMedium,
-                        textAlign = TextAlign.Center
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Try clearing a filter or searching for a broader term.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center
-                    )
-                }
+        // Search Results List — curated catalogue + worldwide GBIF results
+        val trimmedQuery = searchQuery.trim()
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            contentPadding = PaddingValues(bottom = 16.dp)
+        ) {
+            items(filteredList) { spec ->
+                SpeciesItemCard(
+                    species = spec,
+                    fetchThumbnail = { viewModel.fetchSpeciesImages(it).firstOrNull() },
+                    onClick = { onSpeciesSelected(spec) }
+                )
             }
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                contentPadding = PaddingValues(bottom = 16.dp)
-            ) {
-                items(filteredList) { spec ->
+
+            // Worldwide section — every described fungus via the GBIF taxonomy
+            if (trimmedQuery.length >= 3 && (globalResults.isNotEmpty() || isGlobalSearching)) {
+                item {
+                    Column(modifier = Modifier.padding(top = 8.dp)) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Public,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = if (isGlobalSearching && globalResults.isEmpty())
+                                    "Searching every fungus worldwide…"
+                                else
+                                    "Worldwide results · ${globalResults.size}",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            if (isGlobalSearching) {
+                                Spacer(modifier = Modifier.width(10.dp))
+                                CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                            }
+                        }
+                        Text(
+                            text = "From the GBIF global taxonomy — photos load from iNaturalist.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 4.dp)
+                        )
+                    }
+                }
+                items(globalResults) { spec ->
                     SpeciesItemCard(
                         species = spec,
                         fetchThumbnail = { viewModel.fetchSpeciesImages(it).firstOrNull() },
@@ -333,7 +351,44 @@ fun SearchScreen(
                     )
                 }
             }
+
+            // Inline empty hint when there is nothing to show yet
+            if (filteredList.isEmpty() && globalResults.isEmpty() && !isGlobalSearching) {
+                item {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.SearchOff,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.size(64.dp)
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = if (trimmedQuery.length in 1..2)
+                                "Keep typing to search worldwide…"
+                            else
+                                "Nothing matches your filters",
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleMedium,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Type a fungus name to search every described species on Earth.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
         }
+
     }
 }
 
