@@ -13,6 +13,7 @@ import com.example.data.remote.INaturalistApi
 import com.example.data.remote.OpenMeteoApi
 import com.example.data.remote.OverpassApi
 import com.example.model.HotspotCell
+import com.example.model.MapObservation
 import com.example.model.Observation
 import com.example.model.Species
 import com.example.model.UserSighting
@@ -21,6 +22,10 @@ import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.ensureActive
@@ -102,6 +107,93 @@ class FungiRepository(
         dao.getAllUserSightings()
     }
 
+    /**
+     * Retry a suspending IO block with exponential backoff. Network calls to
+     * iNat/ALA/GBIF/Open-Meteo are flaky on mobile; one transient failure
+     * shouldn't drop a whole data source. Re-throws only after the last try.
+     */
+    private suspend fun <T> retryIO(
+        times: Int = 3,
+        initialDelayMs: Long = 400L,
+        block: suspend () -> T
+    ): T {
+        var delayMs = initialDelayMs
+        var lastError: Exception? = null
+        repeat(times) { attempt ->
+            try {
+                return block()
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                lastError = e
+                if (attempt < times - 1) {
+                    Log.w(TAG, "retry ${attempt + 1}/$times after: ${e.message}")
+                    delay(delayMs)
+                    delayMs *= 2
+                }
+            }
+        }
+        throw lastError ?: IllegalStateException("retryIO failed")
+    }
+
+    // All-fungi map layer: every fungal observation in an area, keyed by a
+    // coarse grid + radius and cached briefly so panning is cheap.
+    private val areaObsCache = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, List<MapObservation>>>()
+    private val AREA_OBS_TTL_MS = 30 * 60 * 1000L
+
+    /**
+     * Every fungal sighting in the map area, fetched in ONE kingdom-wide
+     * iNaturalist request (taxon_name=Fungi) rather than per species. Powers
+     * the "all sightings" map layer and a generic fungal-activity signal in the
+     * aggregate prediction. Fails soft to an empty list (never breaks the map).
+     */
+    suspend fun getAllFungiObservations(
+        lat: Double,
+        lng: Double,
+        radiusKm: Double,
+        forceRefresh: Boolean = false
+    ): List<MapObservation> = withContext(Dispatchers.IO) {
+        val key = "${"%.2f".format(lat)}_${"%.2f".format(lng)}_${radiusKm.toInt()}"
+        val now = System.currentTimeMillis()
+        if (!forceRefresh) {
+            areaObsCache[key]?.let { (ts, value) ->
+                if (now - ts < AREA_OBS_TTL_MS) return@withContext value
+            }
+        }
+        val result = try {
+            val cal = Calendar.getInstance().apply { add(Calendar.YEAR, -5) }
+            val since = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(cal.time)
+            val resp = retryIO {
+                iNatApi.getAreaObservations(
+                    lat = lat, lng = lng, radiusKm = radiusKm, sinceDate = since
+                )
+            }
+            resp.results.mapNotNull { o ->
+                val geoLng = o.geojson?.coordinates?.getOrNull(0)
+                val geoLat = o.geojson?.coordinates?.getOrNull(1)
+                val pLat = o.latitude ?: o.location?.split(",")?.getOrNull(0)?.trim()?.toDoubleOrNull() ?: geoLat
+                val pLng = o.longitude ?: o.location?.split(",")?.getOrNull(1)?.trim()?.toDoubleOrNull() ?: geoLng
+                if (pLat == null || pLng == null) return@mapNotNull null
+                MapObservation(
+                    id = o.id,
+                    lat = pLat,
+                    lng = pLng,
+                    taxonName = o.taxon?.name ?: "Unidentified fungus",
+                    commonName = o.taxon?.commonName,
+                    source = "iNaturalist",
+                    observedAt = parseObsDate(o.observedOn),
+                    qualityGrade = o.qualityGrade ?: "needs_id",
+                    photoUrl = o.photos?.firstOrNull()?.url,
+                    placeGuess = o.placeGuess
+                )
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "all-fungi observations fetch failed: ${e.message}")
+            emptyList()
+        }
+        areaObsCache[key] = now to result
+        result
+    }
+
     // Reference-photo gallery per species (scientific name → image URLs),
     // pulled from iNaturalist taxon photos. Cached for the process lifetime so
     // revisiting a species detail is instant and free.
@@ -168,13 +260,15 @@ class FungiRepository(
             val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
             val sinceDate = sdf.format(cal.time)
 
-            val response = iNatApi.getObservations(
-                taxonName = species.scientificName,
-                lat = lat,
-                lng = lng,
-                radiusKm = radiusKm,
-                sinceDate = sinceDate
-            )
+            val response = retryIO {
+                iNatApi.getObservations(
+                    taxonName = species.scientificName,
+                    lat = lat,
+                    lng = lng,
+                    radiusKm = radiusKm,
+                    sinceDate = sinceDate
+                )
+            }
 
             val iNatObsList = response.results
             val freshObservations = iNatObsList.mapNotNull { iObs ->
@@ -208,9 +302,20 @@ class FungiRepository(
                 }
             }
 
-            // Also pull from ALA and GBIF for richer evidence
-            val alaObs = try { getALAObservations(species, lat, lng, radiusKm) } catch (_: Exception) { emptyList() }
-            val gbifObs = try { getGBIFObservations(species, lat, lng, radiusKm) } catch (_: Exception) { emptyList() }
+            // Also pull museum/herbarium records from ALA and GBIF, in PARALLEL
+            // with each other and with retry. Failures are logged (not silently
+            // swallowed) and degrade to empty so iNat data still comes through.
+            val (alaObs, gbifObs) = coroutineScope {
+                val alaDeferred = async {
+                    try { retryIO { getALAObservations(species, lat, lng, radiusKm) } }
+                    catch (e: Exception) { Log.w(TAG, "ALA fetch failed for ${species.scientificName}: ${e.message}"); emptyList() }
+                }
+                val gbifDeferred = async {
+                    try { retryIO { getGBIFObservations(species, lat, lng, radiusKm) } }
+                    catch (e: Exception) { Log.w(TAG, "GBIF fetch failed for ${species.scientificName}: ${e.message}"); emptyList() }
+                }
+                alaDeferred.await() to gbifDeferred.await()
+            }
 
             val allFresh = freshObservations + alaObs + gbifObs
 
@@ -991,16 +1096,52 @@ class FungiRepository(
         val allSpecies = dao.getAllSpecies()
         if (allSpecies.isEmpty()) return@withContext emptyList()
 
-        // Pull observations for every species
+        // Pull observations for every catalogue species — in bounded-parallel
+        // batches (not one-at-a-time) so the aggregate map isn't gated on 40
+        // sequential round trips. Each failure is isolated and logged.
         val allObservations = mutableListOf<Observation>()
-        for (species in allSpecies) {
+        for (batch in allSpecies.chunked(6)) {
             coroutineContext.ensureActive()
-            try {
-                val obs = getObservations(species, centerLat, centerLng, radiusKm, forceRefresh)
-                allObservations.addAll(obs)
-            } catch (e: Exception) {
-                Log.w(TAG, "Skipping ${species.scientificName} in aggregate fetch: ${e.message}")
+            val fetched = coroutineScope {
+                batch.map { species ->
+                    async {
+                        try {
+                            getObservations(species, centerLat, centerLng, radiusKm, forceRefresh)
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Skipping ${species.scientificName} in aggregate fetch: ${e.message}")
+                            emptyList()
+                        }
+                    }
+                }.awaitAll()
             }
+            fetched.forEach { allObservations.addAll(it) }
+        }
+
+        // Fold in EVERY nearby fungal sighting (kingdom-wide, incl. species not
+        // in the catalogue) so the aggregate prediction reflects real fungal
+        // activity on the ground, not only our 40 species. Deduped by iNat id
+        // against the per-species records above.
+        val seenIds = allObservations.map { it.id }.toHashSet()
+        try {
+            getAllFungiObservations(centerLat, centerLng, radiusKm, forceRefresh).forEach { m ->
+                if (seenIds.add(m.id)) {
+                    allObservations.add(
+                        Observation(
+                            id = m.id,
+                            speciesId = m.taxonName,
+                            lat = m.lat,
+                            lng = m.lng,
+                            observedAt = m.observedAt,
+                            source = m.source,
+                            photoUrl = m.photoUrl,
+                            qualityGrade = m.qualityGrade,
+                            cachedAt = System.currentTimeMillis()
+                        )
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "aggregate all-fungi enrichment failed: ${e.message}")
         }
         val userSightings = dao.getAllUserSightings().filter {
             calculateDistanceMeters(centerLat, centerLng, it.lat, it.lng) <= radiusKm * 1000.0

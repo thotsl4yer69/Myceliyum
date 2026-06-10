@@ -28,6 +28,28 @@ interface INaturalistApi {
         @Query("rank") rank: String = "species",
         @Query("per_page") perPage: Int = 1
     ): INatTaxaResponse
+
+    /**
+     * All fungal observations in a map area in a SINGLE request, by querying
+     * the whole Fungi kingdom (taxon_name=Fungi) rather than 40 per-species
+     * calls. Powers the "all sightings" map layer and the aggregate
+     * fungal-activity signal in predictions. `quality_grade` is left
+     * unconstrained so casual + needs-id records show too; `photos`/`geo`
+     * keep only mappable, evidenced records.
+     */
+    @GET("observations")
+    suspend fun getAreaObservations(
+        @Query("lat") lat: Double,
+        @Query("lng") lng: Double,
+        @Query("radius") radiusKm: Double,
+        @Query("d1") sinceDate: String,
+        @Query("taxon_name") taxonName: String = "Fungi",
+        @Query("photos") hasPhotos: Boolean = true,
+        @Query("geo") hasGeo: Boolean = true,
+        @Query("order_by") orderBy: String = "observed_on",
+        @Query("order") order: String = "desc",
+        @Query("per_page") perPage: Int = 200
+    ): INatResponse
 }
 
 data class INatTaxaResponse(
@@ -62,7 +84,17 @@ data class INatObservation(
     @Json(name = "geojson") val geojson: INatGeoJson?,
     @Json(name = "observed_on") val observedOn: String?,
     @Json(name = "quality_grade") val qualityGrade: String?,
-    @Json(name = "photos") val photos: List<INatPhoto>?
+    @Json(name = "photos") val photos: List<INatPhoto>?,
+    @Json(name = "taxon") val taxon: INatObsTaxon?,
+    @Json(name = "place_guess") val placeGuess: String?
+)
+
+// Taxon attached to an observation — used to label map pins with the
+// species/genus name and common name when querying the whole Fungi kingdom.
+data class INatObsTaxon(
+    @Json(name = "name") val name: String?,
+    @Json(name = "preferred_common_name") val commonName: String?,
+    @Json(name = "rank") val rank: String?
 )
 
 // iNaturalist returns coordinates as GeoJSON: { "coordinates": [lng, lat] }

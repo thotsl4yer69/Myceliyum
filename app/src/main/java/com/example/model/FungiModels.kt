@@ -37,6 +37,25 @@ data class Observation(
     val cachedAt: Long = System.currentTimeMillis() // for TTL check
 )
 
+/**
+ * A lightweight, in-memory observation for the "all fungi sightings" map
+ * layer — NOT persisted to Room (so no schema migration). Carries the taxon
+ * label so pins can show the species/genus and common name straight from the
+ * kingdom-wide iNaturalist query.
+ */
+data class MapObservation(
+    val id: Long,
+    val lat: Double,
+    val lng: Double,
+    val taxonName: String,      // e.g. "Amanita muscaria" or "Cortinarius"
+    val commonName: String?,    // e.g. "Fly Agaric"
+    val source: String,         // "iNaturalist", "ALA", "GBIF"
+    val observedAt: Long,
+    val qualityGrade: String,
+    val photoUrl: String?,
+    val placeGuess: String?
+)
+
 @Entity(tableName = "user_sightings")
 data class UserSighting(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
