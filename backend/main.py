@@ -123,11 +123,23 @@ def env_grid():
     # separately and guarded, so any failure here never breaks the core layers.
     water_col = [None] * n
     try:
-        water_mask = (
+        # JRC permanent-ish surface water (≥20% occurrence), 0 = water, 1 = land.
+        # unmask(0) keeps the image fully valid so the transform is defined
+        # everywhere (water cells read 0 rather than masked/null).
+        land = (
             ee.Image("JRC/GSW1_4/GlobalSurfaceWater")
-            .select("occurrence").gte(20).selfMask()
+            .select("occurrence").gte(20).unmask(0).Not()
         )
-        wd = water_mask.distance(ee.Kernel.euclidean(2000, "meters"), False).rename("water_dist")
+        # fastDistanceTransform → squared euclidean distance (in pixels) to the
+        # nearest zero pixel (= nearest water). Cheap and bounded, unlike
+        # Image.distance() over a 2 km kernel, which exceeds EE compute limits
+        # and silently yields null for every cell. neighbourhood 256 px ≈ 7.6 km
+        # at the dataset's 30 m scale — well beyond the app's 2 km cap.
+        wd = (
+            land.fastDistanceTransform(256).select("distance")
+            .sqrt().multiply(30)          # √(px²) · 30 m/px → metres
+            .rename("water_dist")
+        )
         wfeat = wd.reduceRegions(collection=fc, reducer=ee.Reducer.first(), scale=30).getInfo()["features"]
         wby = {f["properties"].get("idx"): f["properties"].get("water_dist") for f in wfeat}
         water_col = [wby.get(i) for i in range(n)]
