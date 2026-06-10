@@ -61,7 +61,44 @@ interface GBIFApi {
         @Query("limit") limit: Int = 100,
         @Query("hasCoordinate") hasCoordinate: Boolean = true
     ): GBIFResponse
+
+    /**
+     * Global fungal taxonomy search — the GBIF species backbone covers every
+     * described fungus on Earth (~150k species). `highertaxonKey=5` constrains
+     * to kingdom Fungi. This turns the catalogue into a searchable front-end
+     * over the entire global fungal taxonomy, not just the bundled field guide.
+     */
+    @GET("species/search")
+    suspend fun searchSpecies(
+        @Query("q") query: String,
+        @Query("highertaxonKey") fungiKingdomKey: Int = 5,
+        @Query("rank") rank: String = "SPECIES",
+        @Query("status") status: String = "ACCEPTED",
+        @Query("limit") limit: Int = 40
+    ): GBIFSpeciesResponse
 }
+
+data class GBIFSpeciesResponse(
+    @Json(name = "results") val results: List<GBIFSpecies>?
+)
+
+data class GBIFSpecies(
+    @Json(name = "key") val key: Long?,
+    @Json(name = "scientificName") val scientificName: String?,
+    @Json(name = "canonicalName") val canonicalName: String?,
+    @Json(name = "kingdom") val kingdom: String?,
+    @Json(name = "phylum") val phylum: String?,
+    @Json(name = "order") val order: String?,
+    @Json(name = "family") val family: String?,
+    @Json(name = "genus") val genus: String?,
+    @Json(name = "rank") val rank: String?,
+    @Json(name = "vernacularNames") val vernacularNames: List<GBIFVernacular>?
+)
+
+data class GBIFVernacular(
+    @Json(name = "vernacularName") val vernacularName: String?,
+    @Json(name = "language") val language: String?
+)
 
 data class GBIFResponse(
     @Json(name = "count") val count: Int,
