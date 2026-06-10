@@ -184,7 +184,7 @@ fun MapScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
-                        .background(Color(0xFF090D0B)) // Ultra dark forest obsidian green
+                        .background(Color(0xFF0B0D0B)) // Ultra dark forest obsidian green
                 ) {
                     OSMMapView(
                         centerX = mapCenter.first,
@@ -266,12 +266,12 @@ fun MapScreen(
                                 Text("Excellent >80%", color = Color.White, fontSize = 9.sp)
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(modifier = Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFF4DDFAC)))
+                                Box(modifier = Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFF54E0A0)))
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text("Very Good 60-80%", color = Color.White, fontSize = 9.sp)
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(modifier = Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFFE8C86B)))
+                                Box(modifier = Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFFE6B24C)))
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text("Promising 40-60%", color = Color.White, fontSize = 9.sp)
                             }
@@ -281,7 +281,7 @@ fun MapScreen(
                                 Text("Possible 20-40%", color = Color.White, fontSize = 9.sp)
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(modifier = Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFF6B8775).copy(alpha = 0.3f)))
+                                Box(modifier = Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFF5B6353).copy(alpha = 0.3f)))
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text("Unlikely <20%", color = Color.White, fontSize = 9.sp)
                             }
@@ -1140,17 +1140,17 @@ fun OSMMapView(
                     // the top tiers are emphasised; Promising/Possible are faint.
                     fillColor = when (cell.tier) {
                         "Excellent" -> android.graphics.Color.argb(115, 255, 107, 107)  // warm red — hotspot
-                        "VeryGood"  -> android.graphics.Color.argb(85, 77, 223, 172)    // mint green
-                        "Promising" -> android.graphics.Color.argb(45, 232, 200, 107)   // chanterelle gold
+                        "VeryGood"  -> android.graphics.Color.argb(85, 84, 224, 160)    // mint green
+                        "Promising" -> android.graphics.Color.argb(45, 230, 178, 76)   // chanterelle gold
                         "Possible"  -> android.graphics.Color.argb(20, 139, 157, 147)   // muted sage
-                        else -> android.graphics.Color.argb(14, 107, 135, 117)          // dim sage
+                        else -> android.graphics.Color.argb(14, 91, 99, 83)          // dim sage
                     }
                     strokeColor = when (cell.tier) {
                         "Excellent" -> android.graphics.Color.parseColor("#FF6B6B")
-                        "VeryGood"  -> android.graphics.Color.parseColor("#4DDFAC")
-                        "Promising" -> android.graphics.Color.parseColor("#E8C86B")
+                        "VeryGood"  -> android.graphics.Color.parseColor("#54E0A0")
+                        "Promising" -> android.graphics.Color.parseColor("#E6B24C")
                         "Possible"  -> android.graphics.Color.parseColor("#8B9D93")
-                        else -> android.graphics.Color.parseColor("#6B8775")
+                        else -> android.graphics.Color.parseColor("#5B6353")
                     }
                     strokeWidth = when (cell.tier) {
                         "Excellent" -> 3f
@@ -1241,10 +1241,10 @@ private fun tierLabel(tier: String): String = when (tier) {
 /** Maps a 5-tier name to its UI colour. */
 private fun tierColor(tier: String): Color = when (tier) {
     "Excellent" -> Color(0xFFFF6B6B)  // warm red
-    "VeryGood"  -> Color(0xFF4DDFAC)  // mint green
-    "Promising" -> Color(0xFFE8C86B)  // chanterelle gold
+    "VeryGood"  -> Color(0xFF54E0A0)  // mint green
+    "Promising" -> Color(0xFFE6B24C)  // chanterelle gold
     "Possible"  -> Color(0xFF8B9D93)  // muted sage
-    else        -> Color(0xFF6B8775)  // dim forest
+    else        -> Color(0xFF5B6353)  // dim forest
 }
 
 private fun calculateDistanceBetweenPoints(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
