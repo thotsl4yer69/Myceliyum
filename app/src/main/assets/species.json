@@ -1187,5 +1187,843 @@
     ],
     "notes": "DEADLY — contains the same amatoxins as the Death Cap and has killed people who mistook it for edible or psychoactive wood-loving mushrooms. Note: it does NOT bruise blue.",
     "imageUrls": []
+  },
+  {
+    "id": "amanita_ananiceps",
+    "scientificName": "Amanita ananiceps",
+    "commonNames": [
+      "Two-veiled Amanita"
+    ],
+    "genus": "Amanita",
+    "family": "Amanitaceae",
+    "habitatTypes": [
+      "Native Eucalypt Forest"
+    ],
+    "substrates": [
+      "Soil (mycorrhizal with Eucalyptus)"
+    ],
+    "seasonStart": 4,
+    "seasonEnd": 7,
+    "capDescription": "6-15 cm, white to pale grey, covered in thick floccose white veil patches; margin appendiculate.",
+    "gillDescription": "White, free, crowded.",
+    "stemDescription": "8-16 cm, white, with a large saccate volva and floccose ring zone.",
+    "sporeColor": "White",
+    "bruisingReaction": "No bruising.",
+    "lookAlikes": [
+      "Amanita phalloides (smooth olive cap)",
+      "Other white Amanita"
+    ],
+    "notes": "A large native eucalypt-forest Amanita. As with the whole genus, assume toxic — never eaten.",
+    "imageUrls": []
+  },
+  {
+    "id": "amanita_grisella",
+    "scientificName": "Amanita grisella",
+    "commonNames": [
+      "Grey Grisette"
+    ],
+    "genus": "Amanita",
+    "family": "Amanitaceae",
+    "habitatTypes": [
+      "Native Eucalypt Forest"
+    ],
+    "substrates": [
+      "Soil (mycorrhizal with Eucalyptus)"
+    ],
+    "seasonStart": 4,
+    "seasonEnd": 7,
+    "capDescription": "4-9 cm, grey to grey-brown, smooth, margin strongly striate; ringless.",
+    "gillDescription": "White, free.",
+    "stemDescription": "6-12 cm, slender, white-grey, with a sac-like volva; NO ring.",
+    "sporeColor": "White",
+    "bruisingReaction": "No bruising.",
+    "lookAlikes": [
+      "Other grisettes",
+      "Toxic Amanita with rings"
+    ],
+    "notes": "A ringless native grisette. Even ringless Amanita are not recommended; ID is risky.",
+    "imageUrls": []
+  },
+  {
+    "id": "austropaxillus_infundibuliformis",
+    "scientificName": "Austropaxillus infundibuliformis",
+    "commonNames": [
+      "Eucalypt Roll-rim"
+    ],
+    "genus": "Austropaxillus",
+    "family": "Serpulaceae",
+    "habitatTypes": [
+      "Native Eucalypt Forest"
+    ],
+    "substrates": [
+      "Soil (mycorrhizal with Eucalyptus)"
+    ],
+    "seasonStart": 4,
+    "seasonEnd": 7,
+    "capDescription": "5-12 cm, tan to ochre-brown, funnel-shaped with an inrolled margin, dry.",
+    "gillDescription": "Decurrent, yellow-brown, easily separable from the cap, sometimes forking.",
+    "stemDescription": "3-7 cm, central, paler than cap.",
+    "sporeColor": "Olive-brown",
+    "bruisingReaction": "Bruises rusty brown.",
+    "lookAlikes": [
+      "Paxillus involutus (poisonous, exotic)"
+    ],
+    "notes": "Native relative of the dangerous Brown Roll-rim. Treat as toxic — Paxillus relatives cause a fatal immune reaction.",
+    "imageUrls": []
+  },
+  {
+    "id": "laccaria_lateritia",
+    "scientificName": "Laccaria sp.",
+    "commonNames": [
+      "Brick Deceiver"
+    ],
+    "genus": "Laccaria",
+    "family": "Hydnangiaceae",
+    "habitatTypes": [
+      "Native Eucalypt Forest",
+      "Conifer Plantation"
+    ],
+    "substrates": [
+      "Soil (mycorrhizal)"
+    ],
+    "seasonStart": 4,
+    "seasonEnd": 8,
+    "capDescription": "1.5-5 cm, brick to tawny-orange, hygrophanous, striate margin, scurfy centre.",
+    "gillDescription": "Thick, distant, pinkish-flesh, decurrent, white-dusted.",
+    "stemDescription": "3-8 cm, fibrous, tough, cap-coloured.",
+    "sporeColor": "White",
+    "bruisingReaction": "No bruising.",
+    "lookAlikes": [
+      "Other Laccaria deceivers"
+    ],
+    "notes": "A common tough little 'deceiver' of southern soils. Study species; not a recommended edible here.",
+    "imageUrls": []
+  },
+  {
+    "id": "hygrocybe_chromolimonea",
+    "scientificName": "Hygrocybe chromolimonea",
+    "commonNames": [
+      "Lemon Waxcap"
+    ],
+    "genus": "Hygrocybe",
+    "family": "Hygrophoraceae",
+    "habitatTypes": [
+      "Wet Sclerophyll / Temperate Rainforest"
+    ],
+    "substrates": [
+      "Soil among moss"
+    ],
+    "seasonStart": 4,
+    "seasonEnd": 7,
+    "capDescription": "1-4 cm, bright chrome-yellow to lemon, viscid, conico-convex.",
+    "gillDescription": "Waxy, yellow, adnate to decurrent.",
+    "stemDescription": "2-5 cm, yellow, slender, slimy.",
+    "sporeColor": "White",
+    "bruisingReaction": "No bruising.",
+    "lookAlikes": [
+      "Other yellow Hygrocybe"
+    ],
+    "notes": "A glossy lemon waxcap of mossy wet forest. Waxcaps are regarded as inedible — leave them.",
+    "imageUrls": []
+  },
+  {
+    "id": "hygrocybe_austropratensis",
+    "scientificName": "Hygrocybe austropratensis",
+    "commonNames": [
+      "Meadow Waxcap"
+    ],
+    "genus": "Hygrocybe",
+    "family": "Hygrophoraceae",
+    "habitatTypes": [
+      "Grassland / Pasture",
+      "Native Eucalypt Forest"
+    ],
+    "substrates": [
+      "Soil in unimproved grassland"
+    ],
+    "seasonStart": 4,
+    "seasonEnd": 7,
+    "capDescription": "2-6 cm, apricot to salmon-orange, dry to slightly greasy, convex then flattening.",
+    "gillDescription": "Thick, waxy, pale apricot, decurrent.",
+    "stemDescription": "3-6 cm, paler, dry.",
+    "sporeColor": "White",
+    "bruisingReaction": "No bruising.",
+    "lookAlikes": [
+      "Other orange waxcaps"
+    ],
+    "notes": "An indicator of old, unfertilised grassland. Inedible; valued ecologically.",
+    "imageUrls": []
+  },
+  {
+    "id": "cortinarius_metallicus",
+    "scientificName": "Cortinarius sp.",
+    "commonNames": [
+      "Metallic Webcap"
+    ],
+    "genus": "Cortinarius",
+    "family": "Cortinariaceae",
+    "habitatTypes": [
+      "Native Eucalypt Forest"
+    ],
+    "substrates": [
+      "Soil (mycorrhizal with Eucalyptus)"
+    ],
+    "seasonStart": 4,
+    "seasonEnd": 7,
+    "capDescription": "3-7 cm, lilac to steel-blue with a metallic sheen, viscid, fading ochre.",
+    "gillDescription": "Pale violet then rusty; cortina present.",
+    "stemDescription": "4-8 cm, bluish, club-based.",
+    "sporeColor": "Rust brown",
+    "bruisingReaction": "No bruising.",
+    "lookAlikes": [
+      "Cortinarius rotundisporus",
+      "Cortinarius archeri"
+    ],
+    "notes": "One of many blue native webcaps. Cortinarius are not eaten — some carry slow kidney toxins.",
+    "imageUrls": []
+  },
+  {
+    "id": "dermocybe_canaria",
+    "scientificName": "Dermocybe sp.",
+    "commonNames": [
+      "Canary Webcap"
+    ],
+    "genus": "Cortinarius",
+    "family": "Cortinariaceae",
+    "habitatTypes": [
+      "Native Eucalypt Forest"
+    ],
+    "substrates": [
+      "Soil (mycorrhizal)"
+    ],
+    "seasonStart": 4,
+    "seasonEnd": 7,
+    "capDescription": "2-5 cm, bright yellow to orange-yellow, dry, silky-fibrillose.",
+    "gillDescription": "Bright yellow then rusty; cortina present.",
+    "stemDescription": "3-7 cm, yellow, dry.",
+    "sporeColor": "Rust brown",
+    "bruisingReaction": "No bruising.",
+    "lookAlikes": [
+      "Other Dermocybe / Cortinarius"
+    ],
+    "notes": "Vivid yellow webcaps once used as dyes. Like all Cortinarius, not for eating.",
+    "imageUrls": []
+  },
+  {
+    "id": "boletellus_obscurecoccineus",
+    "scientificName": "Boletellus obscurecoccineus",
+    "commonNames": [
+      "Rhubarb Bolete"
+    ],
+    "genus": "Boletellus",
+    "family": "Boletaceae",
+    "habitatTypes": [
+      "Native Eucalypt Forest"
+    ],
+    "substrates": [
+      "Soil (mycorrhizal with Eucalyptus)"
+    ],
+    "seasonStart": 1,
+    "seasonEnd": 5,
+    "capDescription": "3-9 cm, deep pink-red to rhubarb, dry and finely scaly/cracked.",
+    "gillDescription": "Pore surface (no gills) yellow, angular pores.",
+    "stemDescription": "5-11 cm, pink-red, often ribbed at the apex.",
+    "sporeColor": "Olive-brown",
+    "bruisingReaction": "Pores may blue slightly.",
+    "lookAlikes": [
+      "Other red-capped boletes"
+    ],
+    "notes": "A striking pink-red native bolete. Edibility poorly known — treat as inedible.",
+    "imageUrls": []
+  },
+  {
+    "id": "austroboletus_lacunosus",
+    "scientificName": "Austroboletus lacunosus",
+    "commonNames": [
+      "Pitted Bolete"
+    ],
+    "genus": "Austroboletus",
+    "family": "Boletaceae",
+    "habitatTypes": [
+      "Native Eucalypt Forest"
+    ],
+    "substrates": [
+      "Soil (mycorrhizal with Eucalyptus)"
+    ],
+    "seasonStart": 1,
+    "seasonEnd": 5,
+    "capDescription": "4-10 cm, brown to grey-brown, dry, often wrinkled.",
+    "gillDescription": "Pore surface white then pink-brown; deeply pitted/lacunose stem.",
+    "stemDescription": "6-14 cm, conspicuously pitted and netted, pale.",
+    "sporeColor": "Pink-brown",
+    "bruisingReaction": "Little change.",
+    "lookAlikes": [
+      "Other Austroboletus"
+    ],
+    "notes": "Recognised by the strongly pitted stem. Not regarded as a culinary species.",
+    "imageUrls": []
+  },
+  {
+    "id": "fistulina_hepatica",
+    "scientificName": "Fistulina hepatica",
+    "commonNames": [
+      "Beefsteak Fungus"
+    ],
+    "genus": "Fistulina",
+    "family": "Fistulinaceae",
+    "habitatTypes": [
+      "Native Eucalypt Forest"
+    ],
+    "substrates": [
+      "Living and dead hardwood trunks (often eucalypt, oak)"
+    ],
+    "seasonStart": 1,
+    "seasonEnd": 6,
+    "capDescription": "10-25 cm, tongue or liver-shaped bracket, blood-red to liver-brown, moist and gelatinous, oozing red juice.",
+    "gillDescription": "Pore surface cream, the tubes individually separable.",
+    "stemDescription": "Lateral, short or absent.",
+    "sporeColor": "Pink-brown",
+    "bruisingReaction": "Cut flesh is marbled red like raw meat and bleeds a reddish juice.",
+    "lookAlikes": [
+      "Ganoderma brackets (woody)"
+    ],
+    "notes": "An edible bracket when young (acidic, best cooked), but it stains and can be tough. Confirm ID with an expert.",
+    "imageUrls": []
+  },
+  {
+    "id": "piptoporus_australiensis",
+    "scientificName": "Laetiporus / Piptoporus sp.",
+    "commonNames": [
+      "Curry Punk"
+    ],
+    "genus": "Piptoporus",
+    "family": "Fomitopsidaceae",
+    "habitatTypes": [
+      "Native Eucalypt Forest"
+    ],
+    "substrates": [
+      "Dead eucalypt wood"
+    ],
+    "seasonStart": 1,
+    "seasonEnd": 12,
+    "capDescription": "Hard bracket 5-20 cm, yellow-brown to ochre, smelling strongly of curry when fresh.",
+    "gillDescription": "Pore surface yellowish.",
+    "stemDescription": "No stem; bracketed.",
+    "sporeColor": "White",
+    "bruisingReaction": "Little change.",
+    "lookAlikes": [
+      "Other eucalypt brackets"
+    ],
+    "notes": "A woody eucalypt bracket famous for its curry smell. Inedible.",
+    "imageUrls": []
+  },
+  {
+    "id": "stereum_ostrea",
+    "scientificName": "Stereum ostrea",
+    "commonNames": [
+      "False Turkey Tail"
+    ],
+    "genus": "Stereum",
+    "family": "Stereaceae",
+    "habitatTypes": [
+      "Native Eucalypt Forest",
+      "Urban Parks & Gardens"
+    ],
+    "substrates": [
+      "Dead wood, logs and branches"
+    ],
+    "seasonStart": 1,
+    "seasonEnd": 12,
+    "capDescription": "2-7 cm thin fan brackets, concentrically zoned tan/orange/brown, silky above.",
+    "gillDescription": "Underside SMOOTH (no pores) — the key difference from true Turkey Tail.",
+    "stemDescription": "No stem; attached at one edge.",
+    "sporeColor": "White",
+    "bruisingReaction": "Some Stereum bleed when cut.",
+    "lookAlikes": [
+      "Trametes versicolor (pored underside)"
+    ],
+    "notes": "Looks like Turkey Tail but the underside is smooth, not pored. Inedible (woody).",
+    "imageUrls": []
+  },
+  {
+    "id": "auricularia_cornea",
+    "scientificName": "Auricularia cornea",
+    "commonNames": [
+      "Wood Ear",
+      "Jelly Ear"
+    ],
+    "genus": "Auricularia",
+    "family": "Auriculariaceae",
+    "habitatTypes": [
+      "Native Eucalypt Forest",
+      "Wet Sclerophyll / Temperate Rainforest"
+    ],
+    "substrates": [
+      "Dead wood"
+    ],
+    "seasonStart": 1,
+    "seasonEnd": 12,
+    "capDescription": "Ear-shaped gelatinous brackets 2-8 cm, tan to red-brown, velvety outside, smooth and veined inside; dries hard, revives when wet.",
+    "gillDescription": "No gills — smooth fertile inner surface.",
+    "stemDescription": "No stem; attached laterally.",
+    "sporeColor": "White",
+    "bruisingReaction": "No bruising.",
+    "lookAlikes": [
+      "Other Auricularia"
+    ],
+    "notes": "The southern 'wood ear', related to the cultivated culinary species; edible cooked but bland. Confirm ID first.",
+    "imageUrls": []
+  },
+  {
+    "id": "calocera_sinensis",
+    "scientificName": "Calocera sp.",
+    "commonNames": [
+      "Stagshorn Jelly"
+    ],
+    "genus": "Calocera",
+    "family": "Dacrymycetaceae",
+    "habitatTypes": [
+      "Native Eucalypt Forest"
+    ],
+    "substrates": [
+      "Dead wood"
+    ],
+    "seasonStart": 1,
+    "seasonEnd": 12,
+    "capDescription": "Erect gelatinous-tough yellow to orange antler-like prongs 1-4 cm, sticky.",
+    "gillDescription": "No gills — smooth fertile surface.",
+    "stemDescription": "Tapered base on wood.",
+    "sporeColor": "Yellow",
+    "bruisingReaction": "No bruising.",
+    "lookAlikes": [
+      "Clavulinopsis (brittle, not gelatinous)",
+      "Calocera viscosa"
+    ],
+    "notes": "Rubbery orange jelly-clubs on rotting wood. Harmless but inedible.",
+    "imageUrls": []
+  },
+  {
+    "id": "clavaria_zollingeri",
+    "scientificName": "Clavaria zollingeri",
+    "commonNames": [
+      "Violet Coral"
+    ],
+    "genus": "Clavaria",
+    "family": "Clavariaceae",
+    "habitatTypes": [
+      "Native Eucalypt Forest",
+      "Grassland / Pasture"
+    ],
+    "substrates": [
+      "Soil among moss and grass"
+    ],
+    "seasonStart": 4,
+    "seasonEnd": 7,
+    "capDescription": "Tufts of brittle, branched amethyst-violet clubs 3-10 cm tall.",
+    "gillDescription": "No gills — smooth fertile branch surface.",
+    "stemDescription": "Fused violet base.",
+    "sporeColor": "White",
+    "bruisingReaction": "No bruising.",
+    "lookAlikes": [
+      "Ramaria (ochre spores, tougher)"
+    ],
+    "notes": "A spectacular violet coral of mossy ground. Harmless; not worth eating.",
+    "imageUrls": []
+  },
+  {
+    "id": "geastrum_triplex",
+    "scientificName": "Geastrum triplex",
+    "commonNames": [
+      "Collared Earthstar"
+    ],
+    "genus": "Geastrum",
+    "family": "Geastraceae",
+    "habitatTypes": [
+      "Native Eucalypt Forest",
+      "Urban Parks & Gardens"
+    ],
+    "substrates": [
+      "Soil and leaf litter"
+    ],
+    "seasonStart": 3,
+    "seasonEnd": 7,
+    "capDescription": "Onion-shaped, splitting into a star of 4-8 rays that fold back, lifting a central spore sac that sits in a 'collar'; 4-10 cm across.",
+    "gillDescription": "No gills — central sac puffs brown spores from an apical pore.",
+    "stemDescription": "No stem.",
+    "sporeColor": "Brown",
+    "bruisingReaction": "No bruising.",
+    "lookAlikes": [
+      "Other earthstars"
+    ],
+    "notes": "An unmistakable earthstar; the cracked collar is diagnostic. Inedible.",
+    "imageUrls": []
+  },
+  {
+    "id": "pisolithus_arhizus",
+    "scientificName": "Pisolithus arhizus",
+    "commonNames": [
+      "Horse Dung Fungus",
+      "Dyeball"
+    ],
+    "genus": "Pisolithus",
+    "family": "Sclerodermatineae",
+    "habitatTypes": [
+      "Native Eucalypt Forest",
+      "Conifer Plantation",
+      "Grassland / Pasture"
+    ],
+    "substrates": [
+      "Soil (mycorrhizal, often disturbed ground)"
+    ],
+    "seasonStart": 1,
+    "seasonEnd": 5,
+    "capDescription": "Club to pear-shaped 5-20 cm, yellow-brown, the interior packed with pea-like 'peridioles' in a black tarry matrix.",
+    "gillDescription": "No gills — internal spore mass weathering from the top down.",
+    "stemDescription": "Rooting yellow base.",
+    "sporeColor": "Brown",
+    "bruisingReaction": "Yellow surface stains the hands; used as a natural dye.",
+    "lookAlikes": [
+      "Scleroderma (uniform interior)"
+    ],
+    "notes": "A tough mycorrhizal ball, important in reforestation and a traditional dye. Not edible.",
+    "imageUrls": []
+  },
+  {
+    "id": "scleroderma_cepa",
+    "scientificName": "Scleroderma sp.",
+    "commonNames": [
+      "Earthball"
+    ],
+    "genus": "Scleroderma",
+    "family": "Sclerodermataceae",
+    "habitatTypes": [
+      "Native Eucalypt Forest",
+      "Conifer Plantation"
+    ],
+    "substrates": [
+      "Soil (mycorrhizal)"
+    ],
+    "seasonStart": 1,
+    "seasonEnd": 6,
+    "capDescription": "Firm rounded ball 2-8 cm, ochre to brown, thick warty rind that cracks; cuts to a HARD purple-black marbled interior.",
+    "gillDescription": "No gills — solid firm gleba, purple-black then powdery.",
+    "stemDescription": "No real stem.",
+    "sporeColor": "Black-brown",
+    "bruisingReaction": "Rind may yellow then redden when cut.",
+    "lookAlikes": [
+      "True puffballs (soft pure-white interior — edible)"
+    ],
+    "notes": "TOXIC if eaten — the firm dark interior separates earthballs from edible puffballs (which are soft and white inside). Always cut to check.",
+    "imageUrls": []
+  },
+  {
+    "id": "lepista_nuda",
+    "scientificName": "Lepista nuda",
+    "commonNames": [
+      "Wood Blewit"
+    ],
+    "genus": "Lepista",
+    "family": "Tricholomataceae",
+    "habitatTypes": [
+      "Native Eucalypt Forest",
+      "Conifer Plantation",
+      "Urban Parks & Gardens"
+    ],
+    "substrates": [
+      "Leaf litter and compost"
+    ],
+    "seasonStart": 4,
+    "seasonEnd": 7,
+    "capDescription": "5-12 cm, lilac to violet-brown fading tan, smooth, margin inrolled then flat.",
+    "gillDescription": "Crowded, violet, sinuate, fading buff.",
+    "stemDescription": "4-8 cm, lilac, fibrous, bulbous base.",
+    "sporeColor": "Pale pink",
+    "bruisingReaction": "No bruising.",
+    "lookAlikes": [
+      "Toxic violet Cortinarius (rusty spores)",
+      "Purple Mycena"
+    ],
+    "notes": "An edible exotic blewit (cook thoroughly) — but violet Cortinarius lookalikes are dangerous, so spore print and care are essential.",
+    "imageUrls": []
+  },
+  {
+    "id": "agaricus_xanthodermus",
+    "scientificName": "Agaricus xanthodermus",
+    "commonNames": [
+      "Yellow Stainer"
+    ],
+    "genus": "Agaricus",
+    "family": "Agaricaceae",
+    "habitatTypes": [
+      "Urban Parks & Gardens",
+      "Grassland / Pasture"
+    ],
+    "substrates": [
+      "Soil in lawns, gardens, parks"
+    ],
+    "seasonStart": 3,
+    "seasonEnd": 6,
+    "capDescription": "5-15 cm, white, smooth, squarish when young; bruises CHROME-YELLOW especially at the cap edge and stem base.",
+    "gillDescription": "Crowded, free, pink then chocolate-brown.",
+    "stemDescription": "5-12 cm, white, with a ring; base bruises bright yellow and smells of phenol/ink.",
+    "sporeColor": "Chocolate brown",
+    "bruisingReaction": "Stains bright chrome-yellow, strongest at the stem base; unpleasant chemical smell.",
+    "lookAlikes": [
+      "Edible field/horse mushrooms (Agaricus campestris/arvensis)"
+    ],
+    "notes": "TOXIC — the commonest mushroom-poisoning culprit in gardens. The yellow staining base + phenol smell distinguish it from edible Agaricus.",
+    "imageUrls": []
+  },
+  {
+    "id": "agaricus_campestris",
+    "scientificName": "Agaricus campestris",
+    "commonNames": [
+      "Field Mushroom"
+    ],
+    "genus": "Agaricus",
+    "family": "Agaricaceae",
+    "habitatTypes": [
+      "Grassland / Pasture"
+    ],
+    "substrates": [
+      "Soil in unimproved pasture and lawns"
+    ],
+    "seasonStart": 3,
+    "seasonEnd": 6,
+    "capDescription": "4-10 cm, white to cream, dry, silky to slightly scaly.",
+    "gillDescription": "Crowded, free, bright PINK when young then chocolate-brown.",
+    "stemDescription": "3-6 cm, white, with a thin fragile ring; base does NOT yellow.",
+    "sporeColor": "Chocolate brown",
+    "bruisingReaction": "Flesh may slowly pink; does not stain chrome-yellow.",
+    "lookAlikes": [
+      "Agaricus xanthodermus (yellow-staining, toxic)",
+      "Deadly white Amanita (white gills, volva)"
+    ],
+    "notes": "The classic edible field mushroom — but young pink gills are vital: white gills + a volva mean a potentially deadly Amanita. Always check the base.",
+    "imageUrls": []
+  },
+  {
+    "id": "marasmius_oreades",
+    "scientificName": "Marasmius oreades",
+    "commonNames": [
+      "Fairy Ring Champignon"
+    ],
+    "genus": "Marasmius",
+    "family": "Marasmiaceae",
+    "habitatTypes": [
+      "Grassland / Pasture",
+      "Urban Parks & Gardens"
+    ],
+    "substrates": [
+      "Soil in lawns, forming rings"
+    ],
+    "seasonStart": 3,
+    "seasonEnd": 6,
+    "capDescription": "2-5 cm, tan to buff, bell-shaped then flat with a broad umbo, hygrophanous.",
+    "gillDescription": "Whitish, broad, well-spaced, almost free.",
+    "stemDescription": "3-7 cm, tough, pale, pliant (bends without snapping).",
+    "sporeColor": "White",
+    "bruisingReaction": "No bruising.",
+    "lookAlikes": [
+      "Toxic lawn Clitocybe (white, crowded decurrent gills)"
+    ],
+    "notes": "A grassland edible that forms fairy rings — but deadly white Clitocybe also grow in lawns, so the tough pliant stem and spacing must be confirmed.",
+    "imageUrls": []
+  },
+  {
+    "id": "hypholoma_brunneum",
+    "scientificName": "Hypholoma sp.",
+    "commonNames": [
+      "Eucalypt Woodtuft"
+    ],
+    "genus": "Hypholoma",
+    "family": "Strophariaceae",
+    "habitatTypes": [
+      "Native Eucalypt Forest"
+    ],
+    "substrates": [
+      "Dead wood and buried roots"
+    ],
+    "seasonStart": 3,
+    "seasonEnd": 7,
+    "capDescription": "2-6 cm, tawny-orange to brown, smooth, hygrophanous, in dense clusters.",
+    "gillDescription": "Crowded, olive then purple-brown.",
+    "stemDescription": "4-9 cm, brown, fibrous, ring zone.",
+    "sporeColor": "Purple-brown",
+    "bruisingReaction": "No bruising.",
+    "lookAlikes": [
+      "Galerina marginata (deadly)",
+      "Gymnopilus (rusty spores)"
+    ],
+    "notes": "Cluster-forming woodtuft. Easily confused with the DEADLY Galerina — not for eating.",
+    "imageUrls": []
+  },
+  {
+    "id": "panellus_stipticus",
+    "scientificName": "Panellus stipticus",
+    "commonNames": [
+      "Bitter Oyster",
+      "Luminescent Panellus"
+    ],
+    "genus": "Panellus",
+    "family": "Mycenaceae",
+    "habitatTypes": [
+      "Native Eucalypt Forest"
+    ],
+    "substrates": [
+      "Dead hardwood"
+    ],
+    "seasonStart": 1,
+    "seasonEnd": 12,
+    "capDescription": "1-3 cm kidney/fan brackets, tan to buff, dry and scurfy, attached by a tiny lateral stub.",
+    "gillDescription": "Crowded, pale cinnamon, gills faintly glowing green in the dark in some strains.",
+    "stemDescription": "Rudimentary lateral stem.",
+    "sporeColor": "White",
+    "bruisingReaction": "No bruising.",
+    "lookAlikes": [
+      "Crepidotus",
+      "Schizophyllum"
+    ],
+    "notes": "A tiny bracket; some populations are bioluminescent. Acrid and inedible.",
+    "imageUrls": []
+  },
+  {
+    "id": "pleurotus_australis",
+    "scientificName": "Pleurotus sp.",
+    "commonNames": [
+      "Native Oyster"
+    ],
+    "genus": "Pleurotus",
+    "family": "Pleurotaceae",
+    "habitatTypes": [
+      "Native Eucalypt Forest"
+    ],
+    "substrates": [
+      "Dead and living hardwood"
+    ],
+    "seasonStart": 3,
+    "seasonEnd": 8,
+    "capDescription": "4-14 cm, shell to fan-shaped, cream to grey-brown, smooth, margin inrolled.",
+    "gillDescription": "White, decurrent, running down the short lateral stem.",
+    "stemDescription": "Short, lateral or absent, white.",
+    "sporeColor": "Pale lilac-grey",
+    "bruisingReaction": "No bruising.",
+    "lookAlikes": [
+      "Omphalotus nidiformis (GLOWS, toxic)"
+    ],
+    "notes": "Native oyster mushrooms grow in shelves on wood. CAUTION: the toxic Ghost Fungus is a lookalike — it glows green in the dark and has more crowded gills.",
+    "imageUrls": []
+  },
+  {
+    "id": "cortinarius_sublargus",
+    "scientificName": "Cortinarius sp.",
+    "commonNames": [
+      "Stout Webcap"
+    ],
+    "genus": "Cortinarius",
+    "family": "Cortinariaceae",
+    "habitatTypes": [
+      "Native Eucalypt Forest"
+    ],
+    "substrates": [
+      "Soil (mycorrhizal)"
+    ],
+    "seasonStart": 4,
+    "seasonEnd": 7,
+    "capDescription": "5-12 cm, ochre to tan, viscid, robust, margin inrolled.",
+    "gillDescription": "Pale clay then rusty; cortina present.",
+    "stemDescription": "5-10 cm, stout, white, bulbous.",
+    "sporeColor": "Rust brown",
+    "bruisingReaction": "No bruising.",
+    "lookAlikes": [
+      "Many large Cortinarius"
+    ],
+    "notes": "A robust webcap of eucalypt soils. Cortinarius are not eaten; several are seriously toxic.",
+    "imageUrls": []
+  },
+  {
+    "id": "mycena_kuurkacea",
+    "scientificName": "Mycena sp.",
+    "commonNames": [
+      "Pixie Bonnet"
+    ],
+    "genus": "Mycena",
+    "family": "Mycenaceae",
+    "habitatTypes": [
+      "Wet Sclerophyll / Temperate Rainforest",
+      "Native Eucalypt Forest"
+    ],
+    "substrates": [
+      "Leaf litter, mossy wood"
+    ],
+    "seasonStart": 3,
+    "seasonEnd": 8,
+    "capDescription": "0.5-2 cm, conical to bell-shaped bonnet, grey-brown to pinkish, translucent-striate.",
+    "gillDescription": "Whitish to grey, adnate, distant.",
+    "stemDescription": "2-6 cm, very slender, fragile, often rooting.",
+    "sporeColor": "White",
+    "bruisingReaction": "Some Mycena exude juice when broken.",
+    "lookAlikes": [
+      "Mycena interrupta (blue)",
+      "Other bonnets"
+    ],
+    "notes": "Delicate litter bonnets. Too small and often toxic/unknown — not for eating.",
+    "imageUrls": []
+  },
+  {
+    "id": "tubaria_rufofulva",
+    "scientificName": "Tubaria rufofulva",
+    "commonNames": [
+      "Rufous Twiglet"
+    ],
+    "genus": "Tubaria",
+    "family": "Tubariaceae",
+    "habitatTypes": [
+      "Native Eucalypt Forest",
+      "Urban Parks & Gardens"
+    ],
+    "substrates": [
+      "Wood chips, twigs, mulch"
+    ],
+    "seasonStart": 1,
+    "seasonEnd": 12,
+    "capDescription": "1-3 cm, rusty to tawny-red, hygrophanous, convex then flat.",
+    "gillDescription": "Adnate to slightly decurrent, ochre-brown, fairly distant.",
+    "stemDescription": "2-5 cm, reddish, fibrillose.",
+    "sporeColor": "Ochre-brown",
+    "bruisingReaction": "No bruising.",
+    "lookAlikes": [
+      "Other small brown mulch fungi (LBMs)"
+    ],
+    "notes": "A common mulch-bed 'little brown mushroom'. ID to species is hard; not eaten.",
+    "imageUrls": []
+  },
+  {
+    "id": "leratiomyces_ceres",
+    "scientificName": "Leratiomyces ceres",
+    "commonNames": [
+      "Redlead Roundhead",
+      "Chip Cherry"
+    ],
+    "genus": "Leratiomyces",
+    "family": "Strophariaceae",
+    "habitatTypes": [
+      "Urban Parks & Gardens"
+    ],
+    "substrates": [
+      "Wood chips and bark mulch"
+    ],
+    "seasonStart": 1,
+    "seasonEnd": 12,
+    "capDescription": "1.5-6 cm, vivid orange-red to brick, smooth and slightly sticky, with whitish veil flecks at the margin.",
+    "gillDescription": "Adnate, grey then purple-brown.",
+    "stemDescription": "3-7 cm, white-yellowish, with a faint ring zone, orange base.",
+    "sporeColor": "Purple-brown",
+    "bruisingReaction": "No bruising.",
+    "lookAlikes": [
+      "Other Stropharia / Hypholoma"
+    ],
+    "notes": "The ubiquitous bright orange-red mushroom of garden wood-chip beds. Regarded as inedible/suspect.",
+    "imageUrls": []
   }
 ]
