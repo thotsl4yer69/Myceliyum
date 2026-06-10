@@ -126,26 +126,26 @@ def env_grid():
     try:
         occ = ee.Image("JRC/GSW1_4/GlobalSurfaceWater").select("occurrence")
         proj = occ.projection()  # native 30 m grid
-        # 0 = water (≥20% occurrence), 1 = land. unmask(0) drops the fixed
-        # projection, so reproject back to the native 30 m grid — otherwise
-        # fastDistanceTransform runs in the default 1° projection and the
-        # sampled value comes back null even though nothing throws.
-        land = occ.gte(20).unmask(0).Not().reproject(proj)
-        # fastDistanceTransform → squared euclidean distance (pixels) to nearest
-        # zero pixel (= nearest water). √ → pixels, × nominalScale → metres.
-        wd = (
-            land.fastDistanceTransform(256)
-            .sqrt().multiply(ee.Number(proj.nominalScale()))
-            .rename("water_dist")
+        # 1 = water (≥20% occurrence), 0 = land/no-data. unmask(0) drops the
+        # fixed projection, so reproject back to the native 30 m grid.
+        # NOTE: fastDistanceTransform measures distance to the nearest
+        # NON-ZERO pixel, so water must be the 1s (no .Not() inversion!).
+        water = occ.gte(20).unmask(0).reproject(proj)
+        # → squared euclidean distance (pixels) to nearest water pixel.
+        # √ → pixels, × nominalScale → metres. Beyond the 256-px neighbourhood
+        # (≈7.7 km) it returns a huge saturated value, which the app already
+        # buckets to neutral (>2 km), so no clamping is needed.
+        wd = water.fastDistanceTransform(256).sqrt().multiply(
+            ee.Number(proj.nominalScale())
         )
         wfeat = wd.reduceRegions(collection=fc, reducer=ee.Reducer.first(), scale=30).getInfo()["features"]
-        wby = {f["properties"].get("idx"): f["properties"].get("water_dist") for f in wfeat}
+        # Reducer.first() on a single-band image names the output property
+        # "first" (NOT the band name) — reading "water_dist" here silently
+        # yields null for every cell.
+        wby = {f["properties"].get("idx"): f["properties"].get("first") for f in wfeat}
         water_col = [wby.get(i) for i in range(n)]
-        # Always-on diagnostic until confirmed working: shows whether reduce
-        # returned features and what properties they carry.
         water_dbg = {
             "n_feats": len(wfeat),
-            "scale": float(proj.nominalScale().getInfo()),
             "sample_props": (wfeat[0]["properties"] if wfeat else None),
         }
     except Exception as exc:  # noqa: BLE001
