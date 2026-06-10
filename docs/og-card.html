@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<style data-omelette-injected>html,body{background:transparent}</style><script data-omelette-injected>(()=>{var j=["https://claude.ai","https://preview.claude.ai"];var x=true;var S=30000;var f=3000;document.addEventListener("DOMContentLoaded",()=>{const H=window.Babel;const G="om-src-id";if(H&&H.registerPlugin&&!(H.availablePlugins&&H.availablePlugins[G])){H.registerPlugin(G,({types:Y})=>({visitor:{JSXOpeningElement(U,Q){const J=U.node;if(J.name&&J.name.type==="JSXMemberExpression")return;for(let V=0;V<J.attributes.length;V++){const L=J.attributes[V];if(L.type==="JSXAttribute"&&L.name&&L.name.name==="data-om-id")return}const W=Q.file&&Q.file.opts&&Q.file.opts.filename||"?";const Z=J.loc&&J.loc.start;const z=`jsx:${W}:${J.start??0}:${Z?Z.line:0}:${Z?Z.column+1:0}`;J.attributes.push(Y.jsxAttribute(Y.jsxIdentifier("data-om-id"),Y.stringLiteral(z)))}}}))}const k="om-text-extract";let A=false;if(x&&H&&H.registerPlugin&&!(H.availablePlugins&&H.availablePlugins[k])){const Y=window.React;if(Y&&Y.useSyncExternalStore&&Y.createElement){A=true;const U={};const Q=new Set;let J=0;window.__omTextO=U;window.__omTextSet=(z)=>{for(const V in z){const L=z[V];if(L==null)delete U[V];else U[V]=L}J++;Q.forEach((V)=>V())};const W=(z)=>{Q.add(z);return()=>Q.delete(z)};const Z=()=>J;window.__OmT=function z(V){Y.useSyncExternalStore(W,Z,Z);return Y.createElement("span",{"data-om-text":V.i,className:"__om-t"},V.i in U?U[V.i]:V.children)};H.registerPlugin(k,({types:z})=>{const V={style:1,script:1,noscript:1,textarea:1,title:1,option:1,text:1,tspan:1,textPath:1};const L={placeholder:1,alt:1,title:1,label:1,"aria-label":1,"aria-description":1,"aria-placeholder":1};const _=($,C)=>z.logicalExpression("??",z.memberExpression(z.logicalExpression("||",z.memberExpression(z.identifier("window"),z.identifier("__omTextO")),z.objectExpression([])),z.stringLiteral($),true),C);const E=($)=>$.file&&$.file.opts&&$.file.opts.filename||"?";const B=($)=>$.file&&$.file.code||"";const b=($,C)=>{const X=(F)=>F&&F.start!=null&&F.end!=null&&(F.type==="StringLiteral"||F.type==="TemplateLiteral"&&F.expressions.length===0)?[F.start,F.end]:null;const N=X(C);if(N)return N;if(C&&C.type==="Identifier"){const F=$.scope.getBinding(C.name);if(F&&F.constant&&F.path.node.type==="VariableDeclarator"){return X(F.path.node.init)}}return null};const M=($,C,X)=>{const N=$.node;let F=false;const w=(K,q)=>{F=true;return z.jsxElement(z.jsxOpeningElement(z.jsxIdentifier("__OmT"),[z.jsxAttribute(z.jsxIdentifier("i"),z.stringLiteral(K))],false),z.jsxClosingElement(z.jsxIdentifier("__OmT")),[q],false)};const D=N.children.map((K)=>{if(K.type==="JSXText"){if(K.start==null||K.end==null)return K;const q=X.slice(K.start,K.end);const R=q.length-q.trimStart().length;const m=q.length-q.trimEnd().length;if(R+m>=q.length)return K;return w(`txt:${C}:${K.start+R}:${K.end-m}`,K)}if(K.type==="JSXExpressionContainer"){const q=b($,K.expression);if(q)return w(`str:${C}:${q[0]}:${q[1]}`,K)}return K});if(F)N.children=D};return{visitor:{JSXOpeningElement($,C){const X=$.node;const N=E(C);const F={};for(let w=0;w<X.attributes.length;w++){const D=X.attributes[w];if(D.type!=="JSXAttribute"||!D.name)continue;const K=D.name.name;if(!L[K])continue;if(!D.value||D.value.type!=="StringLiteral")continue;if(D.value.start==null||D.value.end==null)continue;const q=`txt:${N}:${D.value.start}:${D.value.end}`;F[K]=q;D.value=z.jsxExpressionContainer(_(q,z.stringLiteral(D.value.value)))}if(Object.keys(F).length){X.attributes.push(z.jsxAttribute(z.jsxIdentifier("data-om-text-attrs"),z.stringLiteral(JSON.stringify(F))))}},JSXElement($,C){const X=$.node.openingElement;const N=X&&X.name&&X.name.name;if(N==="__OmT")return;if(typeof N==="string"&&V[N])return;M($,E(C),B(C))},JSXFragment($,C){M($,E(C),B(C))}}}})}}const u=A?["transform-react-jsx-source",G,k]:["transform-react-jsx-source",G];document.querySelectorAll('script[type="text/babel"],script[type="text/jsx"]').forEach((Y,U)=>{const Q=Y.getAttribute("data-plugins")||"";const J=u.filter((W)=>Q.indexOf(W)<0);if(J.length){Y.setAttribute("data-plugins",Q?`${Q},${J.join(",")}`:J.join(","))}if(!Y.hasAttribute("data-filename")){Y.setAttribute("data-filename",Y.getAttribute("src")||`inline-${U}`)}})});var y=window.parent;if(y&&y!==window){const H=(Q,J)=>{try{y.postMessage({__omelette_log:true,type:Q,data:J},"*")}catch{}};["log","warn","error"].forEach((Q)=>{const J=console[Q];console[Q]=(...W)=>{const Z=W.map((z)=>{try{return typeof z==="object"?JSON.stringify(z):String(z)}catch{try{return String(z)}catch{return"[unstringifiable]"}}}).join(" ");H(Q,Z);J.apply(console,W)}});window.addEventListener("error",(Q)=>{const J=Q.target;if(J&&J!==window&&J.tagName){const W=J.src||J.href||"";H("resource_error",`${J.tagName} failed to load: ${W}`)}else{H("error",`${Q.message||"Unknown error"} at ${Q.filename||"?"}:${Q.lineno||0}:${Q.colno||0}`)}},true);window.addEventListener("unhandledrejection",(Q)=>{const J=Q.reason;const W=J instanceof Error?`${J.message} ${J.stack}`:String(J);H("error",`Unhandled rejection: ${W}`)});const G=()=>{try{y.postMessage({type:"omelette:height",height:document.documentElement.scrollHeight},"*")}catch{}};if(document.readyState==="complete")G();else window.addEventListener("load",G);if(window.ResizeObserver)new ResizeObserver(G).observe(document.documentElement);const k={};let A=0;window.claude={complete(Q){return new Promise((J,W)=>{if(!j.length){W(new Error("claude.complete: no parent origin"));return}const Z=`c${++A}`;const z=()=>setTimeout(()=>{delete k[Z];W(new Error(`claude.complete: no data for ${S/1000}s`))},S);const V=z();k[Z]={resolve:J,reject:W,text:"",t:V,arm:z};try{for(const L of j){y.postMessage({__om_api:true,id:Z,body:Q},L)}}catch(L){clearTimeout(V);delete k[Z];W(L)}})}};const u={};let Y=0;window.omelette={writeFile:(Q,J)=>new Promise((W,Z)=>{if(!j.length){W();return}const z=`f${++Y}`;const V=setTimeout(()=>{delete u[z];W()},f);u[z]={resolve:W,reject:Z,t:V};try{for(const L of j){y.postMessage({__om_file:true,id:z,op:"write",path:Q,content:J},L)}}catch{clearTimeout(V);delete u[z];W()}})};const U=(Q)=>{try{return JSON.stringify(Q)}catch{return JSON.stringify(String(Q))}};window.addEventListener("message",(Q)=>{if(j.indexOf(Q.origin)<0)return;if(Q.source!==y)return;const J=Q.data;if(!J)return;if(J.type==="omelette-preview-refresh"){if(typeof J.token!=="string"||!/^[0-9a-f.-]+(\.(rc|pr-[0-9]+))?(\.[0-9]+\.[0-9a-f]{16})?$/.test(J.token))return;const z=Math.max(1,Math.floor((J.expiresAt||0)-Date.now()/1000));document.cookie="__Host-omelette-preview="+J.token+"; Path=/; Secure; SameSite=None; Partitioned; Max-Age="+z;return}if(J.__om_file_r){const z=u[J.id];if(!z)return;clearTimeout(z.t);delete u[J.id];if(J.ok)z.resolve();else z.reject(new Error(J.error||"write failed"));return}if(J.__om_api_r){const z=k[J.id];if(!z)return;if(J.error!=null){clearTimeout(z.t);delete k[J.id];z.reject(new Error(J.error));return}if(J.chunk!=null){clearTimeout(z.t);z.t=z.arm();z.text+=J.chunk;return}if(J.done){clearTimeout(z.t);delete k[J.id];z.resolve(J.text!=null?J.text:z.text);return}return}if(!J.__om_eval)return;const W=J;const Z=(z)=>{Q.source.postMessage({...z,__om_eval_r:1,id:W.id},Q.origin)};try{const z=(0,eval)(W.code);if(z&&typeof z.then==="function"){z.then((V)=>Z({ok:1,v:U(V)}),(V)=>Z({ok:0,e:String(V)}))}else{Z({ok:1,v:U(z)})}}catch(z){Z({ok:0,e:String(z)})}})}})();
+</script>
+
+<meta charset="UTF-8"></meta>
+<title>OG Card — MyceliYUMS</title>
+<link href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@600;700&amp;family=Saira:wght@400;500&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet"></link>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1200px; height: 630px; overflow: hidden; }
+  body {
+    background: #0B0D0B; color: #D7D9CB; font-family: 'Saira', sans-serif; position: relative;
+    background-image: linear-gradient(#2B3022 1px, transparent 1px), linear-gradient(90deg, #2B3022 1px, transparent 1px);
+    background-size: 40px 40px; background-position: center;
+  }
+  .vign { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 45%, transparent 40%, rgba(11,13,11,0.85) 100%); }
+  .card { position: absolute; inset: 0; display: flex; align-items: center; gap: 70px; padding: 0 90px; }
+  .mark { width: 360px; height: 360px; flex: none; filter: drop-shadow(0 0 34px rgba(84,224,160,0.22)); }
+  .fig { font-family: 'IBM Plex Mono', monospace; font-size: 19px; letter-spacing: 0.32em; color: #E6B24C; margin-bottom: 22px; }
+  h1 { font-family: 'Saira Condensed', sans-serif; font-weight: 700; font-size: 130px; line-height: 0.92; letter-spacing: 0.02em; text-transform: uppercase; }
+  h1 b { color: #54E0A0; }
+  .tag { font-size: 34px; font-weight: 400; color: #8E9583; margin-top: 26px; line-height: 1.3; }
+  .tag b { color: #D7D9CB; font-weight: 500; }
+  .chips { display: flex; gap: 14px; margin-top: 34px; }
+  .chip { font-family: 'IBM Plex Mono', monospace; font-size: 15px; letter-spacing: 0.16em; color: #8E9583; border: 1px solid #363C2A; padding: 10px 18px; background: rgba(20,22,15,0.7); }
+  .cut { position: absolute; width: 22px; height: 22px; }
+  .cut::before, .cut::after { content: ""; position: absolute; background: #4a5240; }
+  .cut::before { width: 22px; height: 2px; } .cut::after { width: 2px; height: 22px; }
+  .cut.tl { top: 26px; left: 26px; } .cut.tl::before, .cut.tl::after { top: 0; left: 0; }
+  .cut.tr { top: 26px; right: 26px; } .cut.tr::before { top: 0; right: 0; } .cut.tr::after { top: 0; right: 0; }
+  .cut.bl { bottom: 26px; left: 26px; } .cut.bl::before { bottom: 0; left: 0; } .cut.bl::after { bottom: 0; left: 0; }
+  .cut.br { bottom: 26px; right: 26px; } .cut.br::before { bottom: 0; right: 0; } .cut.br::after { bottom: 0; right: 0; }
+</style>
+</head>
+<body>
+  <div class="vign"></div>
+  <div class="cut tl"></div><div class="cut tr"></div><div class="cut bl"></div><div class="cut br"></div>
+  <div class="card">
+    <svg class="mark" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M24 4C12 4 4.5 11.5 4.5 20.5c0 3.4 2.6 5.2 6.2 5.6 2.5.3 4.3 1.6 4.6 4.2l.9 7.2c.3 2.7 3.4 4.5 7.8 4.5s7.5-1.8 7.8-4.5l.9-7.2c.3-2.6 2.1-3.9 4.6-4.2 3.6-.4 6.2-2.2 6.2-5.6C43.5 11.5 36 4 24 4Z" stroke="#1f9e6c" stroke-width="1.1" opacity="0.35" stroke-dasharray="3 2.5"></path>
+      <path d="M24 5.75C13 5.75 6.15 12.6 6.15 20.7c0 3 2.35 4.6 5.7 5.05 2.7.35 4.65 1.8 4.95 4.55l.8 6.4c.3 2.45 2.9 4.05 6.4 4.05s6.1-1.6 6.4-4.05l.8-6.4c.3-2.75 2.25-4.2 4.95-4.55 3.35-.45 5.7-2.05 5.7-5.05C41.85 12.6 35 5.75 24 5.75Z" stroke="#1f9e6c" stroke-width="1.1" opacity="0.5"></path>
+      <path d="M24 7.5C14 7.5 7.8 13.7 7.8 20.9c0 2.6 2.1 4 5.2 4.5 2.9.4 5 2 5.3 4.9l.7 5.6c.3 2.2 2.4 3.6 5 3.6s4.7-1.4 5-3.6l.7-5.6c.3-2.9 2.4-4.5 5.3-4.9 3.1-.5 5.2-1.9 5.2-4.5C40.2 13.7 34 7.5 24 7.5Z" stroke="#54E0A0" stroke-width="1.9"></path>
+      <path d="M24 11c-7.8 0-12.8 4.8-12.8 10.3 0 1.9 1.6 3 4.2 3.5 3.3.6 5.6 2.4 5.9 5.5l.5 3.9c.2 1.7 1 2.7 2.2 2.7s2-1 2.2-2.7l.5-3.9c.3-3.1 2.6-4.9 5.9-5.5 2.6-.5 4.2-1.6 4.2-3.5C36.8 15.8 31.8 11 24 11Z" stroke="#1f9e6c" stroke-width="1.2" opacity="0.6"></path>
+      <path d="M24 13.7V11.8M27.9 14.75 28.85 13.1M20.1 14.75 19.15 13.1M30.75 17.6 32.4 16.65M17.25 17.6 15.6 16.65" stroke="#1f9e6c" stroke-width="1" opacity="0.55" stroke-linecap="round"></path>
+      <path d="M24 14.5c-5.4 0-8.9 3.3-8.9 7 0 1.3 1.1 2 2.9 2.4 2.7.55 4.6 2 5 4.6.1.8.5 1.2 1 1.2s.9-.4 1-1.2c.4-2.6 2.3-4.05 5-4.6 1.8-.4 2.9-1.1 2.9-2.4 0-3.7-3.5-7-8.9-7Z" fill="#54E0A0"></path>
+      <circle cx="24" cy="22" r="2.4" fill="#0B0D0B"></circle>
+      <path d="M24 18.1v1.1M24 24.8v1.1M20.2 22h1.1M26.7 22h1.1" stroke="#E6B24C" stroke-width="1" opacity="0.9"></path>
+      <circle cx="24" cy="22" r="1.4" fill="#E6B24C"></circle>
+    </svg>
+    <div>
+      <div class="fig">FIELD SIGNAL TERMINAL</div>
+      <h1>Myceli<b>yums</b></h1>
+      <div class="tag">Read the forest <b>before it fruits.</b></div>
+      <div class="chips">
+        <span class="chip">10 WEIGHTED SIGNALS</span>
+        <span class="chip">EARTH ENGINE SATELLITE</span>
+        <span class="chip">WORLDWIDE</span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,43 +1,219 @@
 /* ============================================================
-   MYCELIYUM — interactivity
+   MYCELIYUMS — interactivity
    ============================================================ */
 
-/* Real species data from the app's bundled catalogue (species.json) */
+/* Field catalogue — 28 taxa. Photos resolve live from Wikipedia/Wikimedia
+   Commons (CC) per species and cache locally; plates shown until resolved. */
 const SPECIES = [
+  /* ---- DEADLY ---- */
+  {
+    sci: "Amanita phalloides", com: "Death Cap", genus: "Amanita", family: "Amanitaceae",
+    habitat: "Oak & Beech Woodland", season: [2, 6], spore: "White", sporeHex: "#f3f1e9",
+    status: "deadly", statusLabel: "Deadly", tags: ["deadly", "toxic"], capHex: "#9aa05a",
+    marks: "Greenish-olive cap, pure white gills, skirt ring, large sack-like volva at the base.",
+    look: "Mistaken for straw & paddy-straw mushrooms — causes most fatal poisonings worldwide. Amatoxins survive cooking."
+  },
+  {
+    sci: "Amanita virosa", com: "Destroying Angel", genus: "Amanita", family: "Amanitaceae",
+    habitat: "Mixed & Birch Forest", season: [1, 5], spore: "White", sporeHex: "#f3f1e9",
+    status: "deadly", statusLabel: "Deadly", tags: ["deadly", "toxic"], capHex: "#e8e6da",
+    marks: "Pure white throughout, shaggy stem, flimsy skirt, deep sack volva.",
+    look: "Young buttons pass for edible puffballs — always slice buttons top-to-bottom to check for a hidden outline."
+  },
+  {
+    sci: "Galerina marginata", com: "Funeral Bell", genus: "Galerina", family: "Hymenogastraceae",
+    habitat: "Rotting Conifer Wood", season: [3, 7], spore: "Rusty brown", sporeHex: "#8a5a2e",
+    status: "deadly", statusLabel: "Deadly", tags: ["deadly", "toxic"], capHex: "#b07a3a",
+    marks: "Small honey-brown hygrophanous cap, ring zone on stem, clusters on dead logs.",
+    look: "Deadly twin of honey fungus and wood-loving Psilocybe — same logs, same season. Rusty print = walk away."
+  },
+  {
+    sci: "Cortinarius rubellus", com: "Deadly Webcap", genus: "Cortinarius", family: "Cortinariaceae",
+    habitat: "Mossy Conifer Forest", season: [2, 6], spore: "Rust", sporeHex: "#a05a28",
+    status: "deadly", statusLabel: "Deadly", tags: ["deadly", "toxic"], capHex: "#c06a2e",
+    marks: "Tawny-orange conical cap, cobweb veil remnants, yellow zig-zag bands on stem.",
+    look: "Picked in error for chanterelles — orellanine destroys kidneys weeks after the meal."
+  },
+  {
+    sci: "Gyromitra esculenta", com: "False Morel", genus: "Gyromitra", family: "Discinaceae",
+    habitat: "Sandy Pine Forest", season: [8, 11], spore: "Cream", sporeHex: "#e8dcc0",
+    status: "deadly", statusLabel: "Deadly", tags: ["deadly", "toxic"], capHex: "#7a4a32",
+    marks: "Brain-like reddish-brown folded cap; interior chambered, not hollow.",
+    look: "True morels are honeycomb-PITTED and fully hollow. Gyromitrin is lethal raw and risky cooked."
+  },
+
+  /* ---- TOXIC ---- */
   {
     sci: "Amanita muscaria", com: "Fly Agaric", genus: "Amanita", family: "Amanitaceae",
-    habitat: "Conifer Plantation", season: [4, 6], spore: "White", sporeHex: "#f3f1e9",
-    status: "toxic", statusLabel: "Toxic", tags: ["toxic"],
+    habitat: "Conifer & Birch Plantation", season: [4, 6], spore: "White", sporeHex: "#f3f1e9",
+    status: "toxic", statusLabel: "Toxic", tags: ["toxic", "invasive"], capHex: "#c23b2e",
     img: "https://commons.wikimedia.org/wiki/Special:FilePath/Fliegenpilz_fly_agaric_Amanita_muscaria.JPG?width=600", rid: "spAmanita",
-    note: "Introduced. Forms mycorrhizal rings around Pinus radiata."
+    marks: "Scarlet cap with white warts, white gills, bulbous base with scaly rings.",
+    look: "Rain-faded caps resemble edible blushers — blushers flush pink when cut. Invasive in the southern hemisphere."
   },
   {
-    sci: "Psilocybe subaeruginosa", com: "Gold-top", genus: "Psilocybe", family: "Hymenogastraceae",
-    habitat: "Eucalypt / Urban Mulch", season: [4, 8], spore: "Purple-brown", sporeHex: "#3a2b3a",
-    status: "psy", statusLabel: "Psychoactive", tags: ["psy"],
-    img: "https://inaturalist-open-data.s3.amazonaws.com/photos/518685963/medium.jpg", capHex: "#c08a4a", rid: "spPsilocybe",
-    note: "Native SE Australia. Intense blue-green bruising when handled."
+    sci: "Amanita pantherina", com: "Panther Cap", genus: "Amanita", family: "Amanitaceae",
+    habitat: "Beech & Conifer Forest", season: [3, 6], spore: "White", sporeHex: "#f3f1e9",
+    status: "toxic", statusLabel: "Toxic", tags: ["toxic"], capHex: "#8a6a4a",
+    marks: "Bronze cap with PURE-white warts, collared bulb at stem base.",
+    look: "Confused with the edible blusher — the blusher bruises pink, panther stays white. Stronger toxins than fly agaric."
   },
   {
-    sci: "Omphalotus nidiformis", com: "Ghost Fungus", genus: "Omphalotus", family: "Omphalotaceae",
-    habitat: "Eucalypt Woodland", season: [3, 7], spore: "White", sporeHex: "#f3f1e9",
-    status: "bio", statusLabel: "Bioluminescent", tags: ["bio", "toxic"],
-    img: "https://commons.wikimedia.org/wiki/Special:FilePath/Omphalotus_nidiformis%2C_Ghost_Fungus%2C_Australia.jpg?width=600", rid: "spOmphalotus",
-    note: "Glows soft green in darkness via luciferin–luciferase. Toxic."
+    sci: "Chlorophyllum molybdites", com: "Green-spored Parasol", genus: "Chlorophyllum", family: "Agaricaceae",
+    habitat: "Lawns & Grass Rings", season: [1, 4], spore: "Green", sporeHex: "#7a8c5a",
+    status: "toxic", statusLabel: "Toxic", tags: ["toxic"], capHex: "#d9d0bb",
+    marks: "Large white parasol in grass; gills age grey-green; double-edged ring.",
+    look: "The #1 cause of mushroom poisoning on lawns — split from true parasols by its GREEN spore print."
+  },
+  {
+    sci: "Agaricus xanthodermus", com: "Yellow Stainer", genus: "Agaricus", family: "Agaricaceae",
+    habitat: "Parks, Gardens, Hedgerows", season: [2, 6], spore: "Chocolate brown", sporeHex: "#4a3328",
+    status: "toxic", statusLabel: "Toxic", tags: ["toxic"], capHex: "#ddd8c8",
+    marks: "Stains chrome-yellow instantly at the stem base when cut; ink / phenol smell.",
+    look: "Passes for the field mushroom in every other way — the yellow flash and chemical smell give it away."
+  },
+  {
+    sci: "Rubroboletus satanas", com: "Satan's Bolete", genus: "Rubroboletus", family: "Boletaceae",
+    habitat: "Chalky Oak Woodland", season: [1, 4], spore: "Olive-brown", sporeHex: "#5d5230",
+    status: "toxic", statusLabel: "Toxic", tags: ["toxic"], capHex: "#cfc8b8",
+    marks: "Pale chalky cap, blood-red pores, swollen red-netted stem; flesh blues when cut.",
+    look: "Treat every red-pored, blue-bruising bolete as suspect until keyed out properly."
   },
   {
     sci: "Gymnopilus junonius", com: "Spectacular Rustgill", genus: "Gymnopilus", family: "Hymenogastraceae",
     habitat: "Eucalypt Forest / Parks", season: [3, 7], spore: "Rusty orange", sporeHex: "#b5662e",
-    status: "toxic", statusLabel: "Inedible", tags: ["toxic"],
-    img: "https://commons.wikimedia.org/wiki/Special:FilePath/Gymnopilus_spectabilis_42904.jpg?width=600", capHex: "#d98a2e", rid: "spGymnopilus",
-    note: "Bitter. Massive clusters at the base of eucalypts."
+    status: "toxic", statusLabel: "Inedible", tags: ["toxic"], capHex: "#d98a2e",
+    img: "https://commons.wikimedia.org/wiki/Special:FilePath/Gymnopilus_spectabilis_42904.jpg?width=600", rid: "spGymnopilus",
+    marks: "Huge golden clusters at trunk bases; rusty spore dust collects on the ring.",
+    look: "Resembles honey fungus at a glance — intensely bitter, rusty-orange print."
+  },
+  {
+    sci: "Hypholoma fasciculare", com: "Sulphur Tuft", genus: "Hypholoma", family: "Strophariaceae",
+    habitat: "Stumps & Dead Wood", season: [3, 8], spore: "Purple-brown", sporeHex: "#3a2b3a",
+    status: "toxic", statusLabel: "Toxic", tags: ["toxic"], capHex: "#e0c04a",
+    marks: "Dense sulphur-yellow tufts, greenish gills, slender curved stems.",
+    look: "Shares stumps with honey fungus and edible brick caps — bitter taste and green gill tint mark it out."
+  },
+  {
+    sci: "Omphalotus nidiformis", com: "Ghost Fungus", genus: "Omphalotus", family: "Omphalotaceae",
+    habitat: "Eucalypt Woodland", season: [3, 7], spore: "White", sporeHex: "#f3f1e9",
+    status: "bio", statusLabel: "Bioluminescent", tags: ["bio", "toxic"], capHex: "#d9d3c3",
+    img: "https://commons.wikimedia.org/wiki/Special:FilePath/Omphalotus_nidiformis%2C_Ghost_Fungus%2C_Australia.jpg?width=600", rid: "spOmphalotus",
+    marks: "Fan-shaped cream brackets at eucalypt bases; glows soft green in full darkness.",
+    look: "Harvested in error as oyster mushroom — if it glows at night, drop it. Severe GI toxin."
+  },
+  {
+    sci: "Omphalotus olearius", com: "Jack-o'-Lantern", genus: "Omphalotus", family: "Omphalotaceae",
+    habitat: "Olive & Oak Stumps", season: [1, 5], spore: "Cream-yellow", sporeHex: "#e8d9a8",
+    status: "toxic", statusLabel: "Toxic", tags: ["toxic", "bio"], capHex: "#e07a2a",
+    marks: "Bright orange clusters; TRUE blade gills running down the stem; faint night glow.",
+    look: "The classic chanterelle impostor — chanterelles have blunt forking ridges, never thin blade gills."
+  },
+
+  /* ---- EDIBLE (with field cautions) ---- */
+  {
+    sci: "Boletus edulis", com: "Porcini · Cep", genus: "Boletus", family: "Boletaceae",
+    habitat: "Oak, Beech & Pine Forest", season: [2, 5], spore: "Olive-brown", sporeHex: "#5d5230",
+    status: "edible", statusLabel: "Edible", tags: ["edible"], capHex: "#8a5a32",
+    marks: "Bun-brown cap, pores white aging yellow-olive, fine white net on a swollen stem.",
+    look: "Bitter bolete shares the build — pinkish pores and a DARK stem net; one ruins the whole pan."
+  },
+  {
+    sci: "Cantharellus cibarius", com: "Chanterelle", genus: "Cantharellus", family: "Cantharellaceae",
+    habitat: "Mossy Hardwood & Conifer", season: [2, 6], spore: "Pale yellow", sporeHex: "#e8d9a8",
+    status: "edible", statusLabel: "Edible", tags: ["edible"], capHex: "#e8b53a",
+    marks: "Egg-yolk colour throughout, blunt forking ridges (not gills), apricot smell.",
+    look: "Check against jack-o'-lantern and false chanterelle — both carry true thin gills."
+  },
+  {
+    sci: "Macrolepiota procera", com: "Parasol", genus: "Macrolepiota", family: "Agaricaceae",
+    habitat: "Pasture Edge & Open Woods", season: [2, 5], spore: "White", sporeHex: "#f3f1e9",
+    status: "edible", statusLabel: "Edible", tags: ["edible"], capHex: "#b09a72",
+    marks: "Snakeskin-patterned stem, movable double ring, drumstick-shaped buttons.",
+    look: "In green-spored regions ALWAYS print lawn finds — Chlorophyllum molybdites mimics it perfectly."
+  },
+  {
+    sci: "Pleurotus ostreatus", com: "Oyster Mushroom", genus: "Pleurotus", family: "Pleurotaceae",
+    habitat: "Dead Hardwood, Shelved", season: [4, 9], spore: "White-lilac", sporeHex: "#d9d3e3",
+    status: "edible", statusLabel: "Edible", tags: ["edible"], capHex: "#9a9282",
+    marks: "Shell-shaped caps in shelves, decurrent gills, stem rudimentary or absent.",
+    look: "In Australia & NZ rule out ghost fungus first — same shelf habit, toxic, glows at night."
+  },
+  {
+    sci: "Morchella esculenta", com: "Common Morel", genus: "Morchella", family: "Morchellaceae",
+    habitat: "Disturbed Ground & Orchards", season: [8, 11], spore: "Cream", sporeHex: "#e8dcc0",
+    status: "edible", statusLabel: "Edible", tags: ["edible"], capHex: "#b0a070",
+    marks: "Honeycomb-pitted cap fused to the stem; completely hollow when split.",
+    look: "False morel is wrinkled-brainy, chambered inside, and deadly. Always cook morels through."
+  },
+  {
+    sci: "Lactarius deliciosus", com: "Saffron Milk Cap", genus: "Lactarius", family: "Russulaceae",
+    habitat: "Pine Plantations", season: [2, 5], spore: "Cream", sporeHex: "#e8dcc0",
+    status: "edible", statusLabel: "Edible", tags: ["edible"], capHex: "#d9822e",
+    marks: "Carrot-orange latex when cut, zonate cap, bruises green with handling.",
+    look: "Woolly milk cap weeps WHITE peppery latex — zonate too, but shaggy-rimmed."
+  },
+  {
+    sci: "Coprinus comatus", com: "Shaggy Ink Cap", genus: "Coprinus", family: "Agaricaceae",
+    habitat: "Roadsides & Disturbed Soil", season: [2, 6], spore: "Black", sporeHex: "#1a1a1a",
+    status: "edible", statusLabel: "Edible", tags: ["edible"], capHex: "#e3e0d3",
+    marks: "White shaggy torpedo caps that dissolve into black ink within a day.",
+    look: "Common ink cap (smooth grey cap) reacts violently with alcohol — keep them separate."
+  },
+  {
+    sci: "Suillus luteus", com: "Slippery Jack", genus: "Suillus", family: "Suillaceae",
+    habitat: "Pine Plantations", season: [2, 6], spore: "Brown", sporeHex: "#6e4a2a",
+    status: "edible", statusLabel: "Edible", tags: ["edible"], capHex: "#7a4a28",
+    marks: "Slimy chestnut cap, purple-tinged ring, fine dotted yellow pores.",
+    look: "Few risky twins under pine — peel the slime skin; it upsets some stomachs."
+  },
+  {
+    sci: "Hydnum repandum", com: "Hedgehog Mushroom", genus: "Hydnum", family: "Hydnaceae",
+    habitat: "Mossy Mixed Forest", season: [3, 7], spore: "White", sporeHex: "#f3f1e9",
+    status: "edible", statusLabel: "Edible", tags: ["edible"], capHex: "#e0c090",
+    marks: "Cream cap with soft SPINES underneath instead of gills or pores.",
+    look: "No dangerous species carries spines — the safest beginner identification there is."
+  },
+  {
+    sci: "Armillaria mellea", com: "Honey Fungus", genus: "Armillaria", family: "Physalacriaceae",
+    habitat: "Stumps & Living Roots", season: [3, 6], spore: "White", sporeHex: "#f3f1e9",
+    status: "edible", statusLabel: "Edible · cook well", tags: ["edible", "bio"], capHex: "#b08a4a",
+    marks: "Honey-tan scaly caps in bursts, white ring, black bootlace rhizomorphs under bark; mycelium glows faintly.",
+    look: "Deadly Galerina fruits on the same logs — Galerina prints rusty brown, Armillaria white."
+  },
+
+  /* ---- PSYCHOACTIVE ---- */
+  {
+    sci: "Psilocybe subaeruginosa", com: "Gold-top", genus: "Psilocybe", family: "Hymenogastraceae",
+    habitat: "Eucalypt / Urban Mulch", season: [4, 8], spore: "Purple-brown", sporeHex: "#3a2b3a",
+    status: "psy", statusLabel: "Psychoactive", tags: ["psy"], capHex: "#c08a4a",
+    img: "https://inaturalist-open-data.s3.amazonaws.com/photos/518685963/medium.jpg", rid: "spPsilocybe",
+    marks: "Caramel hygrophanous cap, intense blue-green bruising, pale fibrous stem.",
+    look: "Galerina marginata fruits in the same mulch and is lethal — print every wood-lover."
+  },
+  {
+    sci: "Psilocybe semilanceata", com: "Liberty Cap", genus: "Psilocybe", family: "Hymenogastraceae",
+    habitat: "Sheep Pasture & Rank Grass", season: [4, 7], spore: "Purple-brown", sporeHex: "#3a2b3a",
+    status: "psy", statusLabel: "Psychoactive", tags: ["psy"], capHex: "#b0985a",
+    marks: "Nipple-topped conical cap, striate when damp, slender wavy stem.",
+    look: "Small brown grassland species blur together — deadly Cortinarius and Galerina print rust, not purple-brown."
+  },
+
+  /* ---- BIOLUMINESCENT / INVASIVE ---- */
+  {
+    sci: "Mycena chlorophos", com: "Night-light Bonnet", genus: "Mycena", family: "Mycenaceae",
+    habitat: "Subtropical Woody Litter", season: [1, 4], spore: "White", sporeHex: "#f3f1e9",
+    status: "bio", statusLabel: "Bioluminescent", tags: ["bio"], capHex: "#c8d9c0",
+    marks: "Tiny pale parasols; rim-lit green glow, strongest the first night after rain.",
+    look: "Too small to eat, unmistakable to log — a flagship sighting for night surveys."
   },
   {
     sci: "Favolaschia calocera", com: "Orange Pore Fungus", genus: "Favolaschia", family: "Mycenaceae",
     habitat: "Rainforest / Damp Gully", season: [3, 8], spore: "White", sporeHex: "#f3f1e9",
-    status: "invasive", statusLabel: "Invasive", tags: ["invasive"],
-    img: "https://commons.wikimedia.org/wiki/Special:FilePath/Favolaschia_calocera_38204.jpg?width=600", capHex: "#e2752f", rid: "spFavolaschia",
-    note: "Invasive from Madagascar. Spreading through Victorian wet gullies."
+    status: "invasive", statusLabel: "Invasive", tags: ["invasive"], capHex: "#e2752f",
+    img: "https://commons.wikimedia.org/wiki/Special:FilePath/Favolaschia_calocera_38204.jpg?width=600", rid: "spFavolaschia",
+    marks: "Bright orange ping-pong-bat caps with honeycomb pores on the underside.",
+    look: "Nothing dangerous shares the look — log every sighting to help track its spread."
   }
 ];
 
@@ -66,15 +242,15 @@ function plateArt(capHex) {
 }
 
 function speciesCard(s, i) {
-  const sbClass = { toxic: "sb-toxic", psy: "sb-psy", bio: "sb-bio", invasive: "sb-invasive" }[s.status];
+  const sbClass = { deadly: "sb-deadly", toxic: "sb-toxic", psy: "sb-psy", bio: "sb-bio", invasive: "sb-invasive", edible: "sb-edible" }[s.status];
   const resolved = (window.__resources && s.rid && window.__resources[s.rid]) || s.img;
   const media = resolved
     ? `<img src="${resolved}" alt="${s.sci}" loading="lazy" onerror="this.closest('.ph').classList.add('is-plate'); this.remove();">`
     : plateArt(s.capHex);
   const specno = 'SPC-' + String(i + 1).padStart(2, '0');
   return `
-  <article class="species" data-tags="${s.tags.join(' ')}">
-    <div class="ph${resolved ? '' : ' is-plate'}">
+  <article class="species" data-tags="${s.tags.join(' ')}" data-i="${i}">
+    <div class="ph${resolved ? '' : ' is-plate'}" title="Expand specimen photo">
       <span class="status-badge ${sbClass}">${s.statusLabel}</span>
       <span class="specno">${specno}</span>
       ${media}
@@ -94,8 +270,106 @@ function speciesCard(s, i) {
           <div class="season-row">${MONTHS.map(m => `<span>${m}</span>`).join('')}</div>
         </div>
       </div>
+      <div class="spec-notes">
+        ${s.marks ? `<div class="fm"><b>Field marks</b>${s.marks}</div>` : ''}
+        ${s.look ? `<div class="fm warn"><b>Lookalike warning</b>${s.look}</div>` : ''}
+      </div>
     </div>
   </article>`;
+}
+
+/* ---- live photo resolution — Wikipedia REST summary (CC imagery) ---- */
+const IMG_CACHE_KEY = 'myc_taxa_img_v1';
+
+function applySpeciesImage(i, thumb, full) {
+  const card = document.querySelector(`.species[data-i="${i}"]`);
+  if (!card) return;
+  const ph = card.querySelector('.ph');
+  if (full) ph.dataset.full = full;
+  let img = ph.querySelector('img');
+  if (img) { if (!SPECIES[i].img) img.src = thumb; return; }
+  img = document.createElement('img');
+  img.alt = SPECIES[i].sci;
+  img.loading = 'lazy';
+  img.onerror = function () { ph.classList.add('is-plate'); img.remove(); };
+  img.src = thumb;
+  const plate = ph.querySelector('.plate');
+  if (plate) plate.remove();
+  ph.classList.remove('is-plate');
+  ph.appendChild(img);
+}
+
+async function resolveImages() {
+  let cache = {};
+  try { cache = JSON.parse(localStorage.getItem(IMG_CACHE_KEY) || '{}'); } catch (e) {}
+  let dirty = false;
+  const jobs = SPECIES.map(async (s, i) => {
+    const key = s.sci;
+    if (cache[key] && cache[key].t) { applySpeciesImage(i, cache[key].t, cache[key].f); return; }
+    try {
+      const r = await fetch('https://en.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(s.sci.replace(/ /g, '_')));
+      if (!r.ok) return;
+      const j = await r.json();
+      const src = j.thumbnail && j.thumbnail.source;
+      if (!src) return;
+      const thumb = src.replace(/\/(\d+)px-/, '/640px-');
+      const full = src.replace(/\/(\d+)px-/, '/1280px-');
+      cache[key] = { t: thumb, f: full };
+      dirty = true;
+      applySpeciesImage(i, thumb, full);
+    } catch (e) { /* offline — plates remain */ }
+  });
+  await Promise.allSettled(jobs);
+  if (dirty) { try { localStorage.setItem(IMG_CACHE_KEY, JSON.stringify(cache)); } catch (e) {} }
+}
+
+/* ---- specimen lens — click a photo to expand for field comparison ---- */
+function initLens() {
+  const grid = document.getElementById('catGrid');
+  if (!grid) return;
+  const lens = document.createElement('div');
+  lens.className = 'lens';
+  lens.innerHTML =
+    '<div class="lens-card">' +
+      '<div class="lens-ph"><img alt=""><span class="lens-no"></span></div>' +
+      '<div class="lens-info">' +
+        '<div><span class="lens-badge"></span></div>' +
+        '<div><div class="lens-sci"></div><div class="lens-com"></div></div>' +
+        '<p class="lens-tax"></p>' +
+        '<div class="lens-marks"></div>' +
+        '<div class="lens-look"></div>' +
+        '<div class="lens-hint">PHOTO © WIKIMEDIA COMMONS / INATURALIST CONTRIBUTORS · ESC OR CLICK OUTSIDE TO CLOSE · NEVER EAT ON A PHOTO MATCH ALONE</div>' +
+      '</div>' +
+      '<button class="lens-close" aria-label="Close">&#10005;</button>' +
+    '</div>';
+  document.body.appendChild(lens);
+
+  function close() { lens.classList.remove('open'); document.body.style.overflow = ''; }
+  lens.addEventListener('click', (e) => { if (e.target === lens) close(); });
+  lens.querySelector('.lens-close').addEventListener('click', close);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+
+  grid.addEventListener('click', (e) => {
+    const ph = e.target.closest('.ph');
+    if (!ph || ph.classList.contains('is-plate')) return;
+    const card = ph.closest('.species');
+    const s = SPECIES[+card.dataset.i];
+    const img = ph.querySelector('img');
+    if (!s || !img) return;
+    const sbClass = { deadly: 'sb-deadly', toxic: 'sb-toxic', psy: 'sb-psy', bio: 'sb-bio', invasive: 'sb-invasive', edible: 'sb-edible' }[s.status];
+    lens.querySelector('.lens-ph img').src = ph.dataset.full || img.src;
+    lens.querySelector('.lens-no').textContent = 'SPC-' + String(+card.dataset.i + 1).padStart(2, '0') + ' · FIELD COMPARISON VIEW';
+    const badge = lens.querySelector('.lens-badge');
+    badge.textContent = s.statusLabel;
+    badge.className = 'lens-badge status-badge ' + sbClass;
+    lens.querySelector('.lens-sci').textContent = s.sci;
+    lens.querySelector('.lens-com').textContent = s.com;
+    lens.querySelector('.lens-tax').textContent = s.genus + ' · ' + s.family + ' · ' + s.habitat;
+    lens.querySelector('.lens-marks').innerHTML = s.marks ? '<b>Field marks</b>' + s.marks : '';
+    lens.querySelector('.lens-look').innerHTML = s.look ? '<b>Lookalike warning</b>' + s.look : '';
+    lens.classList.add('open');
+    document.body.style.overflow = 'hidden';
+  });
 }
 
 function renderCatalogue() {
@@ -393,6 +667,8 @@ function initTicker() {
 function boot() {
   renderCatalogue();
   initFilter();
+  resolveImages();
+  initLens();
   renderHeatmap();
   initReveal();
   initNav();
