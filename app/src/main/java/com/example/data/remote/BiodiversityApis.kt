@@ -63,6 +63,33 @@ interface GBIFApi {
     ): GBIFResponse
 
     /**
+     * All fungal occurrence records (museum/herbarium + observations) in a map
+     * area — used to plot global GBIF specimen pins alongside iNaturalist
+     * sightings. No species filter; kingdomKey=5 keeps it to Fungi.
+     */
+    @GET("occurrence/search")
+    suspend fun searchAreaOccurrences(
+        @Query("decimalLatitude") lat: String,        // "min,max"
+        @Query("decimalLongitude") lon: String,       // "min,max"
+        @Query("kingdomKey") kingdomKey: Int = 5,
+        @Query("hasCoordinate") hasCoordinate: Boolean = true,
+        @Query("hasGeospatialIssue") hasGeoIssue: Boolean = false,
+        @Query("limit") limit: Int = 200
+    ): GBIFResponse
+
+    /**
+     * Total GBIF record count for a species worldwide (limit=0 returns the
+     * count without the records). Surfaced on the detail screen as how widely
+     * the species has been recorded.
+     */
+    @GET("occurrence/search")
+    suspend fun countOccurrences(
+        @Query("scientificName") scientificName: String,
+        @Query("kingdomKey") kingdomKey: Int = 5,
+        @Query("limit") limit: Int = 0
+    ): GBIFResponse
+
+    /**
      * Global fungal taxonomy search — the GBIF species backbone covers every
      * described fungus on Earth (~150k species). `highertaxonKey=5` constrains
      * to kingdom Fungi. This turns the catalogue into a searchable front-end

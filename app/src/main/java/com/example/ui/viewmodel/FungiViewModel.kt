@@ -60,6 +60,10 @@ class FungiViewModel(
     suspend fun fetchSpeciesPhotos(scientificName: String): List<com.example.model.SpeciesPhoto> =
         repository.fetchSpeciesPhotos(scientificName)
 
+    /** Total worldwide GBIF record count for a species (detail screen). */
+    suspend fun fetchGlobalRecordCount(scientificName: String): Int? =
+        repository.getGlobalRecordCount(scientificName)
+
     // 2. User Sightings Flows
     val userSightings: StateFlow<List<UserSighting>> = repository.allUserSightingsFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())

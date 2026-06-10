@@ -56,6 +56,12 @@ fun DetailScreen(
     }
     val images = photos.map { it.url }
 
+    // Worldwide GBIF record count — how widely this species has been recorded.
+    var recordCount by remember(species.id) { mutableStateOf<Int?>(null) }
+    LaunchedEffect(species.id) {
+        recordCount = viewModel.fetchGlobalRecordCount(species.scientificName)
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -254,6 +260,16 @@ fun DetailScreen(
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Bold
                         )
+                        recordCount?.let { n ->
+                            if (n > 0) {
+                                Text(
+                                    text = "🌍 ${"%,d".format(n)} records worldwide (GBIF)",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(top = 2.dp)
+                                )
+                            }
+                        }
                     }
 
                     Button(
