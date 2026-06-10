@@ -1,0 +1,7 @@
+# Cloudflare static-assets headers.
+# Always revalidate the HTML so a fresh deploy is visible immediately rather
+# than being served from a stale edge/browser cache. Hashed-name assets could
+# cache longer, but these filenames are stable, so revalidate them too —
+# Cloudflare still answers with 304s, so the cost is negligible.
+/*
+  Cache-Control: public, max-age=0, must-revalidate
