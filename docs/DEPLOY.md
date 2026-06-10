@@ -1,56 +1,44 @@
 # Myceliyum — website + APK deployment
 
-This ships the **Myceliyum** marketing site plus a one-shot CI workflow that
-builds the Android APK **and** deploys the site on every push to `main`.
+How the site and the Android APK actually ship. Both are automatic on every
+push to `main` — no manual steps.
 
 ```
 docs/
-  index.html     ← the site (served at the repo's Pages URL)
+  index.html     ← the site (served by Cloudflare Workers)
   styles.css
   app.js
   DEPLOY.md      ← this file
+wrangler.jsonc   ← Cloudflare Workers config (serves docs/ as static assets)
 .github/workflows/
-  deploy.yml     ← builds APK → "latest" release + deploys docs/ to Pages
+  android-ci.yml      ← tests + debug APK on every PR/push; on main it also
+                         refreshes the rolling "latest" GitHub release
+  android-release.yml ← manual, optionally release-signed APK build
 ```
 
-> Note: the site was designed & packaged here, but pushing to your remote and
-> compiling the APK happen on GitHub. Everything below is copy-paste ready.
+## Website — Cloudflare Workers (automatic)
 
----
+The repo is connected to Cloudflare Workers Builds. Every push to `main`
+deploys `docs/` as a static site per `wrangler.jsonc` (`assets.directory:
+"docs"`). The custom domain (`myceliyums.xyz`) is managed in the Cloudflare
+dashboard under the `myceliyum` Worker.
 
-## 1 · Add these files to the repo & push
-
-From a local clone of `thotsl4yer69/Myceliyum`, drop in the `docs/` folder and
-the `.github/workflows/deploy.yml` file, then:
+To preview or deploy by hand:
 
 ```bash
-git add docs/ .github/workflows/deploy.yml
-git commit -m "Add marketing site + auto deploy (Pages) & APK release workflow"
-git push origin main
+npx wrangler dev      # local preview
+npx wrangler deploy   # manual production deploy
 ```
 
-## 2 · Turn on GitHub Pages (one time)
+## APK — rolling "latest" release (automatic)
 
-Repo **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+Every push to `main`, the `publish-latest` job in `android-ci.yml` uploads the
+freshly built debug APK to the rolling **`latest`** GitHub release. The site's
+"Download APK" button points at `…/releases/latest`, so it always serves the
+newest build.
 
-(That's it — no branch/folder to pick. The workflow publishes the site itself.)
-
-## 3 · Done — it's automatic from here
-
-Every push to `main` now:
-
-1. **Builds the debug APK** and publishes it to a rolling **`latest`** release.
-   The site's "Download latest APK" button points at the stable asset URL
-   `…/releases/download/latest/myceliyum-latest.apk`, so it always serves the
-   freshest build with no further edits.
-2. **Deploys `docs/`** to GitHub Pages at:
-
-   ```
-   https://thotsl4yer69.github.io/Myceliyum/
-   ```
-
-You can also trigger the whole thing by hand from the **Actions** tab
-(**Deploy site & APK → Run workflow**).
+`versionCode` is set from the CI run number (`BUILD_NUMBER`), so each published
+build is uniquely versioned; `versionName` tracks milestones (currently 7.0).
 
 > The map tiles, fonts, and species photos load from public CDNs, so the live
 > page needs internet — that's inherent to the interactive map.
@@ -72,10 +60,10 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 ### Release signing (optional)
 
-The bundled `android-release.yml` workflow produces a release APK. To get a
-**release-signed** build, set these repository secrets (Settings → Secrets and
-variables → Actions); without them it falls back to a debug-signed APK that
-still installs for testing:
+The `android-release.yml` workflow (Actions tab → run manually) produces a
+release APK. To get a **release-signed** build, set these repository secrets
+(Settings → Secrets and variables → Actions); without them it falls back to a
+debug-signed APK that still installs for testing:
 
 - `RELEASE_KEYSTORE_BASE64` — base64 of your `.jks` keystore
 - `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_PASSWORD`, `RELEASE_KEY_ALIAS`

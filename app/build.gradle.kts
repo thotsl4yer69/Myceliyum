@@ -15,8 +15,10 @@ android {
     applicationId = "com.aistudio.myceliummapper.vcfqka"
     minSdk = 24
     targetSdk = 35
-    versionCode = 1
-    versionName = "1.0"
+    // CI sets BUILD_NUMBER (= GitHub run number) so every published APK has a
+    // unique, increasing versionCode; local builds fall back to 1.
+    versionCode = System.getenv("BUILD_NUMBER")?.toIntOrNull() ?: 1
+    versionName = "7.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

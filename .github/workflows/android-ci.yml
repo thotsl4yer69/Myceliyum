@@ -47,6 +47,8 @@ jobs:
         run: ./gradlew testDebugUnitTest --stacktrace
 
       - name: Assemble debug APK
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
         run: ./gradlew assembleDebug --stacktrace
 
       - name: Upload debug APK
@@ -64,3 +66,32 @@ jobs:
           name: unit-test-reports
           path: app/build/reports/tests/
           if-no-files-found: ignore
+
+  # Keep the website's "Download APK" button working: every push to main
+  # refreshes a rolling "latest" GitHub release with the freshly built APK
+  # (the site links to /releases/latest).
+  publish-latest:
+    name: Publish rolling "latest" release
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download debug APK
+        uses: actions/download-artifact@v4
+        with:
+          name: app-debug
+
+      - name: Create or refresh the "latest" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view latest -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+            gh release create latest -R "$GITHUB_REPOSITORY" \
+              --title "Latest field build" \
+              --notes "Rolling release — newest debug APK from main."
+          gh release upload latest *.apk -R "$GITHUB_REPOSITORY" --clobber
+          gh release edit latest -R "$GITHUB_REPOSITORY" \
+            --notes "Rolling release — newest debug APK from main. Built from ${GITHUB_SHA::7} (run #${{ github.run_number }})."
