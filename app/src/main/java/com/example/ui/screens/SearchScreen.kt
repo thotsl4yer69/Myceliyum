@@ -328,6 +328,7 @@ fun SearchScreen(
                 items(filteredList) { spec ->
                     SpeciesItemCard(
                         species = spec,
+                        fetchThumbnail = { viewModel.fetchSpeciesImages(it).firstOrNull() },
                         onClick = { onSpeciesSelected(spec) }
                     )
                 }
@@ -339,6 +340,7 @@ fun SearchScreen(
 @Composable
 fun SpeciesItemCard(
     species: Species,
+    fetchThumbnail: (suspend (String) -> String?)? = null,
     onClick: () -> Unit
 ) {
     Surface(
@@ -357,10 +359,15 @@ fun SpeciesItemCard(
                 .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Thumbnail — real image if the species ships one, otherwise a
+            // Thumbnail — a bundled image if the species ships one, else
+            // lazily pull the first iNaturalist taxon photo; falls back to a
             // neutral placeholder icon (no stock stand-ins).
             val ctx = LocalContext.current
-            val firstImage = species.imageUrls.firstOrNull()
+            var fetchedThumb by remember(species.id) { mutableStateOf<String?>(null) }
+            if (species.imageUrls.isEmpty() && fetchThumbnail != null) {
+                LaunchedEffect(species.id) { fetchedThumb = fetchThumbnail(species.scientificName) }
+            }
+            val firstImage = species.imageUrls.firstOrNull() ?: fetchedThumb
             Box(
                 modifier = Modifier
                     .size(80.dp)

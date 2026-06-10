@@ -15,7 +15,40 @@ interface INaturalistApi {
         @Query("quality_grade") qualityGrade: String = "research",
         @Query("per_page") perPage: Int = 100
     ): INatResponse
+
+    /**
+     * Taxon lookup — pulls a gallery of reference photos for a species by
+     * scientific name. iNaturalist returns curated `taxon_photos` (CC
+     * licensed, attributed) plus a `default_photo`, giving every species
+     * multiple images without bundling them in the APK.
+     */
+    @GET("taxa")
+    suspend fun getTaxa(
+        @Query("q") query: String,
+        @Query("rank") rank: String = "species",
+        @Query("per_page") perPage: Int = 1
+    ): INatTaxaResponse
 }
+
+data class INatTaxaResponse(
+    @Json(name = "results") val results: List<INatTaxon>?
+)
+
+data class INatTaxon(
+    @Json(name = "name") val name: String?,
+    @Json(name = "default_photo") val defaultPhoto: INatTaxonPhoto?,
+    @Json(name = "taxon_photos") val taxonPhotos: List<INatTaxonPhotoWrap>?
+)
+
+data class INatTaxonPhotoWrap(
+    @Json(name = "photo") val photo: INatTaxonPhoto?
+)
+
+data class INatTaxonPhoto(
+    @Json(name = "medium_url") val mediumUrl: String?,
+    @Json(name = "url") val url: String?,
+    @Json(name = "attribution") val attribution: String?
+)
 
 data class INatResponse(
     @Json(name = "results") val results: List<INatObservation>

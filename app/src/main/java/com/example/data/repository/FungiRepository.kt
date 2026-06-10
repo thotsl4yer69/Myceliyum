@@ -59,17 +59,21 @@ class FungiRepository(
      */
     suspend fun seedDatabase() = withContext(Dispatchers.IO) {
         try {
-            val existing = dao.getAllSpecies()
-            if (existing.isEmpty()) {
-                context.assets.open("species.json").use { inputStream ->
-                    val reader = InputStreamReader(inputStream)
-                    val jsonString = reader.readText()
-                    val listType = Types.newParameterizedType(List::class.java, Species::class.java)
-                    val adapter = moshi.adapter<List<Species>>(listType)
-                    val speciesList = adapter.fromJson(jsonString)
-                    if (speciesList != null) {
+            context.assets.open("species.json").use { inputStream ->
+                val reader = InputStreamReader(inputStream)
+                val jsonString = reader.readText()
+                val listType = Types.newParameterizedType(List::class.java, Species::class.java)
+                val adapter = moshi.adapter<List<Species>>(listType)
+                val speciesList = adapter.fromJson(jsonString)
+                if (speciesList != null) {
+                    // Upsert when the bundled catalogue and the DB differ in size
+                    // (fresh install, or an app update that adds species). The
+                    // species table is independent of user sightings, and inserts
+                    // REPLACE on conflict, so this never touches user data.
+                    val existingCount = dao.getAllSpecies().size
+                    if (existingCount != speciesList.size) {
                         dao.insertSpecies(speciesList)
-                        Log.d(TAG, "Successfully seeded ${speciesList.size} species to Room database.")
+                        Log.d(TAG, "Seeded/updated species catalogue: $existingCount -> ${speciesList.size}.")
                     }
                 }
             }
@@ -97,6 +101,37 @@ class FungiRepository(
     suspend fun getAllUserSightings(): List<UserSighting> = withContext(Dispatchers.IO) {
         dao.getAllUserSightings()
     }
+
+    // Reference-photo gallery per species (scientific name → image URLs),
+    // pulled from iNaturalist taxon photos. Cached for the process lifetime so
+    // revisiting a species detail is instant and free.
+    private val speciesImageCache = java.util.concurrent.ConcurrentHashMap<String, List<String>>()
+
+    /**
+     * A gallery of reference photos for a species, sourced from iNaturalist's
+     * curated taxon photos (CC-licensed, attributed). Returns medium-size image
+     * URLs that Coil loads directly — no images bundled in the APK. Fails soft
+     * to an empty list (the detail screen then shows bundled images or a
+     * styled placeholder), so it never breaks the UI offline.
+     */
+    suspend fun fetchSpeciesImages(scientificName: String): List<String> =
+        withContext(Dispatchers.IO) {
+            speciesImageCache[scientificName]?.let { return@withContext it }
+            val urls = try {
+                val taxon = iNatApi.getTaxa(scientificName).results?.firstOrNull()
+                val gallery = taxon?.taxonPhotos.orEmpty()
+                    .mapNotNull { it.photo?.mediumUrl ?: it.photo?.url }
+                val withDefault =
+                    if (gallery.isEmpty()) listOfNotNull(taxon?.defaultPhoto?.mediumUrl ?: taxon?.defaultPhoto?.url)
+                    else gallery
+                withDefault.distinct().take(12)
+            } catch (e: Exception) {
+                Log.w(TAG, "species images fetch failed for $scientificName: ${e.message}")
+                emptyList()
+            }
+            speciesImageCache[scientificName] = urls
+            urls
+        }
 
     /**
      * Fetch iNaturalist observations with offline-first Room cache with TTL.

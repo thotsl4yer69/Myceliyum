@@ -45,6 +45,14 @@ class FungiViewModel(
     val speciesList: StateFlow<List<Species>> = repository.allSpeciesFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    /**
+     * A gallery of reference photos for a species, pulled from iNaturalist
+     * taxon photos (cached). Used by the detail screen to show multiple images
+     * for every species without bundling them in the APK.
+     */
+    suspend fun fetchSpeciesImages(scientificName: String): List<String> =
+        repository.fetchSpeciesImages(scientificName)
+
     // 2. User Sightings Flows
     val userSightings: StateFlow<List<UserSighting>> = repository.allUserSightingsFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
