@@ -1,8 +1,8 @@
 # Mycelium Mapper — environmental layers backend
 
 A tiny Cloud Run service that exposes Google Earth Engine layers (land cover,
-tree-canopy %, NDVI) to the app, so the **service-account key never ships in
-the APK**. Earth Engine runs server-side under the service account's own
+tree-canopy %, NDVI, distance to surface water) to the app, so the
+**service-account key never ships in the APK**. Earth Engine runs server-side under the service account's own
 identity.
 
 ## Why a backend (read this)
@@ -60,7 +60,8 @@ BACKEND_TOKEN=<the token printed above>
 curl -s -X POST "$URL/env-grid" \
   -H "X-Api-Token: $TOKEN" -H "Content-Type: application/json" \
   -d '{"points": [[-37.8136, 144.9631], [-37.8386, 145.3524]]}' | jq
-# → {"landcover":[50,10], "canopy":[3.1, 78.4], "ndvi":[0.21, 0.74]}
+# → {"landcover":[50,10], "canopy":[3.1, 78.4], "ndvi":[0.21, 0.74],
+#    "water_dist":[180.0, null]}   # metres to nearest water; null = >2 km / no data
 ```
 
 ## Endpoints
@@ -68,4 +69,4 @@ curl -s -X POST "$URL/env-grid" \
 | Method | Path        | Body / Result |
 |--------|-------------|---------------|
 | GET    | `/health`   | `{"status":"ok"}` |
-| POST   | `/env-grid` | `{"points":[[lat,lng],...]}` (≤600) → `{"landcover":[...],"canopy":[...],"ndvi":[...]}` aligned 1:1 |
+| POST   | `/env-grid` | `{"points":[[lat,lng],...]}` (≤600) → `{"landcover":[...],"canopy":[...],"ndvi":[...],"water_dist":[...]}` aligned 1:1 |

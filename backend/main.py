@@ -20,6 +20,7 @@ a matching `X-Api-Token` header. Deploy authenticated where possible; the
 token is a lightweight guard against casual abuse of the public endpoint.
 """
 import datetime
+import hmac
 import os
 
 import ee
@@ -45,7 +46,9 @@ def ensure_ee() -> None:
 def _auth():
     if request.path == "/health":
         return None
-    if BACKEND_TOKEN and request.headers.get("X-Api-Token") != BACKEND_TOKEN:
+    if BACKEND_TOKEN and not hmac.compare_digest(
+        request.headers.get("X-Api-Token", ""), BACKEND_TOKEN
+    ):
         return jsonify({"error": "unauthorized"}), 401
     return None
 
@@ -70,10 +73,13 @@ def env_grid():
         return jsonify({"error": f"too many points (max {MAX_POINTS})"}), 400
 
     # FeatureCollection of points (Earth Engine expects [lng, lat]).
-    feats = [
-        ee.Feature(ee.Geometry.Point([float(p[1]), float(p[0])]), {"idx": i})
-        for i, p in enumerate(points)
-    ]
+    try:
+        feats = [
+            ee.Feature(ee.Geometry.Point([float(p[1]), float(p[0])]), {"idx": i})
+            for i, p in enumerate(points)
+        ]
+    except (TypeError, ValueError, IndexError):
+        return jsonify({"error": "points must be numeric [lat, lng] pairs"}), 400
     fc = ee.FeatureCollection(feats)
 
     # ── Layers ────────────────────────────────────────────────────────
