@@ -43,6 +43,16 @@ fun DetailScreen(
     val context = LocalContext.current
     val currentMonth = remember { Calendar.getInstance().get(Calendar.MONTH) + 1 }
 
+    // Pull a gallery of reference photos for this species from iNaturalist and
+    // merge with any bundled images, so every species shows multiple photos.
+    var remoteImages by remember(species.id) { mutableStateOf<List<String>>(emptyList()) }
+    LaunchedEffect(species.id) {
+        remoteImages = viewModel.fetchSpeciesImages(species.scientificName)
+    }
+    val images = remember(species.imageUrls, remoteImages) {
+        (species.imageUrls + remoteImages).distinct()
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -86,8 +96,8 @@ fun DetailScreen(
                     .height(280.dp)
                     .background(Color.Black)
             ) {
-                if (species.imageUrls.isNotEmpty()) {
-                    val pagerState = rememberPagerState(pageCount = { species.imageUrls.size })
+                if (images.isNotEmpty()) {
+                    val pagerState = rememberPagerState(pageCount = { images.size })
 
                     HorizontalPager(
                         state = pagerState,
@@ -104,7 +114,7 @@ fun DetailScreen(
 
                             AsyncImage(
                                 model = ImageRequest.Builder(context)
-                                    .data(species.imageUrls[page])
+                                    .data(images[page])
                                     .crossfade(true)
                                     .build(),
                                 contentDescription = "${species.scientificName} photo ${page + 1}",
@@ -148,14 +158,14 @@ fun DetailScreen(
                     }
 
                     // Page indicator dots
-                    if (species.imageUrls.size > 1) {
+                    if (images.size > 1) {
                         Row(
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
                                 .padding(bottom = 40.dp),
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            repeat(species.imageUrls.size) { index ->
+                            repeat(images.size) { index ->
                                 Box(
                                     modifier = Modifier
                                         .size(if (pagerState.currentPage == index) 8.dp else 6.dp)
