@@ -122,10 +122,13 @@ def env_grid():
     # Distance (m) to surface water — a riparian signal. Computed and sampled
     # separately and guarded, so any failure here never breaks the core layers.
     water_col = [None] * n
+    water_err = None
     try:
         # JRC permanent-ish surface water (≥20% occurrence), 0 = water, 1 = land.
         # unmask(0) keeps the image fully valid so the transform is defined
-        # everywhere (water cells read 0 rather than masked/null).
+        # everywhere (water cells read 0 rather than masked/null). The single
+        # band is named "occurrence" all the way through — do NOT .select() a
+        # different name, fastDistanceTransform preserves the input band name.
         land = (
             ee.Image("JRC/GSW1_4/GlobalSurfaceWater")
             .select("occurrence").gte(20).unmask(0).Not()
@@ -136,7 +139,7 @@ def env_grid():
         # and silently yields null for every cell. neighbourhood 256 px ≈ 7.6 km
         # at the dataset's 30 m scale — well beyond the app's 2 km cap.
         wd = (
-            land.fastDistanceTransform(256).select("distance")
+            land.fastDistanceTransform(256)
             .sqrt().multiply(30)          # √(px²) · 30 m/px → metres
             .rename("water_dist")
         )
@@ -144,16 +147,20 @@ def env_grid():
         wby = {f["properties"].get("idx"): f["properties"].get("water_dist") for f in wfeat}
         water_col = [wby.get(i) for i in range(n)]
     except Exception as exc:  # noqa: BLE001
+        water_err = repr(exc)
         app.logger.warning("water distance failed: %s", exc)
 
-    return jsonify(
-        {
-            "landcover": col("landcover"),
-            "canopy": col("canopy"),
-            "ndvi": col("ndvi"),
-            "water_dist": water_col,
-        }
-    )
+    payload = {
+        "landcover": col("landcover"),
+        "canopy": col("canopy"),
+        "ndvi": col("ndvi"),
+        "water_dist": water_col,
+    }
+    # Temporary diagnostic: surface why water distance failed, if it did. The
+    # app ignores unknown keys, so this is harmless; remove once confirmed.
+    if water_err is not None:
+        payload["_water_debug"] = water_err
+    return jsonify(payload)
 
 
 if __name__ == "__main__":
