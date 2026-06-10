@@ -1,0 +1,53 @@
+name: Deploy site (Cloudflare)
+
+# Reliable, repo-controlled deploy of docs/ to the existing "myceliyum"
+# Cloudflare Worker (static assets). This is a fallback for the Cloudflare
+# "Workers Builds" git integration, which has been reporting success without
+# actually updating production. It runs `wrangler deploy` with the same
+# wrangler.jsonc (assets.directory: docs).
+#
+# To activate: add a repository secret CLOUDFLARE_API_TOKEN
+#   (Cloudflare dashboard → My Profile → API Tokens → Create Token →
+#    "Edit Cloudflare Workers" template). Account ID is already set below.
+# Until the secret is present, the job is a clean no-op (green CI).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'wrangler.jsonc'
+      - '.github/workflows/deploy-site.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: wrangler deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for Cloudflare token
+        id: gate
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -n "$TOKEN" ]; then
+            echo "have_token=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "have_token=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::CLOUDFLARE_API_TOKEN not set — skipping deploy. Add the secret to enable reliable site deploys."
+          fi
+
+      - name: Checkout
+        if: steps.gate.outputs.have_token == 'true'
+        uses: actions/checkout@v4
+
+      - name: Deploy docs/ to Cloudflare Workers
+        if: steps.gate.outputs.have_token == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: c145d1f5c9cb016d5f208731555cb138
+          command: deploy
