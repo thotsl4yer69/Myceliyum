@@ -56,6 +56,10 @@ class FungiViewModel(
     suspend fun fetchSpeciesImages(scientificName: String): List<String> =
         repository.fetchSpeciesImages(scientificName)
 
+    /** Reference photos with CC attribution for the detail gallery. */
+    suspend fun fetchSpeciesPhotos(scientificName: String): List<com.example.model.SpeciesPhoto> =
+        repository.fetchSpeciesPhotos(scientificName)
+
     // 2. User Sightings Flows
     val userSightings: StateFlow<List<UserSighting>> = repository.allUserSightingsFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())

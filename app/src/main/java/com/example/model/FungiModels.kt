@@ -38,6 +38,16 @@ data class Observation(
 )
 
 /**
+ * A reference photo with its attribution/credit line (iNaturalist taxon
+ * photos are CC-licensed and require attribution). Bundled images have no
+ * attribution (null).
+ */
+data class SpeciesPhoto(
+    val url: String,
+    val attribution: String?
+)
+
+/**
  * A lightweight, in-memory observation for the "all fungi sightings" map
  * layer — NOT persisted to Room (so no schema migration). Carries the taxon
  * label so pins can show the species/genus and common name straight from the
