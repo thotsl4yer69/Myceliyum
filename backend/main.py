@@ -4,13 +4,14 @@ Mycelium Mapper — environmental layers proxy (Google Earth Engine).
 Runs on Cloud Run as a service account (Application Default Credentials),
 so NO service-account key file is needed at deploy time or runtime. The
 Android app calls this service over HTTPS to get per-cell environmental
-layers (land cover, tree-canopy %, NDVI vegetation greenness) that feed
-the hotspot prediction engine.
+layers (land cover, tree-canopy %, NDVI vegetation greenness, and distance
+to surface water) that feed the hotspot prediction engine.
 
 Endpoints:
   GET  /health            → liveness probe
   POST /env-grid          → body {"points": [[lat,lng], ...]} (≤600)
-                            → {"landcover": [...], "canopy": [...], "ndvi": [...]}
+                            → {"landcover": [...], "canopy": [...], "ndvi": [...],
+                               "water_dist": [...]}   # metres to nearest water
                             arrays are aligned 1:1 with the input points;
                             entries may be null where a layer has no value.
 

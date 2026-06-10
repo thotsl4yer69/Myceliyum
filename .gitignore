@@ -24,3 +24,7 @@ debug.keystore
 .build-outputs/
 .gradle-user-home/
 build.log
+
+# Python (backend)
+__pycache__/
+*.pyc
