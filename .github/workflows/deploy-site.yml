@@ -44,6 +44,23 @@ jobs:
         if: steps.gate.outputs.have_token == 'true'
         uses: actions/checkout@v4
 
+      # The myceliyums.xyz zone's Browser Cache TTL (4h) overrides the
+      # max-age=0 from docs/_headers on the custom domain, so returning
+      # visitors can run stale JS/CSS for hours after a deploy. Versioning the
+      # asset URLs with the commit SHA busts that cache deterministically —
+      # the HTML itself is always revalidated.
+      - name: Cache-bust local asset URLs with the commit SHA
+        if: steps.gate.outputs.have_token == 'true'
+        run: |
+          V="${GITHUB_SHA::8}"
+          sed -i \
+            -e "s|href=\"styles\.css\"|href=\"styles.css?v=${V}\"|" \
+            -e "s|src=\"hyphae-bg\.js\"|src=\"hyphae-bg.js?v=${V}\"|" \
+            -e "s|src=\"app\.js\"|src=\"app.js?v=${V}\"|" \
+            docs/index.html
+          echo "Stamped asset URLs:"
+          grep -nE 'styles\.css\?v=|app\.js\?v=|hyphae-bg\.js\?v=' docs/index.html
+
       - name: Deploy docs/ to Cloudflare Pages (serves myceliyums.xyz)
         if: steps.gate.outputs.have_token == 'true'
         uses: cloudflare/wrangler-action@v3
