@@ -546,9 +546,13 @@ const ICON = {
 
 /* scroll reveal */
 function initReveal() {
+  // threshold must stay 0: a fractional threshold can never fire for elements
+  // taller than viewport/threshold — the 28-card catalogue grid is ~15,500px
+  // on phones, so at 0.12 it stayed invisible on mobile forever. rootMargin
+  // keeps the reveal from triggering until the element edge is near.
   const io = new IntersectionObserver((entries) => {
     entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
-  }, { threshold: 0.12 });
+  }, { threshold: 0, rootMargin: '0px 0px -8% 0px' });
   document.querySelectorAll('.reveal').forEach(el => io.observe(el));
 }
 
