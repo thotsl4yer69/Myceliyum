@@ -34,3 +34,12 @@ __pycache__/
 .dev.vars*
 !.dev.vars.example
 !.env.example
+
+# Release signing keystore + passwords are kept OUTSIDE the repo and must
+# never be committed (release keystore lives in ~/.secrets/myceliyum/).
+*.jks
+*.keystore
+keystore*.base64*
+
+# OMC orchestration state
+.omc/

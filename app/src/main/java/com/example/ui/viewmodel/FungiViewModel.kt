@@ -165,6 +165,9 @@ class FungiViewModel(
         .stateIn(viewModelScope, SharingStarted.Eagerly, SettingsStore.DEFAULT_MAP_THEME)
     val appTheme: StateFlow<String> = settingsStore.appTheme
         .stateIn(viewModelScope, SharingStarted.Eagerly, SettingsStore.DEFAULT_APP_THEME)
+    // User-supplied Anthropic API key for AI identification (stored on-device only).
+    val anthropicApiKey: StateFlow<String> = settingsStore.anthropicApiKey
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "")
     // Initial value true so the returning-user case doesn't flash the disclaimer
     // before DataStore has loaded; a brand-new user sees it once it emits false.
     val splashNoticeAccepted: StateFlow<Boolean> = settingsStore.splashAccepted
@@ -180,6 +183,10 @@ class FungiViewModel(
 
     fun setAppTheme(value: String) {
         viewModelScope.launch { settingsStore.setAppTheme(value) }
+    }
+
+    fun setAnthropicApiKey(value: String) {
+        viewModelScope.launch { settingsStore.setAnthropicApiKey(value) }
     }
 
     fun acceptSplashNotice() {

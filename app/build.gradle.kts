@@ -18,21 +18,19 @@ android {
     // CI sets BUILD_NUMBER (= GitHub run number) so every published APK has a
     // unique, increasing versionCode; local builds fall back to 1.
     versionCode = System.getenv("BUILD_NUMBER")?.toIntOrNull() ?: 1
-    versionName = "7.0"
+    versionName = "7.1"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-    // Read Anthropic API key from local.properties (not checked into VCS)
+    // Optional build-time keys are read from local.properties / env (never
+    // committed). The Anthropic key is deliberately NOT compiled in — it is
+    // supplied by the user at runtime in Settings and stored only on-device,
+    // so the published APK never ships an API key.
     val localProps = Properties()
     val localPropsFile = rootProject.file("local.properties")
     if (localPropsFile.exists()) {
       localPropsFile.inputStream().use { localProps.load(it) }
     }
-    buildConfigField(
-      "String",
-      "ANTHROPIC_API_KEY",
-      "\"${localProps.getProperty("ANTHROPIC_API_KEY", "")}\""
-    )
     // Google Cloud API key (Geocoding / Elevation / Vision). Read from
     // local.properties or the GOOGLE_API_KEY env var (CI) — never committed.
     buildConfigField(

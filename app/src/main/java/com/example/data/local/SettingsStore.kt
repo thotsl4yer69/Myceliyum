@@ -22,6 +22,10 @@ class SettingsStore(private val context: Context) {
         val MAP_THEME = stringPreferencesKey("map_theme")
         val SPLASH_ACCEPTED = booleanPreferencesKey("splash_accepted")
         val APP_THEME = stringPreferencesKey("app_theme")
+        // User-supplied Anthropic API key for the AI identification feature.
+        // Stored only on this device; never bundled into the published app and
+        // sent only directly to the Anthropic API from the user's own device.
+        val ANTHROPIC_API_KEY = stringPreferencesKey("anthropic_api_key")
     }
 
     companion object {
@@ -43,6 +47,10 @@ class SettingsStore(private val context: Context) {
     val appTheme: Flow<String> =
         context.dataStore.data.map { it[Keys.APP_THEME] ?: DEFAULT_APP_THEME }
 
+    /** User-supplied Anthropic API key; blank until the user enters one. */
+    val anthropicApiKey: Flow<String> =
+        context.dataStore.data.map { it[Keys.ANTHROPIC_API_KEY] ?: "" }
+
     suspend fun setMeasureUnits(value: String) {
         context.dataStore.edit { it[Keys.UNITS] = value }
     }
@@ -57,5 +65,9 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setAppTheme(value: String) {
         context.dataStore.edit { it[Keys.APP_THEME] = value }
+    }
+
+    suspend fun setAnthropicApiKey(value: String) {
+        context.dataStore.edit { it[Keys.ANTHROPIC_API_KEY] = value.trim() }
     }
 }

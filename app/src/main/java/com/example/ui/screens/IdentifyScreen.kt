@@ -37,7 +37,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
-import com.example.BuildConfig
+import com.example.data.local.SettingsStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -74,6 +74,11 @@ data class IdentificationResult(
 @Composable
 fun IdentifyScreen() {
     val context = LocalContext.current
+    // The Anthropic API key is supplied by the user in Settings and stored only
+    // on-device — it is never embedded in the published app. Identification is
+    // disabled until the user provides their own key.
+    val settingsStore = remember { SettingsStore(context) }
+    val anthropicApiKey by settingsStore.anthropicApiKey.collectAsState(initial = "")
     val coroutineScope = rememberCoroutineScope()
 
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
@@ -144,7 +149,7 @@ fun IdentifyScreen() {
         coroutineScope.launch {
             try {
                 val result = withContext(Dispatchers.IO) {
-                    callClaudeVisionAPI(context, uri)
+                    callClaudeVisionAPI(context, uri, anthropicApiKey)
                 }
                 identificationResult = result
                 chatMessages = listOf(
@@ -168,7 +173,7 @@ fun IdentifyScreen() {
         coroutineScope.launch {
             try {
                 val response = withContext(Dispatchers.IO) {
-                    callClaudeChatAPI(chatMessages)
+                    callClaudeChatAPI(chatMessages, anthropicApiKey)
                 }
                 chatMessages = chatMessages + ChatMessage("assistant", response)
             } catch (e: Exception) {
@@ -765,9 +770,8 @@ private fun imageUriToBase64(context: Context, uri: Uri): String {
     return Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
 }
 
-private fun callClaudeVisionAPI(context: Context, imageUri: Uri): IdentificationResult {
-    val apiKey = try { BuildConfig.ANTHROPIC_API_KEY } catch (e: Exception) { "" }
-    if (apiKey.isBlank()) throw Exception("API key not configured. Add ANTHROPIC_API_KEY to local.properties.")
+private fun callClaudeVisionAPI(context: Context, imageUri: Uri, apiKey: String): IdentificationResult {
+    if (apiKey.isBlank()) throw Exception("Add your Anthropic API key in Settings to enable AI identification.")
 
     val base64Image = imageUriToBase64(context, imageUri)
 
@@ -885,9 +889,8 @@ private fun parseIdentificationResponse(text: String): IdentificationResult {
     )
 }
 
-private fun callClaudeChatAPI(messages: List<ChatMessage>): String {
-    val apiKey = try { BuildConfig.ANTHROPIC_API_KEY } catch (e: Exception) { "" }
-    if (apiKey.isBlank()) throw Exception("API key not configured")
+private fun callClaudeChatAPI(messages: List<ChatMessage>, apiKey: String): String {
+    if (apiKey.isBlank()) throw Exception("Add your Anthropic API key in Settings to chat with the mycologist assistant.")
 
     val systemPrompt = """You are an expert mycologist assistant specializing in Victorian (Australian) fungi.
 Answer questions about mushroom identification, safety, ecology, and foraging.

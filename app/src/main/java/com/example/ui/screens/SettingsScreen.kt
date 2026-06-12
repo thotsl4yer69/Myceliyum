@@ -17,6 +17,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -42,6 +44,11 @@ fun SettingsScreen(
     val mapTheme by viewModel.mapTheme.collectAsState()
     val appTheme by viewModel.appTheme.collectAsState()
     val userSightings by viewModel.userSightings.collectAsState()
+    val anthropicApiKey by viewModel.anthropicApiKey.collectAsState()
+
+    // Local editable copy of the stored API key; re-seeds if the stored value changes.
+    var apiKeyInput by remember(anthropicApiKey) { mutableStateOf(anthropicApiKey) }
+    var apiKeyVisible by remember { mutableStateOf(false) }
 
     var showExportSuccessDialog by remember { mutableStateOf(false) }
     var exportedCsvFilePath by remember { mutableStateOf("") }
@@ -119,6 +126,81 @@ fun SettingsScreen(
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                             )
+                        }
+                    }
+                }
+            }
+
+            // 0b. AI identification — user-supplied Anthropic API key.
+            // The key is stored only on this device and is never bundled into
+            // the published app, so public APKs ship without any API key.
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(imageVector = Icons.Default.Key, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = "AI identification key",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Paste your own Anthropic API key to enable photo identification and the mycologist chat. It is stored only on this device and sent directly to Anthropic — never to us. Get one at console.anthropic.com.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 16.sp
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = apiKeyInput,
+                        onValueChange = { apiKeyInput = it },
+                        label = { Text("Anthropic API key") },
+                        placeholder = { Text("sk-ant-...") },
+                        singleLine = true,
+                        visualTransformation = if (apiKeyVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            IconButton(onClick = { apiKeyVisible = !apiKeyVisible }) {
+                                Icon(
+                                    imageVector = if (apiKeyVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                    contentDescription = if (apiKeyVisible) "Hide key" else "Show key"
+                                )
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("anthropic_api_key_field")
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                viewModel.setAnthropicApiKey(apiKeyInput)
+                                Toast.makeText(
+                                    context,
+                                    if (apiKeyInput.isBlank()) "API key cleared" else "API key saved",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            },
+                            modifier = Modifier.testTag("save_anthropic_api_key")
+                        ) { Text("Save") }
+                        if (anthropicApiKey.isNotBlank()) {
+                            OutlinedButton(
+                                onClick = {
+                                    apiKeyInput = ""
+                                    viewModel.setAnthropicApiKey("")
+                                    Toast.makeText(context, "API key cleared", Toast.LENGTH_SHORT).show()
+                                }
+                            ) { Text("Clear") }
                         }
                     }
                 }
