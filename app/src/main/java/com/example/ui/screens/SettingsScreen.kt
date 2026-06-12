@@ -23,6 +23,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.UserSighting
 import com.example.ui.viewmodel.FungiViewModel
+import com.example.update.UpdateState
+import com.example.update.UpdateViewModel
 import java.io.File
 import java.io.FileWriter
 import java.text.SimpleDateFormat
@@ -31,9 +33,11 @@ import java.util.*
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
-    viewModel: FungiViewModel
+    viewModel: FungiViewModel,
+    updateViewModel: UpdateViewModel
 ) {
     val context = LocalContext.current
+    val updateState by updateViewModel.state.collectAsState()
     val measureUnits by viewModel.measureUnits.collectAsState()
     val mapTheme by viewModel.mapTheme.collectAsState()
     val appTheme by viewModel.appTheme.collectAsState()
@@ -314,6 +318,65 @@ fun SettingsScreen(
                             text = "Export to CSV",
                             fontWeight = FontWeight.Bold
                         )
+                    }
+                }
+            }
+
+            // 5. App version & in-app updater
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(imageVector = Icons.Default.SystemUpdate, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = "App version",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Version ${updateViewModel.currentVersionName} (build ${com.example.BuildConfig.VERSION_CODE})",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Builds update automatically when a newer one is published. Check now to pull the latest field build from GitHub.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 16.sp
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    val checking = updateState is UpdateState.Checking
+                    Button(
+                        onClick = { updateViewModel.checkForUpdates(silent = false) },
+                        enabled = !checking,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp)
+                            .testTag("check_updates_button"),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        if (checking) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(text = "Checking…", fontWeight = FontWeight.Bold)
+                        } else {
+                            Icon(imageVector = Icons.Default.SystemUpdate, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(text = "Check for updates", fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }

@@ -1,69 +1,82 @@
-# Myceliyum — website + APK deployment
+# Myceliyum — website deployment (Cloudflare Pages)
 
-How the site and the Android APK actually ship. Both are automatic on every
-push to `main` — no manual steps.
+The **Myceliyum** marketing site is a plain static site. It deploys via
+**Cloudflare Pages** connected to this GitHub repo — every push to `main`
+auto-deploys, and Cloudflare handles DNS + SSL for `myceliyums.xyz`.
 
 ```
 docs/
-  index.html     ← the site (served by Cloudflare Workers)
+  index.html     ← the site (Cloudflare Pages "build output directory")
   styles.css
   app.js
   DEPLOY.md      ← this file
-wrangler.jsonc   ← Cloudflare Workers config (serves docs/ as static assets)
-.github/workflows/
-  android-ci.yml      ← tests + debug APK on every PR/push; on main it also
-                         refreshes the rolling "latest" GitHub release
-  android-release.yml ← manual, optionally release-signed APK build
 ```
 
-## Website — Cloudflare Workers (automatic)
-
-The repo is connected to Cloudflare Workers Builds. Every push to `main`
-deploys `docs/` as a static site per `wrangler.jsonc` (`assets.directory:
-"docs"`). The custom domain (`myceliyums.xyz`) is managed in the Cloudflare
-dashboard under the `myceliyum` Worker.
-
-To preview or deploy by hand:
-
-```bash
-npx wrangler dev      # local preview
-npx wrangler deploy   # manual production deploy
-```
-
-## APK — rolling "latest" release (automatic)
-
-Every push to `main`, the `publish-latest` job in `android-ci.yml` uploads the
-freshly built debug APK to the rolling **`latest`** GitHub release. The site's
-"Download APK" button points at `…/releases/latest`, so it always serves the
-newest build.
-
-`versionCode` is set from the CI run number (`BUILD_NUMBER`), so each published
-build is uniquely versioned; `versionName` tracks milestones (currently 7.0).
-
-> The map tiles, fonts, and species photos load from public CDNs, so the live
-> page needs internet — that's inherent to the interactive map.
+> No build step, no framework, no CNAME file — Cloudflare Pages manages the
+> custom domain itself.
 
 ---
 
-## Building the APK locally (optional)
+## 1 · Push the site to the repo
 
-The app builds from the repo root with the bundled Gradle wrapper — no setup
-beyond Android Studio or the SDK + JDK 17.
+From a local clone of `thotsl4yer69/Myceliyum`:
 
 ```bash
-./gradlew assembleDebug
-#  → app/build/outputs/apk/debug/app-debug.apk
-
-# install on a connected device
-adb install -r app/build/outputs/apk/debug/app-debug.apk
+git add docs/
+git commit -m "Myceliyum marketing site"
+git push origin main
 ```
 
-### Release signing (optional)
+## 2 · Create the Cloudflare Pages project (one time)
 
-The `android-release.yml` workflow (Actions tab → run manually) produces a
-release APK. To get a **release-signed** build, set these repository secrets
-(Settings → Secrets and variables → Actions); without them it falls back to a
-debug-signed APK that still installs for testing:
+Cloudflare dashboard → **Workers & Pages → Create → Pages → Connect to Git** →
+authorize and select **`thotsl4yer69/Myceliyum`**.
 
-- `RELEASE_KEYSTORE_BASE64` — base64 of your `.jks` keystore
-- `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_PASSWORD`, `RELEASE_KEY_ALIAS`
+**Build settings:**
+
+| Setting | Value |
+|---|---|
+| Framework preset | None |
+| Build command | *(empty)* |
+| Build output directory | `docs` |
+| Root directory | `/` (default) |
+
+**Save and Deploy.** A `*.pages.dev` URL goes live in ~30s.
+
+## 3 · Attach the domain
+
+Pages project → **Custom domains → Set up a custom domain** → `myceliyums.xyz`
+(and optionally `www.myceliyums.xyz`). Because the domain is already in this
+Cloudflare account, the DNS records + SSL cert are created automatically.
+
+> If the domain isn't "Active" in Cloudflare yet, point the registrar's
+> **nameservers** at the two Cloudflare nameservers shown on the domain's
+> Overview page. That nameserver change is the *only* thing done at the
+> registrar — all DNS records live in Cloudflare.
+
+## 4 · Done — automatic from here
+
+Every push to `main` redeploys the site. `https://myceliyums.xyz` is live.
+
+---
+
+## Notes
+
+- **Do not** also enable GitHub Pages with this domain — the two will fight
+  over it. If it was turned on earlier: repo **Settings → Pages → Source: None**.
+- Map tiles, fonts and species photos load from public CDNs, so the live page
+  needs internet — inherent to the interactive map.
+- A self-contained `Myceliyum (standalone).html` (everything inlined) exists in
+  the project root for offline sharing; it is not part of the web deploy.
+
+---
+
+## The Android app & Earth Engine backend (separate from this site)
+
+The website does **not** host or affect the app. For reference:
+
+- The APK builds from the repo root: `./gradlew assembleDebug`
+  → `app/build/outputs/apk/debug/app-debug.apk`
+- The Earth Engine environmental backend runs on **Google Cloud Run**
+  (`myceliyum-env`, region `australia-southeast1`) and is wired into the app
+  build — it is independent of the marketing site and the domain.

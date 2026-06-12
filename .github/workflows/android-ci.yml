@@ -69,7 +69,9 @@ jobs:
 
   # Keep the website's "Download APK" button working: every push to main
   # refreshes a rolling "latest" GitHub release with the freshly built APK
-  # (the site links to /releases/latest).
+  # (the site links to /releases/latest). The same release also carries a
+  # machine-readable version.json that the app's in-app update check reads to
+  # decide whether a newer build is available.
   publish-latest:
     name: Publish rolling "latest" release
     needs: build
@@ -79,10 +81,32 @@ jobs:
       contents: write
 
     steps:
+      # Checkout is needed only to read versionName from the Gradle config for
+      # the published version.json.
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Download debug APK
         uses: actions/download-artifact@v4
         with:
           name: app-debug
+
+      - name: Generate version.json for in-app update check
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
+        run: |
+          APK_NAME="$(basename "$(ls *.apk | head -n1)")"
+          VERSION_NAME="$(grep -oE 'versionName = "[^"]+"' app/build.gradle.kts | head -n1 | sed -E 's/versionName = "([^"]+)"/\1/')"
+          VERSION_NAME="${VERSION_NAME:-unknown}"
+          cat > version.json <<EOF
+          {
+            "versionCode": ${BUILD_NUMBER},
+            "versionName": "${VERSION_NAME}",
+            "notes": "Rolling release — newest debug APK from main. Built from ${GITHUB_SHA::7} (run #${BUILD_NUMBER}).",
+            "apkUrl": "https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/${APK_NAME}"
+          }
+          EOF
+          echo "Generated version.json:" && cat version.json
 
       - name: Create or refresh the "latest" release
         env:
@@ -92,6 +116,6 @@ jobs:
             gh release create latest -R "$GITHUB_REPOSITORY" \
               --title "Latest field build" \
               --notes "Rolling release — newest debug APK from main."
-          gh release upload latest *.apk -R "$GITHUB_REPOSITORY" --clobber
+          gh release upload latest *.apk version.json -R "$GITHUB_REPOSITORY" --clobber
           gh release edit latest -R "$GITHUB_REPOSITORY" \
             --notes "Rolling release — newest debug APK from main. Built from ${GITHUB_SHA::7} (run #${{ github.run_number }})."

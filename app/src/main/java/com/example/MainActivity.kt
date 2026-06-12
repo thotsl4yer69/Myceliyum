@@ -18,16 +18,19 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.example.model.Species
+import com.example.ui.components.UpdatePrompt
 import com.example.ui.screens.*
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.viewmodel.FungiViewModel
+import com.example.update.UpdateViewModel
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        
+
         val fungiViewModel = ViewModelProvider(this, FungiViewModel.provideFactory(application))[FungiViewModel::class.java]
+        val updateViewModel = ViewModelProvider(this, UpdateViewModel.provideFactory(application))[UpdateViewModel::class.java]
 
         setContent {
             val appTheme by fungiViewModel.appTheme.collectAsState()
@@ -37,8 +40,18 @@ class MainActivity : ComponentActivity() {
                 "Dark" -> true
                 else -> systemDark // "System"
             }
+
+            // Quietly check for a newer build once per launch; only an actual
+            // update surfaces UI (see UpdatePrompt).
+            LaunchedEffect(Unit) {
+                updateViewModel.checkForUpdates(silent = true)
+            }
+
             MyApplicationTheme(darkTheme = useDark) {
-                MainWorkflowLayout(viewModel = fungiViewModel)
+                MainWorkflowLayout(
+                    viewModel = fungiViewModel,
+                    updateViewModel = updateViewModel
+                )
             }
         }
     }
@@ -55,12 +68,16 @@ sealed interface SelectedTab {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun MainWorkflowLayout(viewModel: FungiViewModel) {
+fun MainWorkflowLayout(
+    viewModel: FungiViewModel,
+    updateViewModel: UpdateViewModel
+) {
     // Nav Navigation tabs states
     var activeTab by remember { mutableStateOf<SelectedTab>(SelectedTab.Home) }
     var activeDetailSpecies by remember { mutableStateOf<Species?>(null) }
 
     val splashNoticeAccepted by viewModel.splashNoticeAccepted.collectAsState()
+    val updateState by updateViewModel.state.collectAsState()
 
     // 1. Mandatory Single-Launch Medical & Scientific Disclaimer Notice
     if (!splashNoticeAccepted) {
@@ -169,7 +186,8 @@ fun MainWorkflowLayout(viewModel: FungiViewModel) {
                         viewModel = viewModel
                     )
                     is SelectedTab.Settings -> SettingsScreen(
-                        viewModel = viewModel
+                        viewModel = viewModel,
+                        updateViewModel = updateViewModel
                     )
                 }
 
@@ -196,5 +214,9 @@ fun MainWorkflowLayout(viewModel: FungiViewModel) {
                 }
             }
         }
+
+        // Update prompts / progress (rendered in their own dialog window, so
+        // they float above whatever tab is active).
+        UpdatePrompt(viewModel = updateViewModel, state = updateState)
     }
 }

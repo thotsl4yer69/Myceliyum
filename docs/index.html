@@ -1,12 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- deploy-check-20260610-clean -->
-
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MyceliYUMS — Field Signal Terminal</title>
-<meta name="description" content="A field-research terminal for wild mycology. Searches every described fungus on Earth and fuses iNaturalist, ALA and GBIF records, Open-Meteo weather, Google place-search and Google Earth Engine satellite layers (land cover, tree-canopy %, NDVI) into a 12-signal grid model that scores where fungi are likely fruiting — anywhere on Earth.">
+<meta name="description" content="A field-research terminal for wild mycology. Fuses iNaturalist observations, Open-Meteo weather, Google place-search and Google Earth Engine satellite layers (land cover, tree-canopy %, NDVI) into a grid model that scores where fungi are likely fruiting — anywhere on Earth.">
 <meta name="theme-color" content="#0B0D0B">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://myceliyums.xyz/">
@@ -82,7 +80,7 @@
 </header>
 
 <!-- ============ HERO / FACEPLATE ============ -->
-<section class="hero" id="top" data-screen-label="Hero" data-comment-anchor="6abdc02a21-section">
+<section class="hero" id="top" data-screen-label="Hero">
   <div class="wrap">
     <div class="hero-grid">
       <div class="hero-copy">
@@ -92,7 +90,7 @@
           <span class="tag">SAT <b>EARTH ENGINE</b></span>
         </div>
         <h1>Read the forest<br>before it <span class="em">fruits.</span></h1>
-        <p class="hero-sub">MyceliYUMS fuses <b>live biodiversity and satellite data</b> — a curated field guide plus <b>every described fungus on Earth</b>, iNaturalist · ALA · GBIF records, Open-Meteo weather, Google place-search and <b>Earth Engine satellite layers</b> (land cover, tree-canopy %, NDVI) — into a grid model that scores <b>where fungi are likely fruiting</b>. Quality first: every signal that drives a flush, on every cell.</p>
+        <p class="hero-sub">MyceliYUMS fuses <b>five live data sources</b> — a curated species catalogue, iNaturalist observations, Open-Meteo weather, Google place-search and <b>Earth Engine satellite layers</b> (land cover, tree-canopy %, NDVI) — into a grid model that scores <b>where fungi are likely fruiting</b>. Quality first: every signal that drives a flush, on every cell.</p>
         <div class="hero-actions">
           <a class="btn btn-primary" href="#download">
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.6 9.5 19 7a.4.4 0 0 0-.7-.4L16.9 9a9.9 9.9 0 0 0-9.8 0L5.7 6.6A.4.4 0 0 0 5 7l1.4 2.5A8 8 0 0 0 2 16h20a8 8 0 0 0-4.4-6.5ZM7 13.8a1 1 0 1 1 0-2 1 1 0 0 1 0 2Zm10 0a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"/></svg>
@@ -248,7 +246,7 @@
           <div class="fic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5a2 2 0 0 1 2-2h8l6 6v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5Z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg></div>
         </div>
         <h3>Taxa catalogue</h3>
-        <p>A searchable, filterable species reference — habitat, season, substrate, spore print, bruising reaction, and dangerous look-alikes for each taxon. Search beyond the curated cards to <b>every described fungus on Earth</b> via the global taxonomy, photos pulled live.</p>
+        <p>A searchable, filterable species reference — habitat, season, substrate, spore print, bruising reaction, and dangerous look-alikes for each taxon.</p>
         <span class="tag">Habitat · Season · Spore print</span>
       </article>
       <article class="feat">
@@ -257,8 +255,8 @@
           <div class="fic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 17l5-5 4 4 8-9"/><path d="M16 7h5v5"/></svg></div>
         </div>
         <h3>Hotspot predictor</h3>
-        <p>A grid model scores fruiting likelihood across <b>twelve weighted signals</b> — satellite land cover, tree-canopy and NDVI fused with rainfall, soil, terrain and the species' seasonal window.</p>
-        <span class="tag">12 signals · Grid scoring</span>
+        <p>A grid model scores fruiting likelihood across <b>ten weighted signals</b> — satellite land cover, tree-canopy and NDVI fused with rainfall, soil, terrain and the species' seasonal window.</p>
+        <span class="tag">10 signals · Grid scoring</span>
       </article>
       <article class="feat">
         <div class="feat-top">
@@ -306,10 +304,10 @@
     <div class="block-head reveal">
       <span class="fig sig">SEC 02 / HOTSPOT SCOPE</span>
       <h2 class="section-h">A fruiting forecast,<br>scored grid by grid.</h2>
-      <p class="section-lead">The model sweeps a grid around your station and weights <b>twelve signals</b> that drive a flush — satellite land cover, canopy and NDVI alongside weather, soil, terrain and season — then paints the cells most worth walking.</p>
+      <p class="section-lead">The model sweeps a grid around your station and weights <b>ten signals</b> that drive a flush — satellite land cover, canopy and NDVI alongside weather, soil, terrain and season — then paints the cells most worth walking.</p>
     </div>
     <div class="hot-grid">
-      <div class="reveal" data-comment-anchor="8bbd2c23f7-div">
+      <div class="reveal">
         <div class="sig-head">
           <span class="mlabel" style="color:var(--amber)">WEIGHTED INPUTS · 10 CHANNELS</span>
           <span class="mlabel">MODEL&nbsp;WEIGHT&nbsp;%</span>
@@ -369,7 +367,7 @@
       </div>
 
       <div class="scope cuts">
-        <div class="scope-top" data-comment-anchor="6790f7e55d-div">
+        <div class="scope-top">
           <span class="t">SCOPE · <b>SAMPLE SWEEP</b></span>
           <span class="scan-status"><i></i>SWEEPING</span>
         </div>
@@ -397,7 +395,7 @@
     <div class="block-head reveal">
       <span class="fig">SEC 03 / SPECIMEN INDEX</span>
       <h2 class="section-h">The species file.</h2>
-      <p class="section-lead">Curated field-grade reference cards — the edible, the deadly, and every dangerous twin in between — plus live search across <b>every described fungus on Earth</b>. Each dossier carries field marks, spore print, season and a lookalike warning; tap any photo to expand it for side-by-side comparison in the field.</p>
+      <p class="section-lead">Twenty-eight field-grade reference cards — the edible, the deadly, and every dangerous twin in between. Each dossier carries field marks, spore print, season and a lookalike warning; tap any photo to expand it for side-by-side comparison in the field.</p>
     </div>
     <div class="filter-row reveal">
       <button class="chip active" data-filter="all">All taxa</button>
@@ -443,9 +441,9 @@
           <span class="stage-tag">SCORE</span>
         </div>
         <h4>Weight &amp; fuse</h4>
-        <p>The engine blends twelve weighted signals into a fruiting probability for every grid cell.</p>
+        <p>The engine blends ten weighted signals into a fruiting probability for every grid cell.</p>
         <ul class="stage-list">
-          <li><span>12 weighted signals</span><em>model</em></li>
+          <li><span>10 weighted signals</span><em>model</em></li>
           <li><span>Per-cell grid score</span><em>0–1</em></li>
           <li><span>Cloud + local cache</span><em>hybrid</em></li>
         </ul>
