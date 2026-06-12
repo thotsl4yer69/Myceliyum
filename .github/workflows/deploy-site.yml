@@ -1,14 +1,14 @@
 name: Deploy site (Cloudflare)
 
-# Reliable, repo-controlled deploy of docs/ to the existing "myceliyum"
-# Cloudflare Worker (static assets). This is a fallback for the Cloudflare
-# "Workers Builds" git integration, which has been reporting success without
-# actually updating production. It runs `wrangler deploy` with the same
-# wrangler.jsonc (assets.directory: docs).
+# Reliable, repo-controlled deploy of docs/ to the "myceliyum" Cloudflare
+# PAGES project — that is what actually serves myceliyums.xyz (verified
+# 2026-06-12: the custom domain is attached to the Pages project, NOT the
+# "myceliyum" Worker from wrangler.jsonc, which only serves *.workers.dev).
 #
 # To activate: add a repository secret CLOUDFLARE_API_TOKEN
 #   (Cloudflare dashboard → My Profile → API Tokens → Create Token →
-#    "Edit Cloudflare Workers" template). Account ID is already set below.
+#    custom token with the "Cloudflare Pages: Edit" permission on the
+#    account). Account ID is already set below.
 # Until the secret is present, the job is a clean no-op (green CI).
 
 on:
@@ -44,10 +44,10 @@ jobs:
         if: steps.gate.outputs.have_token == 'true'
         uses: actions/checkout@v4
 
-      - name: Deploy docs/ to Cloudflare Workers
+      - name: Deploy docs/ to Cloudflare Pages (serves myceliyums.xyz)
         if: steps.gate.outputs.have_token == 'true'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: c145d1f5c9cb016d5f208731555cb138
-          command: deploy
+          command: pages deploy docs --project-name myceliyum --branch main
