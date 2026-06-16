@@ -82,10 +82,7 @@ class FungiViewModel(
         selectedSporeFilter
     ) { list, query, habitat, season, spore ->
         list.filter { spec ->
-            val matchesQuery = query.isEmpty() ||
-                    spec.scientificName.contains(query, ignoreCase = true) ||
-                    spec.commonNames.any { it.contains(query, ignoreCase = true) } ||
-                    spec.genus.contains(query, ignoreCase = true)
+            val matchesQuery = com.example.util.SpeciesSearch.matchesName(spec, query)
 
             val matchesHabitat = habitat == null || spec.habitatTypes.any { it.equals(habitat, ignoreCase = true) }
 
