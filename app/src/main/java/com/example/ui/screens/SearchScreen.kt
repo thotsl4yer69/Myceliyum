@@ -281,8 +281,14 @@ fun SearchScreen(
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
                 .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
+            val catalogueLabel = if (filteredList.size == 1) "1 in catalogue" else "${filteredList.size} in catalogue"
+            val worldwideLabel = when {
+                isGlobalSearching -> " · searching worldwide…"
+                globalResults.isNotEmpty() -> " · ${globalResults.size} worldwide"
+                else -> ""
+            }
             Text(
-                text = if (filteredList.size == 1) "1 species" else "${filteredList.size} species",
+                text = catalogueLabel + worldwideLabel,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

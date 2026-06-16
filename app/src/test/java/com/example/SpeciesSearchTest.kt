@@ -103,4 +103,13 @@ class SpeciesSearchTest {
     fun `clearly unrelated query matches nothing`() {
         assertTrue(SpeciesSearch.rank(all, "boletus").isEmpty())
     }
+
+    @Test
+    fun `sortByRelevance orders best match first but keeps every entry`() {
+        // Worldwide results come pre-matched by GBIF, so we only re-order.
+        val input = listOf(flyAgaric, goldTop, goldenTeacher)
+        val sorted = SpeciesSearch.sortByRelevance(input, "golden teacher")
+        assertEquals(goldenTeacher, sorted.first())
+        assertEquals(input.size, sorted.size) // nothing dropped
+    }
 }

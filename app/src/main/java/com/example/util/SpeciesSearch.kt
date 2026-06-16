@@ -94,10 +94,15 @@ object SpeciesSearch {
     fun relevance(species: Species, rawQuery: String): Int {
         val qTokens = tokens(rawQuery)
         if (qTokens.isEmpty()) return 1
+        val total = rawScore(species, qTokens)
+        return if (total >= MIN_SCORE) total else 0
+    }
+
+    /** Unthresholded relevance sum — used for ordering without dropping. */
+    private fun rawScore(species: Species, qTokens: List<String>): Int {
         val hay = haystack(species)
         val hayTokens = hay.split(' ').filter { it.isNotEmpty() }
-        val total = qTokens.sumOf { tokenScore(hay, hayTokens, it) }
-        return if (total >= MIN_SCORE) total else 0
+        return qTokens.sumOf { tokenScore(hay, hayTokens, it) }
     }
 
     /** Convenience boolean: is this species a search candidate at all? */
@@ -110,15 +115,31 @@ object SpeciesSearch {
      * An empty query returns the list unchanged (original catalogue order).
      */
     fun rank(species: List<Species>, rawQuery: String): List<Species> {
-        if (tokens(rawQuery).isEmpty()) return species
+        val qTokens = tokens(rawQuery)
+        if (qTokens.isEmpty()) return species
         return species.asSequence()
-            .map { it to relevance(it, rawQuery) }
-            .filter { it.second > 0 }
+            .map { it to rawScore(it, qTokens) }
+            .filter { it.second >= MIN_SCORE }
             .sortedWith(
                 compareByDescending<Pair<Species, Int>> { it.second }
                     .thenBy { it.first.scientificName }
             )
             .map { it.first }
             .toList()
+    }
+
+    /**
+     * Order [species] by relevance to [rawQuery] without dropping any. Used for
+     * worldwide results, which GBIF has already matched server-side — we only
+     * re-rank them (closest names first) rather than re-filter and risk hiding
+     * a legitimate hit that matched on a field we don't carry locally.
+     */
+    fun sortByRelevance(species: List<Species>, rawQuery: String): List<Species> {
+        val qTokens = tokens(rawQuery)
+        if (qTokens.isEmpty()) return species
+        return species.sortedWith(
+            compareByDescending<Species> { rawScore(it, qTokens) }
+                .thenBy { it.scientificName }
+        )
     }
 }

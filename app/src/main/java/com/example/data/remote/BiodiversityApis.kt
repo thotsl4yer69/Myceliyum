@@ -94,14 +94,19 @@ interface GBIFApi {
      * described fungus on Earth (~150k species). `highertaxonKey=5` constrains
      * to kingdom Fungi. This turns the catalogue into a searchable front-end
      * over the entire global fungal taxonomy, not just the bundled field guide.
+     *
+     * Deliberately loose: [rank] and [status] are nullable and omitted by
+     * default, so synonyms, genus-level hits and infraspecific names all
+     * surface (a search for a well-known synonym or a bare genus shouldn't come
+     * back empty). Callers re-rank the results client-side by relevance.
      */
     @GET("species/search")
     suspend fun searchSpecies(
         @Query("q") query: String,
         @Query("highertaxonKey") fungiKingdomKey: Int = 5,
-        @Query("rank") rank: String = "SPECIES",
-        @Query("status") status: String = "ACCEPTED",
-        @Query("limit") limit: Int = 40
+        @Query("rank") rank: String? = null,
+        @Query("status") status: String? = null,
+        @Query("limit") limit: Int = 60
     ): GBIFSpeciesResponse
 }
 

@@ -18,6 +18,7 @@ import com.example.model.Observation
 import com.example.model.Species
 import com.example.model.UserSighting
 import com.example.util.MycoMath
+import com.example.util.SpeciesSearch
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
@@ -294,6 +295,9 @@ class FungiRepository(
                     imageUrls = emptyList()
                 )
             }.distinctBy { it.scientificName.lowercase() }
+                // GBIF matched these server-side (now including synonyms/genera);
+                // re-rank by our own relevance so the closest names lead.
+                .let { SpeciesSearch.sortByRelevance(it, q) }
         } catch (e: Exception) {
             Log.w(TAG, "global fungi search failed for '$q': ${e.message}")
             emptyList()
