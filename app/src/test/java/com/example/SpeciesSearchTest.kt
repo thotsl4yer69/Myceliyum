@@ -2,14 +2,18 @@ package com.example
 
 import com.example.model.Species
 import com.example.util.SpeciesSearch
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Catalogue search matching. The motivating bug: searching "golden tops" (the
- * common Australian name for Psilocybe subaeruginosa) returned nothing because
- * the entry was filed under "Gold-top" and matching was raw substring only.
+ * Catalogue search matching/ranking. Motivating bug: searching "golden tops"
+ * (the common Australian name for Psilocybe subaeruginosa) returned nothing
+ * because the entry was filed under "Gold-top" and matching was raw substring.
+ *
+ * The matcher is now lenient on purpose — it should rank close/fuzzy matches as
+ * suggestions rather than show an empty screen.
  */
 class SpeciesSearchTest {
 
@@ -42,6 +46,13 @@ class SpeciesSearchTest {
         "Psilocybe",
         listOf("Gold Top", "Golden Top", "Gold Tops", "Golden Tops", "Subs", "Sub", "Gold-top")
     )
+    private val goldenTeacher = species(
+        "Psilocybe cubensis",
+        "Psilocybe",
+        listOf("Golden Teacher", "Gold Top", "Gold Tops", "Golden Cap", "Cubes", "Cube")
+    )
+    private val flyAgaric = species("Amanita muscaria", "Amanita", listOf("Fly Agaric"))
+    private val all = listOf(goldTop, goldenTeacher, flyAgaric)
 
     @Test
     fun `golden tops finds the gold top`() {
@@ -67,16 +78,29 @@ class SpeciesSearchTest {
     }
 
     @Test
-    fun `empty query matches everything`() {
-        assertTrue(SpeciesSearch.matchesName(goldTop, ""))
-        assertTrue(SpeciesSearch.matchesName(goldTop, "   "))
+    fun `golden teacher ranks cubensis first but still suggests the gold top`() {
+        val ranked = SpeciesSearch.rank(all, "golden teacher")
+        assertEquals(goldenTeacher, ranked.first())
+        // The gold top shares "golden", so it's offered as a lower suggestion…
+        assertTrue(goldTop in ranked)
+        // …and the unrelated fly agaric is not.
+        assertFalse(flyAgaric in ranked)
     }
 
     @Test
-    fun `unrelated multi-word query does not match`() {
-        // "golden teacher" is a cultivated Psilocybe cubensis strain, not this
-        // species — it must not spuriously resolve to the gold top.
-        assertFalse(SpeciesSearch.matchesName(goldTop, "golden teacher"))
-        assertFalse(SpeciesSearch.matchesName(goldTop, "fly agaric"))
+    fun `typos still surface a suggestion`() {
+        assertTrue(SpeciesSearch.matchesName(flyAgaric, "amanta"))    // missing 'i'
+        assertTrue(SpeciesSearch.matchesName(goldTop, "psilocibe"))   // 'y' -> 'i'
+    }
+
+    @Test
+    fun `empty query returns the list unchanged`() {
+        assertTrue(SpeciesSearch.matchesName(goldTop, "   "))
+        assertEquals(all, SpeciesSearch.rank(all, ""))
+    }
+
+    @Test
+    fun `clearly unrelated query matches nothing`() {
+        assertTrue(SpeciesSearch.rank(all, "boletus").isEmpty())
     }
 }

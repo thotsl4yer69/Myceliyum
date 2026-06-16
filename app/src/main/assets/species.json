@@ -70,6 +70,42 @@
     "imageUrls": []
   },
   {
+    "id": "psilocybe_cubensis",
+    "scientificName": "Psilocybe cubensis",
+    "commonNames": [
+      "Golden Teacher",
+      "Gold Top",
+      "Gold Tops",
+      "Golden Cap",
+      "Cubes",
+      "Cube"
+    ],
+    "genus": "Psilocybe",
+    "family": "Hymenogastraceae",
+    "habitatTypes": [
+      "Pasture / Grazing Land",
+      "Subtropical Grassland"
+    ],
+    "substrates": [
+      "Cattle and buffalo dung",
+      "Enriched pasture soil"
+    ],
+    "seasonStart": 12,
+    "seasonEnd": 5,
+    "capDescription": "3-8 cm wide, broadly conical to convex then flattening with a low umbo, reddish-cinnamon to golden-brown fading to pale yellow toward the margin. Bruises blue-green where damaged.",
+    "gillDescription": "Adnate to adnexed, crowded, pale grey turning dark purplish-brown to almost black as spores mature; edges whitish.",
+    "stemDescription": "4-15 cm long, white (often yellowing or blue-staining with age), with a persistent membranous ring that becomes dusted dark with falling spores.",
+    "sporeColor": "Dark purplish-brown",
+    "bruisingReaction": "Bruises blue-green where handled or damaged.",
+    "lookAlikes": [
+      "Psilocybe subaeruginosa (cooler southern climate, wood/mulch not dung, no persistent ring)",
+      "Protostropharia / Stropharia spp. (dung-loving but no blue bruising)",
+      "Panaeolus / Galerina spp. on dung (Galerina is DEADLY; no blue bruising)"
+    ],
+    "notes": "Pantropical dung-loving psilocybin species. In Australia it is mainly a SUBTROPICAL species of Queensland and northern NSW cattle pasture in the summer wet season, not the cool southern states. 'Golden Teacher' is a widely cultivated strain of this species. Potently psychoactive (contains psilocybin).",
+    "imageUrls": []
+  },
+  {
     "id": "omphalotus_nidiformis",
     "scientificName": "Omphalotus nidiformis",
     "commonNames": [
