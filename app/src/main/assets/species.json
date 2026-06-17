@@ -1203,7 +1203,9 @@
     "scientificName": "Galerina marginata",
     "commonNames": [
       "Funeral Bell",
-      "Deadly Galerina"
+      "Deadly Galerina",
+      "Autumn Skullcap",
+      "Deadly Skullcap"
     ],
     "genus": "Galerina",
     "family": "Hymenogastraceae",
@@ -2065,6 +2067,72 @@
       "Other Stropharia / Hypholoma"
     ],
     "notes": "The ubiquitous bright orange-red mushroom of garden wood-chip beds. Regarded as inedible/suspect.",
+    "imageUrls": []
+  },
+  {
+    "id": "panaeolus_cyanescens",
+    "scientificName": "Panaeolus cyanescens",
+    "commonNames": [
+      "Blue Meanies",
+      "Blue Meanie",
+      "Copelandia"
+    ],
+    "genus": "Panaeolus",
+    "family": "Bolbitiaceae",
+    "habitatTypes": [
+      "Pasture / Grazing Land",
+      "Subtropical Grassland"
+    ],
+    "substrates": [
+      "Cattle and buffalo dung",
+      "Dung-enriched pasture"
+    ],
+    "seasonStart": 11,
+    "seasonEnd": 4,
+    "capDescription": "1.5-4 cm, hemispherical to broadly convex, light grey to tan, often cracking in dry weather; bruises blue where damaged.",
+    "gillDescription": "Adnate, mottled grey turning black as spores ripen; edges whitish.",
+    "stemDescription": "7-12 cm, slender, greyish to flesh-pink, bruising blue-green toward the base; no ring.",
+    "sporeColor": "Black",
+    "bruisingReaction": "Bruises blue where handled or damaged.",
+    "lookAlikes": [
+      "Panaeolus / Panaeolina spp. on dung (no blue bruising)",
+      "Protostropharia semiglobata (ringed, no blue bruising)"
+    ],
+    "notes": "Pantropical dung species; in Australia mainly subtropical Queensland and northern NSW. In Australia 'Blue Meanies' usually refers to this strongly blue-bruising Panaeolus — though the name is also used loosely for a blue-bruising Psilocybe cubensis, so it is ambiguous. Contains psilocybin — potently psychoactive.",
+    "imageUrls": []
+  },
+  {
+    "id": "psilocybe_cyanescens",
+    "scientificName": "Psilocybe cyanescens",
+    "commonNames": [
+      "Wavy Cap",
+      "Wavy Caps",
+      "Wavies",
+      "Cyans"
+    ],
+    "genus": "Psilocybe",
+    "family": "Hymenogastraceae",
+    "habitatTypes": [
+      "Urban Woodchips",
+      "Urban Parks & Gardens",
+      "Disturbed Paths"
+    ],
+    "substrates": [
+      "Wood chips and bark mulch",
+      "Lignin-rich mulched beds"
+    ],
+    "seasonStart": 4,
+    "seasonEnd": 8,
+    "capDescription": "2-5 cm, chestnut to caramel-brown, strongly hygrophanous, with a distinctly wavy (undulating) margin when mature; drying pale buff.",
+    "gillDescription": "Adnate to sinuate, cinnamon-brown maturing dark purplish-brown; edges paler.",
+    "stemDescription": "3-8 cm, white, fibrous, slightly enlarged at the base, bruising blue-green.",
+    "sporeColor": "Dark purplish-brown",
+    "bruisingReaction": "Bruises blue-green where handled or damaged.",
+    "lookAlikes": [
+      "Psilocybe subaeruginosa (more slender, less wavy margin)",
+      "Galerina marginata (DEADLY — rust-brown spores, no blue bruising)"
+    ],
+    "notes": "An introduced temperate wood-chip Psilocybe established in cooler southern Australia (mulched garden beds, parks). 'Wavy caps' refers to the undulating mature cap margin. Contains psilocybin — potently psychoactive. Easily confused with the DEADLY Galerina marginata, which does NOT bruise blue.",
     "imageUrls": []
   }
 ]
