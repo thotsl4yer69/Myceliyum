@@ -60,6 +60,14 @@ fun SearchScreen(
     }
     val months = (1..12).toList()
 
+    // Common nicknames people reach for first — tapping one runs the search.
+    val popularSearches = remember {
+        listOf(
+            "Gold tops", "Blue meanies", "Wavy caps", "Liberty cap",
+            "Fly agaric", "Death cap", "Saffron milk cap"
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -111,6 +119,33 @@ fun SearchScreen(
                             imageVector = Icons.Outlined.FilterAlt,
                             contentDescription = "Toggle filters check sheet"
                         )
+                    }
+                }
+
+                // Popular-search shortcuts — a discoverability nudge shown only
+                // when the box is empty, so people can find common species by
+                // the nicknames they actually use without typing.
+                if (searchQuery.isEmpty()) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = "Popular searches",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 6.dp)
+                    ) {
+                        popularSearches.forEach { term ->
+                            SuggestionChip(
+                                onClick = { viewModel.searchQuery.value = term },
+                                label = { Text(term, fontSize = 12.sp) }
+                            )
+                        }
                     }
                 }
 

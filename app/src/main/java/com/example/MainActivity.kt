@@ -206,6 +206,9 @@ fun MainWorkflowLayout(
                                 activeTab = SelectedTab.Map
                                 activeDetailSpecies = null
                             },
+                            onOpenSpecies = { related ->
+                                activeDetailSpecies = related
+                            },
                             onBack = {
                                 activeDetailSpecies = null
                             }

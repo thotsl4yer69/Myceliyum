@@ -138,7 +138,10 @@
     "id": "gymnopilus_junonius",
     "scientificName": "Gymnopilus junonius",
     "commonNames": [
-      "Spectacular Rustgill"
+      "Spectacular Rustgill",
+      "Laughing Gym",
+      "Big Laughing Gym",
+      "Laughing Jim"
     ],
     "genus": "Gymnopilus",
     "family": "Hymenogastraceae",
@@ -507,7 +510,9 @@
     "scientificName": "Lactarius deliciosus",
     "commonNames": [
       "Saffron Milkcap",
-      "Pine Milkcap"
+      "Saffron Milk Cap",
+      "Pine Milkcap",
+      "Pine Mushroom"
     ],
     "genus": "Lactarius",
     "family": "Russulaceae",
@@ -2133,6 +2138,37 @@
       "Galerina marginata (DEADLY — rust-brown spores, no blue bruising)"
     ],
     "notes": "An introduced temperate wood-chip Psilocybe established in cooler southern Australia (mulched garden beds, parks). 'Wavy caps' refers to the undulating mature cap margin. Contains psilocybin — potently psychoactive. Easily confused with the DEADLY Galerina marginata, which does NOT bruise blue.",
+    "imageUrls": []
+  },
+  {
+    "id": "psilocybe_semilanceata",
+    "scientificName": "Psilocybe semilanceata",
+    "commonNames": [
+      "Liberty Cap",
+      "Liberty Caps",
+      "Witch's Hat"
+    ],
+    "genus": "Psilocybe",
+    "family": "Hymenogastraceae",
+    "habitatTypes": [
+      "Pasture / Grazing Land",
+      "Native Grassland"
+    ],
+    "substrates": [
+      "Grassland soil among grasses (not dung, not wood)"
+    ],
+    "seasonStart": 4,
+    "seasonEnd": 6,
+    "capDescription": "0.5-2.5 cm, distinctly conical to bell-shaped with a sharp pointed nipple (papilla), pale buff to olive-brown, hygrophanous, the margin striate when moist.",
+    "gillDescription": "Adnexed to almost free, pale greyish maturing to dark purple-brown; edges paler.",
+    "stemDescription": "4-10 cm, very slender, wavy, pale and tough; no ring.",
+    "sporeColor": "Dark purplish-brown",
+    "bruisingReaction": "Bruises blue erratically, often weakly, mostly toward the stem base.",
+    "lookAlikes": [
+      "Panaeolina / Panaeolus spp. (mottled gills, no sharp papilla)",
+      "Galerina marginata (DEADLY — rust-brown spores, no blue bruising)"
+    ],
+    "notes": "The classic Northern-Hemisphere grassland 'liberty cap', recognised by its sharply pointed conical cap and grassland (not wood-chip or dung) habit. Its occurrence in Australia is doubtful/rare and many local reports are misidentifications — included for reference and look-alike awareness. Contains psilocybin.",
     "imageUrls": []
   }
 ]
