@@ -81,20 +81,17 @@ class FungiViewModel(
         selectedSeasonFilter,
         selectedSporeFilter
     ) { list, query, habitat, season, spore ->
-        list.filter { spec ->
-            val matchesQuery = query.isEmpty() ||
-                    spec.scientificName.contains(query, ignoreCase = true) ||
-                    spec.commonNames.any { it.contains(query, ignoreCase = true) } ||
-                    spec.genus.contains(query, ignoreCase = true)
-
+        // Apply the attribute filters first, then rank what survives by how well
+        // its name matches the query (best suggestions first). Ranking is lenient
+        // on purpose — a close or fuzzy match still surfaces rather than showing
+        // an empty screen.
+        val byAttributes = list.filter { spec ->
             val matchesHabitat = habitat == null || spec.habitatTypes.any { it.equals(habitat, ignoreCase = true) }
-
             val matchesSeason = season == null || isMonthInSeason(season, spec.seasonStart, spec.seasonEnd)
-
             val matchesSpore = spore == null || spec.sporeColor.equals(spore, ignoreCase = true)
-
-            matchesQuery && matchesHabitat && matchesSeason && matchesSpore
+            matchesHabitat && matchesSeason && matchesSpore
         }
+        com.example.util.SpeciesSearch.rank(byAttributes, query)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Whether a global (worldwide) taxonomy search is in flight.

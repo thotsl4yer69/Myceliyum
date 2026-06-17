@@ -38,10 +38,14 @@ fun DetailScreen(
     species: Species,
     viewModel: FungiViewModel,
     onNavigateToMap: () -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onOpenSpecies: (Species) -> Unit = {}
 ) {
     val context = LocalContext.current
     val currentMonth = remember { Calendar.getInstance().get(Calendar.MONTH) + 1 }
+    // Catalogue, so a look-alike that we actually have an entry for becomes a
+    // tappable cross-link — handy for jumping straight to a deadly mimic.
+    val catalogue by viewModel.speciesList.collectAsState()
 
     // Pull a gallery of reference photos (with CC attribution) for this species
     // from iNaturalist and merge with any bundled images, so every species
@@ -457,6 +461,9 @@ fun DetailScreen(
                 )
 
                 species.lookAlikes.forEach { lookAlike ->
+                    val linked = remember(lookAlike, catalogue) {
+                        resolveLookAlike(lookAlike, catalogue, species.id)
+                    }
                     Surface(
                         shape = RoundedCornerShape(12.dp),
                         color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.15f),
@@ -464,6 +471,10 @@ fun DetailScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 10.dp)
+                            .then(
+                                if (linked != null) Modifier.clickable { onOpenSpecies(linked) }
+                                else Modifier
+                            )
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -480,6 +491,23 @@ fun DetailScreen(
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onErrorContainer
                                 )
+                                if (linked != null) {
+                                    Spacer(modifier = Modifier.weight(1f))
+                                    Text(
+                                        text = "View",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowForwardIos,
+                                        contentDescription = "Open ${linked.scientificName}",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier
+                                            .padding(start = 4.dp)
+                                            .size(12.dp)
+                                    )
+                                }
                             }
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
@@ -572,6 +600,26 @@ fun ShimmerPlaceholder(modifier: Modifier = Modifier) {
     )
 
     Box(modifier = modifier.background(brush))
+}
+
+/**
+ * Resolves a free-text look-alike line (e.g. "Galerina marginata (DEADLY…)")
+ * to a catalogue species when we actually carry one, so the card can deep-link
+ * to it. Matches on the scientific name appearing in the text and prefers the
+ * most specific (longest) name to avoid a bare-genus false positive. Returns
+ * null for look-alikes we don't have an entry for (shown as plain text).
+ */
+private fun resolveLookAlike(text: String, catalogue: List<Species>, selfId: String): Species? {
+    val haystack = text.lowercase()
+    return catalogue
+        .asSequence()
+        .filter { it.id != selfId }
+        .filter { sp ->
+            val sci = sp.scientificName.lowercase()
+            // Ignore vague placeholder names like "Ramaria sp." / "Laccaria sp."
+            sci.isNotBlank() && !sci.endsWith(" sp.") && haystack.contains(sci)
+        }
+        .maxByOrNull { it.scientificName.length }
 }
 
 private fun isMonthInSeason(month: Int, start: Int, end: Int): Boolean {

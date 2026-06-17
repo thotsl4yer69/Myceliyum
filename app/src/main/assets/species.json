@@ -33,6 +33,11 @@
     "id": "psilocybe_subaeruginosa",
     "scientificName": "Psilocybe subaeruginosa",
     "commonNames": [
+      "Gold Top",
+      "Golden Top",
+      "Gold Tops",
+      "Golden Tops",
+      "Subs",
       "Sub",
       "Gold-top"
     ],
@@ -62,6 +67,42 @@
       "Hypholoma fasciculare (Sulfur tuft, bright yellow-green gills, bitter taste, no blue bruising)"
     ],
     "notes": "Native to SE Australia. Potently psychoactive (contains psilocybin). Can grow in abundance in municipal mulch gardens in Melbourne and Victoria hills.",
+    "imageUrls": []
+  },
+  {
+    "id": "psilocybe_cubensis",
+    "scientificName": "Psilocybe cubensis",
+    "commonNames": [
+      "Golden Teacher",
+      "Gold Top",
+      "Gold Tops",
+      "Golden Cap",
+      "Cubes",
+      "Cube"
+    ],
+    "genus": "Psilocybe",
+    "family": "Hymenogastraceae",
+    "habitatTypes": [
+      "Pasture / Grazing Land",
+      "Subtropical Grassland"
+    ],
+    "substrates": [
+      "Cattle and buffalo dung",
+      "Enriched pasture soil"
+    ],
+    "seasonStart": 12,
+    "seasonEnd": 5,
+    "capDescription": "3-8 cm wide, broadly conical to convex then flattening with a low umbo, reddish-cinnamon to golden-brown fading to pale yellow toward the margin. Bruises blue-green where damaged.",
+    "gillDescription": "Adnate to adnexed, crowded, pale grey turning dark purplish-brown to almost black as spores mature; edges whitish.",
+    "stemDescription": "4-15 cm long, white (often yellowing or blue-staining with age), with a persistent membranous ring that becomes dusted dark with falling spores.",
+    "sporeColor": "Dark purplish-brown",
+    "bruisingReaction": "Bruises blue-green where handled or damaged.",
+    "lookAlikes": [
+      "Psilocybe subaeruginosa (cooler southern climate, wood/mulch not dung, no persistent ring)",
+      "Protostropharia / Stropharia spp. (dung-loving but no blue bruising)",
+      "Panaeolus / Galerina spp. on dung (Galerina is DEADLY; no blue bruising)"
+    ],
+    "notes": "Pantropical dung-loving psilocybin species. In Australia it is mainly a SUBTROPICAL species of Queensland and northern NSW cattle pasture in the summer wet season, not the cool southern states. 'Golden Teacher' is a widely cultivated strain of this species. Potently psychoactive (contains psilocybin).",
     "imageUrls": []
   },
   {
@@ -97,7 +138,10 @@
     "id": "gymnopilus_junonius",
     "scientificName": "Gymnopilus junonius",
     "commonNames": [
-      "Spectacular Rustgill"
+      "Spectacular Rustgill",
+      "Laughing Gym",
+      "Big Laughing Gym",
+      "Laughing Jim"
     ],
     "genus": "Gymnopilus",
     "family": "Hymenogastraceae",
@@ -466,7 +510,9 @@
     "scientificName": "Lactarius deliciosus",
     "commonNames": [
       "Saffron Milkcap",
-      "Pine Milkcap"
+      "Saffron Milk Cap",
+      "Pine Milkcap",
+      "Pine Mushroom"
     ],
     "genus": "Lactarius",
     "family": "Russulaceae",
@@ -1162,7 +1208,9 @@
     "scientificName": "Galerina marginata",
     "commonNames": [
       "Funeral Bell",
-      "Deadly Galerina"
+      "Deadly Galerina",
+      "Autumn Skullcap",
+      "Deadly Skullcap"
     ],
     "genus": "Galerina",
     "family": "Hymenogastraceae",
@@ -2024,6 +2072,103 @@
       "Other Stropharia / Hypholoma"
     ],
     "notes": "The ubiquitous bright orange-red mushroom of garden wood-chip beds. Regarded as inedible/suspect.",
+    "imageUrls": []
+  },
+  {
+    "id": "panaeolus_cyanescens",
+    "scientificName": "Panaeolus cyanescens",
+    "commonNames": [
+      "Blue Meanies",
+      "Blue Meanie",
+      "Copelandia"
+    ],
+    "genus": "Panaeolus",
+    "family": "Bolbitiaceae",
+    "habitatTypes": [
+      "Pasture / Grazing Land",
+      "Subtropical Grassland"
+    ],
+    "substrates": [
+      "Cattle and buffalo dung",
+      "Dung-enriched pasture"
+    ],
+    "seasonStart": 11,
+    "seasonEnd": 4,
+    "capDescription": "1.5-4 cm, hemispherical to broadly convex, light grey to tan, often cracking in dry weather; bruises blue where damaged.",
+    "gillDescription": "Adnate, mottled grey turning black as spores ripen; edges whitish.",
+    "stemDescription": "7-12 cm, slender, greyish to flesh-pink, bruising blue-green toward the base; no ring.",
+    "sporeColor": "Black",
+    "bruisingReaction": "Bruises blue where handled or damaged.",
+    "lookAlikes": [
+      "Panaeolus / Panaeolina spp. on dung (no blue bruising)",
+      "Protostropharia semiglobata (ringed, no blue bruising)"
+    ],
+    "notes": "Pantropical dung species; in Australia mainly subtropical Queensland and northern NSW. In Australia 'Blue Meanies' usually refers to this strongly blue-bruising Panaeolus — though the name is also used loosely for a blue-bruising Psilocybe cubensis, so it is ambiguous. Contains psilocybin — potently psychoactive.",
+    "imageUrls": []
+  },
+  {
+    "id": "psilocybe_cyanescens",
+    "scientificName": "Psilocybe cyanescens",
+    "commonNames": [
+      "Wavy Cap",
+      "Wavy Caps",
+      "Wavies",
+      "Cyans"
+    ],
+    "genus": "Psilocybe",
+    "family": "Hymenogastraceae",
+    "habitatTypes": [
+      "Urban Woodchips",
+      "Urban Parks & Gardens",
+      "Disturbed Paths"
+    ],
+    "substrates": [
+      "Wood chips and bark mulch",
+      "Lignin-rich mulched beds"
+    ],
+    "seasonStart": 4,
+    "seasonEnd": 8,
+    "capDescription": "2-5 cm, chestnut to caramel-brown, strongly hygrophanous, with a distinctly wavy (undulating) margin when mature; drying pale buff.",
+    "gillDescription": "Adnate to sinuate, cinnamon-brown maturing dark purplish-brown; edges paler.",
+    "stemDescription": "3-8 cm, white, fibrous, slightly enlarged at the base, bruising blue-green.",
+    "sporeColor": "Dark purplish-brown",
+    "bruisingReaction": "Bruises blue-green where handled or damaged.",
+    "lookAlikes": [
+      "Psilocybe subaeruginosa (more slender, less wavy margin)",
+      "Galerina marginata (DEADLY — rust-brown spores, no blue bruising)"
+    ],
+    "notes": "An introduced temperate wood-chip Psilocybe established in cooler southern Australia (mulched garden beds, parks). 'Wavy caps' refers to the undulating mature cap margin. Contains psilocybin — potently psychoactive. Easily confused with the DEADLY Galerina marginata, which does NOT bruise blue.",
+    "imageUrls": []
+  },
+  {
+    "id": "psilocybe_semilanceata",
+    "scientificName": "Psilocybe semilanceata",
+    "commonNames": [
+      "Liberty Cap",
+      "Liberty Caps",
+      "Witch's Hat"
+    ],
+    "genus": "Psilocybe",
+    "family": "Hymenogastraceae",
+    "habitatTypes": [
+      "Pasture / Grazing Land",
+      "Native Grassland"
+    ],
+    "substrates": [
+      "Grassland soil among grasses (not dung, not wood)"
+    ],
+    "seasonStart": 4,
+    "seasonEnd": 6,
+    "capDescription": "0.5-2.5 cm, distinctly conical to bell-shaped with a sharp pointed nipple (papilla), pale buff to olive-brown, hygrophanous, the margin striate when moist.",
+    "gillDescription": "Adnexed to almost free, pale greyish maturing to dark purple-brown; edges paler.",
+    "stemDescription": "4-10 cm, very slender, wavy, pale and tough; no ring.",
+    "sporeColor": "Dark purplish-brown",
+    "bruisingReaction": "Bruises blue erratically, often weakly, mostly toward the stem base.",
+    "lookAlikes": [
+      "Panaeolina / Panaeolus spp. (mottled gills, no sharp papilla)",
+      "Galerina marginata (DEADLY — rust-brown spores, no blue bruising)"
+    ],
+    "notes": "The classic Northern-Hemisphere grassland 'liberty cap', recognised by its sharply pointed conical cap and grassland (not wood-chip or dung) habit. Its occurrence in Australia is doubtful/rare and many local reports are misidentifications — included for reference and look-alike awareness. Contains psilocybin.",
     "imageUrls": []
   }
 ]
