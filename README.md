@@ -45,8 +45,14 @@ Overpass are public and keyless. Optional keys in `local.properties`
 
 ### Signing
 
-- **Debug:** uses Android's standard auto-generated debug keystore
-  (`~/.android/debug.keystore`). Nothing needs to be checked in.
+- **Debug:** signs with the **stable, committed** debug keystore
+  (`debug.keystore.base64`, decoded to `debug.keystore` at build time by CI and
+  `build.ps1`). Every rolling debug APK therefore shares one signing identity, so
+  in-app updates install cleanly over each other. Without this, each CI runner's
+  auto-generated `~/.android/debug.keystore` would sign every build with a
+  different key and Android would reject the update with a signature conflict
+  (*"couldn't be installed due to a conflict"*). If `debug.keystore` is absent,
+  the build falls back to the auto-generated key (fine for local-only installs).
 - **Release:** provide a keystore and set the `KEYSTORE_PATH`, `STORE_PASSWORD`,
   and `KEY_PASSWORD` environment variables. Release signing is skipped
   automatically when those variables aren't set, so debug builds always work.

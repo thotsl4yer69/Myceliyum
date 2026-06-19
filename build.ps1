@@ -47,6 +47,19 @@ if ($Clean) {
   Ok "Caches cleared"
 }
 
+# 3b. Restore the stable debug keystore so locally-built APKs are signed with
+# the same key as the published rolling builds — lets you update between them
+# without "couldn't be installed due to a conflict". (debug.keystore is
+# git-ignored; debug.keystore.base64 is the committed source of truth.)
+if ((Test-Path .\debug.keystore.base64) -and (-not (Test-Path .\debug.keystore))) {
+  Step "Restoring debug keystore"
+  [IO.File]::WriteAllBytes(
+    "$projectDir\debug.keystore",
+    [Convert]::FromBase64String((Get-Content .\debug.keystore.base64 -Raw))
+  )
+  Ok "debug.keystore restored from debug.keystore.base64"
+}
+
 # 4. Build the debug APK.
 Step "Building debug APK"
 & .\gradlew.bat --warning-mode=summary :app:assembleDebug 2>&1 | Tee-Object -FilePath build.log

@@ -62,11 +62,25 @@ Google AI Studio export to a buildable, cleaned-up project on stable tooling.
     you build from a terminal first, run once:
     `gradle wrapper --gradle-version 8.11.1` (needs a system Gradle), or just
     open the project in Android Studio.
-- **Fixed the missing debug keystore blocker.** The old `debug` build type
-  referenced `${rootDir}/debug.keystore`, which is `.gitignore`d and absent
-  (only `debug.keystore.base64` was shipped). The `debugConfig` signing config
-  was removed; the debug build now uses Android's standard auto-generated
-  keystore (`~/.android/debug.keystore`). No checked-in keystore is needed.
+- **Stable debug signing (fixes in-app update conflicts).** The `debug` build
+  type signs with the **committed** debug keystore: `debug.keystore.base64` is
+  decoded to `${rootDir}/debug.keystore` at build time (CI workflows and
+  `build.ps1` do this) and used as the debug `signingConfig`. This guarantees
+  every rolling debug APK shares one signing identity so the in-app update check
+  can install a new build over the old one.
+  - *Why this matters:* an earlier pass had switched debug to Android's
+    auto-generated `~/.android/debug.keystore` "so no checked-in keystore is
+    needed." But that key is unique per machine, so each CI runner signed every
+    published APK with a different key. Installing a newer rolling build over an
+    older one then failed with `INSTALL_FAILED_UPDATE_INCOMPATIBLE` — shown to
+    users as *"the update couldn't be installed due to a conflict."* Re-pinning
+    debug signing to the committed keystore resolves it. If `debug.keystore` is
+    absent the build still falls back to the auto-generated key, so local-only
+    builds never fail on a missing keystore.
+  - *One-time step for already-installed copies:* a device that installed a
+    pre-fix build carries the old random key, so the **first** post-fix update
+    still conflicts. Uninstall once and install the latest APK fresh; every
+    update after that installs cleanly.
 - **Release signing** now only activates when `STORE_PASSWORD` is set, so debug
   builds never fail on a missing release keystore.
 
