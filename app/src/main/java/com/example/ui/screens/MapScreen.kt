@@ -50,10 +50,16 @@ import java.util.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
+import android.os.Handler
+import android.os.Looper
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.ceil
 import org.osmdroid.config.Configuration
+import org.osmdroid.events.MapListener
+import org.osmdroid.events.ScrollEvent
+import org.osmdroid.events.ZoomEvent
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Polygon
@@ -203,13 +209,34 @@ fun MapScreen(
                         // iNaturalist, rendered as labelled pins independent of
                         // the selected species / mode.
                         allFungiPins = if (showAllSightings) allFungiPins else emptyList(),
+                        selectedSpeciesName = if (allSpeciesMode) null else activeHotspotSpecies?.scientificName,
                         onCellSelected = { clickedCell ->
                             selectedHotspotCell = clickedCell
                         },
-                        onPointSelected = { newLat, newLng ->
-                            viewModel.mapCenter.value = Pair(newLat, newLng)
-                            selectedHotspotCell = null
+                        // The search centre follows the map: when the user stops
+                        // panning/zooming, recentre on the new viewport centre
+                        // (debounced in OSMMapView). Guard against tiny deltas so
+                        // we don't recompute when the map barely moved.
+                        onCameraIdle = { newLat, newLng ->
+                            val (curLat, curLng) = viewModel.mapCenter.value
+                            if (abs(curLat - newLat) > 1e-4 || abs(curLng - newLng) > 1e-4) {
+                                viewModel.mapCenter.value = Pair(newLat, newLng)
+                                selectedHotspotCell = null
+                            }
                         }
+                    )
+
+                    // Fixed crosshair marking the search centre (the map viewport
+                    // centre). Drawn in Compose so it never moves and is never
+                    // confused with a sighting pin. Non-interactive — taps pass
+                    // through to the map / markers below.
+                    Icon(
+                        imageVector = Icons.Default.GpsFixed,
+                        contentDescription = "Search centre",
+                        tint = Color(0xFF2196F3),
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .size(30.dp)
                     )
 
                     // Compass Indicator & Scale Overlay (hidden in fullscreen)
@@ -1141,24 +1168,47 @@ fun OSMMapView(
     hotspotCells: List<HotspotCell>,
     observationPins: List<Observation>,
     allFungiPins: List<MapObservation> = emptyList(),
+    selectedSpeciesName: String? = null,
     onCellSelected: (HotspotCell) -> Unit,
-    onPointSelected: (Double, Double) -> Unit
+    // Fired (debounced) when the user finishes moving the map — the search
+    // centre follows the viewport. Tapping is reserved for selecting pins/cells.
+    onCameraIdle: (Double, Double) -> Unit
 ) {
     val context = LocalContext.current
-    
+
     // Initialize standard user agent for OSM required by policy
     LaunchedEffect(Unit) {
         Configuration.getInstance().userAgentValue = context.packageName
     }
-    
+
     AndroidView(
         factory = { ctx ->
-            MapView(ctx).apply {
-                setTileSource(tileSourceForTheme(mapTheme))
-                setMultiTouchControls(true)
-                controller.setZoom(13.0)
-                controller.setCenter(GeoPoint(centerX, centerY))
+            val mapView = MapView(ctx)
+            mapView.setTileSource(tileSourceForTheme(mapTheme))
+            mapView.setMultiTouchControls(true)
+            mapView.controller.setZoom(13.0)
+            mapView.controller.setCenter(GeoPoint(centerX, centerY))
+
+            // Relocate the search centre whenever the user moves the map. The
+            // MapListener fires continuously while panning/zooming, so debounce
+            // and only commit the new centre once movement settles (~half a
+            // second after the last gesture) to avoid recomputing on every frame.
+            val idleHandler = Handler(Looper.getMainLooper())
+            var idleRunnable: Runnable? = null
+            fun scheduleIdle() {
+                idleRunnable?.let { idleHandler.removeCallbacks(it) }
+                val r = Runnable {
+                    val c = mapView.mapCenter
+                    onCameraIdle(c.latitude, c.longitude)
+                }
+                idleRunnable = r
+                idleHandler.postDelayed(r, 550)
             }
+            mapView.addMapListener(object : MapListener {
+                override fun onScroll(event: ScrollEvent?): Boolean { scheduleIdle(); return false }
+                override fun onZoom(event: ZoomEvent?): Boolean { scheduleIdle(); return false }
+            })
+            mapView
         },
         update = { mapView ->
             // Apply the selected map style (and a real dark mode via colour inversion).
@@ -1166,11 +1216,20 @@ fun OSMMapView(
             mapView.overlayManager.tilesOverlay.setColorFilter(
                 if (mapTheme == "Dark") TilesOverlay.INVERT_COLORS else null
             )
-            mapView.controller.animateTo(GeoPoint(centerX, centerY))
+            // Recenter the map only when the requested centre came from OUTSIDE
+            // the map (search, GPS, presets, manual coords, hotspot list). When
+            // the user pans the map themselves, mapCenter is already in sync, so
+            // we skip animateTo and never fight their gesture.
+            val cur = mapView.mapCenter
+            if (abs(cur.latitude - centerX) > 1e-5 || abs(cur.longitude - centerY) > 1e-5) {
+                mapView.controller.animateTo(GeoPoint(centerX, centerY))
+            }
 
-            // Clear all overlays to redraw
+            // Clear all overlays to redraw. No catch-all tap overlay any more:
+            // taps now belong to the markers and cells (for info/selection),
+            // while panning the map relocates the search centre.
             mapView.overlays.clear()
-            
+
             // 1. Draw boundary circle (Radius)
             val circlePolygon = Polygon(mapView).apply {
                 val geoPoints = mutableListOf<GeoPoint>()
@@ -1234,6 +1293,8 @@ fun OSMMapView(
                         "VeryGood" -> 2.5f
                         else -> 1.5f
                     }
+                    // Tap a prediction square to see why it scored. Relocating
+                    // is done by panning the map, so taps are free for selection.
                     setOnClickListener { _, _, _ ->
                         onCellSelected(cell)
                         true
@@ -1242,13 +1303,19 @@ fun OSMMapView(
                 mapView.overlays.add(cellPoly)
             }
             
-            // 3a. Selected-species observation markers (single-species mode)
+            val dateFmt = java.text.SimpleDateFormat("d MMM yyyy", java.util.Locale.getDefault())
+
+            // 3a. Selected-species observation markers (single-species mode).
+            // Tap to see the species and when it was recorded.
             for (pin in observationPins) {
                 val marker = Marker(mapView).apply {
                     position = GeoPoint(pin.lat, pin.lng)
                     setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                    title = "Observation"
-                    subDescription = "${pin.source} · ${pin.qualityGrade}"
+                    title = selectedSpeciesName ?: "Sighting"
+                    snippet = buildString {
+                        if (pin.observedAt > 0) append("Recorded ${dateFmt.format(java.util.Date(pin.observedAt))}\n")
+                        append("${pin.source} · ${pin.qualityGrade}")
+                    }
                 }
                 mapView.overlays.add(marker)
             }
@@ -1256,41 +1323,26 @@ fun OSMMapView(
             // 3b. All-fungi sightings layer — every nearby fungal observation,
             // labelled with its taxon, common name, place and date. Tapping a
             // pin opens an info window. Capped so dense areas stay responsive.
-            val dateFmt = java.text.SimpleDateFormat("d MMM yyyy", java.util.Locale.getDefault())
             for (pin in allFungiPins.take(250)) {
                 val marker = Marker(mapView).apply {
                     position = GeoPoint(pin.lat, pin.lng)
                     setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
                     title = pin.commonName?.takeIf { it.isNotBlank() } ?: pin.taxonName
                     snippet = buildString {
+                        // Species (scientific name) first, then when it was found.
                         append(pin.taxonName)
-                        if (pin.observedAt > 0) append("\n${dateFmt.format(java.util.Date(pin.observedAt))}")
+                        if (pin.observedAt > 0) append("\nRecorded ${dateFmt.format(java.util.Date(pin.observedAt))}")
                         pin.placeGuess?.let { append("\n$it") }
-                        append("\niNaturalist · ${pin.qualityGrade}")
+                        append("\n${pin.source} · ${pin.qualityGrade}")
                     }
                 }
                 mapView.overlays.add(marker)
             }
 
-            // 4. Center Crosshair / Probe center
-            val centerMarker = Marker(mapView).apply {
-                position = GeoPoint(centerX, centerY)
-                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                title = "Center"
-            }
-            mapView.overlays.add(centerMarker)
-            
-            // Handle general map taps
-            val tapOverlay = object : org.osmdroid.views.overlay.Overlay() {
-                override fun onSingleTapConfirmed(e: android.view.MotionEvent, mapView: MapView): Boolean {
-                    val proj = mapView.projection
-                    val loc = proj.fromPixels(e.x.toInt(), e.y.toInt()) as GeoPoint
-                    onPointSelected(loc.latitude, loc.longitude)
-                    return true
-                }
-            }
-            mapView.overlays.add(tapOverlay)
-            
+            // No search-centre marker: the centre is the map viewport centre and
+            // is shown by a fixed crosshair drawn in Compose over the map. This
+            // keeps the centre unambiguous and stops it being mistaken for a pin.
+
             mapView.invalidate()
         },
         modifier = Modifier.fillMaxSize()

@@ -1,5 +1,21 @@
 # Changes — completion & stabilization pass
 
+## Map interaction overhaul (Hotspots tab)
+
+- **The search centre now follows the map.** Pan or zoom and the analysis
+  recentres on the new viewport centre (debounced ~0.5 s after you stop moving),
+  then recomputes predictions. Previously a single tap hijacked the centre.
+- **Every pin is tappable for details.** A catch-all tap overlay used to sit on
+  top of the map and swallow all taps, so sighting pins were never clickable and
+  each tap only redrew a generic "Center" pin (the "a pin is added wherever I
+  touch" bug). That overlay is gone; tapping an iNaturalist sighting pin now
+  opens its species (scientific + common name), the date it was recorded, place
+  and source. Tapping a prediction square shows why it scored.
+- **The centre is a fixed crosshair** drawn over the map, so it can never be
+  mistaken for a sighting pin.
+
+
+
 ## Optional Earth Engine backend (highest-fidelity layers)
 
 A small Cloud Run service (`backend/`) exposes Google Earth Engine layers —
