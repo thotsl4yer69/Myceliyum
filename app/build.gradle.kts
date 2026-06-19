@@ -59,6 +59,29 @@ android {
       keyAlias = "upload"
       keyPassword = System.getenv("KEY_PASSWORD")
     }
+
+    // Stable debug signing. The rolling debug APKs published to the "latest"
+    // GitHub release (and offered by the in-app update check) MUST all be signed
+    // with the same key — otherwise Android refuses to install a new build over
+    // an existing one with a signature conflict
+    // (INSTALL_FAILED_UPDATE_INCOMPATIBLE, surfaced to users as "couldn't be
+    // installed due to a conflict"). The auto-generated ~/.android/debug.keystore
+    // is unique per machine, so each CI runner would otherwise sign every build
+    // with a different key and break updates. The committed debug.keystore.base64
+    // is decoded to ${rootDir}/debug.keystore (CI does this; see android-ci.yml /
+    // android-release.yml, and build.ps1 for local builds). When that file is
+    // present we sign with it so every build shares one identity; otherwise we
+    // fall back to the auto-generated key (fine for purely local installs that
+    // never join the rolling-update channel).
+    getByName("debug") {
+      val stableDebugKeystore = file("${rootDir}/debug.keystore")
+      if (stableDebugKeystore.exists()) {
+        storeFile = stableDebugKeystore
+        storePassword = "android"
+        keyAlias = "androiddebugkey"
+        keyPassword = "android"
+      }
+    }
   }
 
   buildTypes {
@@ -71,8 +94,11 @@ android {
       }
     }
     debug {
-      // Uses the standard auto-generated Android debug keystore
-      // (~/.android/debug.keystore), so no checked-in keystore is required.
+      // Signs with the stable committed debug keystore when it has been restored
+      // to ${rootDir}/debug.keystore (see the debug signingConfig above) so that
+      // rolling APK updates install cleanly over one another; falls back to
+      // Android's auto-generated ~/.android/debug.keystore for local-only builds.
+      signingConfig = signingConfigs.getByName("debug")
     }
   }
   compileOptions {
