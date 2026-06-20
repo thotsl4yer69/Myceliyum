@@ -944,6 +944,49 @@ class FungiRepository(
      * The weighted score is then multiplied by a season/rain penalty AND a
      * habitat gate that collapses built-up/water/bare cells toward zero.
      */
+    /**
+     * Re-tier the grid RELATIVE to the current search radius so the best local
+     * cells always surface. Absolute scores are heavily compressed — a weighted
+     * 0–1 average multiplied by a season/rain penalty AND a habitat gate — and
+     * when the Earth Engine backend isn't configured the OSM fallback pushes
+     * even good forest cells below the old fixed 0.20 "Possible" cutoff, leaving
+     * the map blank everywhere. Ranking by percentile within the visible grid
+     * keeps the map useful (it always points you at the best ground nearby)
+     * while an absolute "dead floor" keeps genuinely unsuitable cells —
+     * built-up / water / bare ground gated toward zero — as Unlikely so cities
+     * never light up. The per-cell `score` and factor breakdown are untouched,
+     * so the "why this score" panel still shows the real numbers.
+     */
+    private fun applyRelativeTiers(cells: List<HotspotCell>): List<HotspotCell> {
+        // Cells at/under this carry no real signal (habitat-gated or no positive
+        // factors) and must never be promoted out of Unlikely.
+        val deadFloor = 0.08
+        val alive = cells.filter { it.score > deadFloor }
+        // Too few live cells to rank meaningfully — keep absolute tiers.
+        if (alive.size < 4) return cells
+
+        val sorted = alive.map { it.score }.sorted()
+        fun percentile(p: Double): Double =
+            sorted[(p * (sorted.size - 1)).toInt().coerceIn(0, sorted.size - 1)]
+
+        // Top ~15% Excellent, next ~20% Very Good, next ~30% Promising, the rest
+        // of the live cells Possible. Dead cells stay Unlikely.
+        val tExcellent = percentile(0.85)
+        val tVeryGood = percentile(0.65)
+        val tPromising = percentile(0.35)
+
+        return cells.map { c ->
+            val tier = when {
+                c.score <= deadFloor -> "Unlikely"
+                c.score >= tExcellent -> "Excellent"
+                c.score >= tVeryGood -> "VeryGood"
+                c.score >= tPromising -> "Promising"
+                else -> "Possible"
+            }
+            if (tier == c.tier) c else c.copy(tier = tier)
+        }
+    }
+
     suspend fun generateHotspots(
         species: Species,
         centerLat: Double,
@@ -1199,7 +1242,7 @@ class FungiRepository(
 
                 cells.add(HotspotCell(cellLat, cellLng, finalScore, tier, factors))
         }
-        return@withContext cells
+        return@withContext applyRelativeTiers(cells)
     }
 
 
@@ -1433,7 +1476,7 @@ class FungiRepository(
 
                 cells.add(HotspotCell(cellLat, cellLng, finalScore, tier, factors))
         }
-        return@withContext cells
+        return@withContext applyRelativeTiers(cells)
     }
 
     // ─── Darwin Core Export ─────────────────────────────────────────
