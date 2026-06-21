@@ -35,5 +35,6 @@ data class EnvGridResponse(
     @Json(name = "soil_ph") val soilPh: List<Double?>? = null,       // surface soil pH (H2O)
     @Json(name = "soil_sand") val soilSand: List<Double?>? = null,   // surface sand mass-fraction %
     @Json(name = "soil_moisture") val soilMoisture: List<Double?>? = null, // 14-day mean vol. soil water (m³/m³)
-    @Json(name = "twi") val twi: List<Double?>? = null       // topographic wetness index
+    @Json(name = "twi") val twi: List<Double?>? = null,      // topographic wetness index
+    @Json(name = "forest_type") val forestType: List<Double?>? = null // Copernicus forest leaf-type class (1-5)
 )

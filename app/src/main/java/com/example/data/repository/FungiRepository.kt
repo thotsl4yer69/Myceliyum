@@ -617,14 +617,14 @@ class FungiRepository(
     private data class EnvCell(
         val landcover: Int?, val canopyPct: Double?, val ndvi: Double?, val waterDistM: Double?,
         val soilPh: Double? = null, val soilSand: Double? = null,
-        val soilMoisture: Double? = null, val twi: Double? = null
+        val soilMoisture: Double? = null, val twi: Double? = null, val forestType: Int? = null
     )
     private val envCache = java.util.concurrent.ConcurrentHashMap<Long, EnvCell>()
 
     /** Snap a coordinate to a global grid index so the same place always keys the same. */
     private fun gridKey(lat: Double, lng: Double): Long {
-        val la = Math.round(lat / 0.0045) + 4_000_000L
-        val ln = Math.round(lng / 0.0057) + 4_000_000L
+        val la = Math.round(lat / 0.00225) + 4_000_000L
+        val ln = Math.round(lng / 0.00285) + 4_000_000L
         return la * 10_000_000L + ln
     }
 
@@ -650,13 +650,14 @@ class FungiRepository(
             try {
                 if (envCacheFile.exists()) envCacheFile.forEachLine { line ->
                     val p = line.split('\t')
-                    // ≥5 fields: core layers; ≥9 adds the v2 soil/moisture/twi
-                    // layers. Older 5-field rows still load (extras stay null).
+                    // ≥5 fields: core layers; ≥9 adds soil/moisture/twi; ≥10 adds
+                    // forest_type. Older shorter rows still load (extras stay null).
                     if (p.size >= 5) p[0].toLongOrNull()?.let { k ->
                         envCache[k] = EnvCell(
                             p[1].toIntOrNull(), p[2].toDoubleOrNull(), p[3].toDoubleOrNull(), p[4].toDoubleOrNull(),
                             p.getOrNull(5)?.toDoubleOrNull(), p.getOrNull(6)?.toDoubleOrNull(),
-                            p.getOrNull(7)?.toDoubleOrNull(), p.getOrNull(8)?.toDoubleOrNull()
+                            p.getOrNull(7)?.toDoubleOrNull(), p.getOrNull(8)?.toDoubleOrNull(),
+                            p.getOrNull(9)?.toIntOrNull()
                         )
                     }
                 }
@@ -679,7 +680,8 @@ class FungiRepository(
                 envCache.entries.asSequence().take(CACHE_MAX).forEach { (k, v) ->
                     w.write(
                         "$k\t${v.landcover ?: ""}\t${v.canopyPct ?: ""}\t${v.ndvi ?: ""}\t${v.waterDistM ?: ""}" +
-                            "\t${v.soilPh ?: ""}\t${v.soilSand ?: ""}\t${v.soilMoisture ?: ""}\t${v.twi ?: ""}\n"
+                            "\t${v.soilPh ?: ""}\t${v.soilSand ?: ""}\t${v.soilMoisture ?: ""}\t${v.twi ?: ""}" +
+                            "\t${v.forestType ?: ""}\n"
                     )
                 }
             }
@@ -889,7 +891,8 @@ class FungiRepository(
         val soilPh: List<Double?>,
         val soilSand: List<Double?>,
         val soilMoisture: List<Double?>,
-        val twi: List<Double?>
+        val twi: List<Double?>,
+        val forestType: List<Int?>
     )
 
     /**
@@ -910,6 +913,7 @@ class FungiRepository(
             val soilSand = arrayOfNulls<Double>(points.size)
             val soilMoisture = arrayOfNulls<Double>(points.size)
             val twi = arrayOfNulls<Double>(points.size)
+            val forestType = arrayOfNulls<Int>(points.size)
             var haveAny = false
             val missIdx = ArrayList<Int>()
             val missPts = ArrayList<Pair<Double, Double>>()
@@ -918,6 +922,7 @@ class FungiRepository(
                 if (c != null) {
                     landcover[i] = c.landcover; canopyPct[i] = c.canopyPct; ndvi[i] = c.ndvi; waterDist[i] = c.waterDistM
                     soilPh[i] = c.soilPh; soilSand[i] = c.soilSand; soilMoisture[i] = c.soilMoisture; twi[i] = c.twi
+                    forestType[i] = c.forestType
                     haveAny = true
                 } else {
                     missIdx.add(i); missPts.add(points[i])
@@ -940,11 +945,13 @@ class FungiRepository(
                         val ssand = resp.soilSand?.getOrNull(c)
                         val smoist = resp.soilMoisture?.getOrNull(c)
                         val tw = resp.twi?.getOrNull(c)
+                        val ft = resp.forestType?.getOrNull(c)?.toInt()
                         val orig = missIdx[k + c]
                         landcover[orig] = lc; canopyPct[orig] = cp; ndvi[orig] = nv; waterDist[orig] = wd
                         soilPh[orig] = sph; soilSand[orig] = ssand; soilMoisture[orig] = smoist; twi[orig] = tw
+                        forestType[orig] = ft
                         envCache[gridKey(missPts[k + c].first, missPts[k + c].second)] =
-                            EnvCell(lc, cp, nv, wd, sph, ssand, smoist, tw)
+                            EnvCell(lc, cp, nv, wd, sph, ssand, smoist, tw, ft)
                         haveAny = true
                     }
                 } catch (e: Exception) {
@@ -957,7 +964,7 @@ class FungiRepository(
             if (!haveAny) return@withContext null
             EnvLayers(
                 landcover.toList(), canopyPct.toList(), ndvi.toList(), waterDist.toList(),
-                soilPh.toList(), soilSand.toList(), soilMoisture.toList(), twi.toList()
+                soilPh.toList(), soilSand.toList(), soilMoisture.toList(), twi.toList(), forestType.toList()
             )
         }
     }
@@ -1075,23 +1082,25 @@ class FungiRepository(
     }
 
     /**
-     * Multi-factor Bayesian hotspot prediction engine (500m resolution).
+     * Multi-factor Bayesian hotspot prediction engine (adaptive ~250m
+     * resolution; cell size grows for very large radii to bound cost).
      *
      * Scoring factors and weights (sum to 1.0):
-     *   1. Observation evidence (iNat + ALA + GBIF + user)          — 0.22
-     *   2. Seasonal fitness (week-level precision)                 — 0.15
+     *   1. Observation evidence (iNat + ALA + GBIF + user)          — 0.21
+     *   2. Seasonal fitness (week-level precision)                 — 0.14
      *   3. Rainfall trigger (20mm+ event 10-21 days ago with lag)  — 0.11
-     *   4. Canopy/forest (EE land cover/canopy/NDVI, or OSM)       — 0.10
+     *   4. Canopy/forest (EE land cover/canopy/NDVI, or OSM)       — 0.08
      *   5. Habitat suitability (species substrate/habitat breadth) — 0.08
-     *   6. Terrain moisture (per-cell slope/concavity from DEM)    — 0.06
-     *   7. Temperature fitness (species-specific ideal range)      — 0.06
-     *   8. Elevation fitness (per-cell altitude vs species band)   — 0.05
-     *   9. Soil (EE surface pH + texture, OpenLandMap)             — 0.04
-     *  10. Background + per-cell soil moisture (rain + EE 14-day)  — 0.03
-     *  11. Topographic Wetness Index (EE MERIT Hydro)             — 0.03
-     *  12. Riparian (per-cell distance to surface water, EE)       — 0.03
-     *  13. Slope aspect (per-cell; south/east-facing favoured)     — 0.03
-     *  14. Moon phase (optional, traditional forager signal)       — 0.01
+     *   6. Temperature fitness (species-specific ideal range)      — 0.06
+     *   7. Host tree match (EE forest leaf-type vs mycorrhizal host)— 0.05
+     *   8. Terrain moisture (per-cell slope/concavity from DEM)    — 0.05
+     *   9. Elevation fitness (per-cell altitude vs species band)   — 0.05
+     *  10. Soil (EE surface pH + texture, OpenLandMap)             — 0.04
+     *  11. Background + per-cell soil moisture (rain + EE 14-day)  — 0.03
+     *  12. Topographic Wetness Index (EE MERIT Hydro)             — 0.03
+     *  13. Riparian (per-cell distance to surface water, EE)       — 0.03
+     *  14. Slope aspect (per-cell; south/east-facing favoured)     — 0.03
+     *  15. Moon phase (optional, traditional forager signal)       — 0.01
      *
      * Factors 4, 5, 7, 9 and 10 vary cell-to-cell (real elevation + EE/OSM),
      * so the map reflects genuine landscape instead of only record density.
@@ -1148,11 +1157,18 @@ class FungiRepository(
         // 3f. Habitat suitability (species breadth → higher baseline)
         val habitatScore = MycoMath.habitatDiversityScore(species.habitatTypes, species.substrates)
         val habitatWeight = MycoMath.speciesHabitatWeight(species.id)
+        // Host tree groups for mycorrhizal matching against the EE forest-type
+        // layer — derived once from the species' habitat/substrate descriptors.
+        val hostGroups = MycoMath.hostGroupsFor(species.habitatTypes, species.substrates)
 
         // ── 4. Grid generation ──────────────────────────────────────
-        val latStep = 0.0045
-        val lngStep = 0.0057
-        val latRangeSteps = ceil((radiusKm * 1000.0) / 500.0).toInt()
+        // Adaptive cell size: ~250 m for typical searches (fine per-cell detail),
+        // growing only for very large radii so the cell count — and Earth Engine
+        // cost — stays bounded (~60 steps per axis max).
+        val cellMeters = maxOf(250.0, radiusKm * 1000.0 / 60.0)
+        val latStep = cellMeters / 111_000.0
+        val lngStep = cellMeters / (111_000.0 * Math.cos(Math.toRadians(centerLat)))
+        val latRangeSteps = ceil((radiusKm * 1000.0) / cellMeters).toInt()
         val cells = mutableListOf<HotspotCell>()
 
         val kernelRadiusMeters = 2500.0  // Wider search for evidence
@@ -1273,6 +1289,10 @@ class FungiRepository(
                 val soilScore = if (env != null)
                     MycoMath.richSoilScore(env.soilPh.getOrNull(idx), env.soilSand.getOrNull(idx)) else 0.6
                 val twiScore = if (env != null) MycoMath.twiWetnessScore(env.twi.getOrNull(idx)) else 0.5
+                // Host-tree (mycorrhizal) match: does this cell's forest leaf-type
+                // contain one of the species' host trees? Neutral when EE is off.
+                val hostTreeScore = if (env != null)
+                    MycoMath.hostTreeMatchScore(env.forestType.getOrNull(idx), hostGroups) else 0.6
                 // Per-cell soil moisture (EE 14-day mean) blended with the area-wide
                 // rain/soil moisture signal, for real per-cell differentiation.
                 val cellSoilMoisture = env?.soilMoisture?.getOrNull(idx)?.let { MycoMath.soilMoistureFitness(it) }
@@ -1286,11 +1306,12 @@ class FungiRepository(
                 val adjustedHabitat = (habitatScore * habitatWeight).coerceIn(0.0, 1.0)
 
                 val factorWeights = mapOf(
-                    "evidence"    to 0.22,
-                    "season"      to 0.15,
+                    "evidence"    to 0.21,
+                    "season"      to 0.14,
                     "rainTrigger" to 0.11,
-                    "canopy"      to 0.10,
-                    "terrain"     to 0.06,
+                    "canopy"      to 0.08,
+                    "hostTree"    to 0.05,
+                    "terrain"     to 0.05,
                     "habitat"     to 0.08,
                     "elevation"   to 0.05,
                     "temperature" to 0.06,
@@ -1306,6 +1327,7 @@ class FungiRepository(
                     "season"      to seasonScore,
                     "rainTrigger" to rainTriggerScore,
                     "canopy"      to canopyScore,
+                    "hostTree"    to hostTreeScore,
                     "terrain"     to terrainScore,
                     "habitat"     to adjustedHabitat,
                     "elevation"   to elevationScore,
@@ -1387,6 +1409,9 @@ class FungiRepository(
                     env.twi.getOrNull(idx)?.let { tw ->
                         factors.add("🏞️ Wetness index (TWI): ${String.format(Locale.US, "%.1f", tw)} → ${String.format(Locale.US, "%.0f", twiScore * 100)}%")
                     }
+                    if (hostGroups.isNotEmpty()) factors.add(
+                        "🌲 Host tree: ${forestTypeLabel(env.forestType.getOrNull(idx))} vs ${hostGroups.joinToString("/") { hostGroupLabel(it) }} → ${String.format(Locale.US, "%.0f", hostTreeScore * 100)}%"
+                    )
                 }
                 if (env == null) weather.avgSoilMoisture?.let { factors.add("💧 Soil moisture: ${String.format(Locale.US, "%.2f", it)} m³/m³ → ${String.format(Locale.US, "%.0f", MycoMath.soilMoistureFitness(it) * 100)}%") }
                 if (moonScore > 0.7) factors.add("🌙 Moon phase favourable (traditional signal)")
@@ -1493,9 +1518,13 @@ class FungiRepository(
             (0.4 * rainMoistureScore + 0.6 * soilMoistureScore) else rainMoistureScore
         val moonScore = MycoMath.moonFruitingScore(nowMs)
 
-        val latStep = 0.0045
-        val lngStep = 0.0057
-        val latRangeSteps = ceil((radiusKm * 1000.0) / 500.0).toInt()
+        // Adaptive cell size: ~250 m for typical searches (fine per-cell detail),
+        // growing only for very large radii so the cell count — and Earth Engine
+        // cost — stays bounded (~60 steps per axis max).
+        val cellMeters = maxOf(250.0, radiusKm * 1000.0 / 60.0)
+        val latStep = cellMeters / 111_000.0
+        val lngStep = cellMeters / (111_000.0 * Math.cos(Math.toRadians(centerLat)))
+        val latRangeSteps = ceil((radiusKm * 1000.0) / cellMeters).toInt()
         val cells = mutableListOf<HotspotCell>()
         val kernelRadiusMeters = 2500.0
         val maxDaysBack = 5.0 * 365.0
@@ -1596,16 +1625,23 @@ class FungiRepository(
                 val soilScore = if (env != null)
                     MycoMath.richSoilScore(env.soilPh.getOrNull(idx), env.soilSand.getOrNull(idx)) else 0.6
                 val twiScore = if (env != null) MycoMath.twiWetnessScore(env.twi.getOrNull(idx)) else 0.5
+                // Aggregate spans the whole catalogue, so match against all host
+                // groups — any forest type then rewards a likely host present.
+                val hostTreeScore = if (env != null) MycoMath.hostTreeMatchScore(
+                    env.forestType.getOrNull(idx),
+                    setOf(MycoMath.HostGroup.NEEDLELEAF, MycoMath.HostGroup.EVERGREEN_BROADLEAF, MycoMath.HostGroup.DECIDUOUS_BROADLEAF)
+                ) else 0.6
                 val cellSoilMoisture = env?.soilMoisture?.getOrNull(idx)?.let { MycoMath.soilMoistureFitness(it) }
                 val moistureScoreCell = if (cellSoilMoisture != null)
                     (0.5 * moistureScore + 0.5 * cellSoilMoisture) else moistureScore
 
                 // Weighted combination (weights sum to 1.0)
-                val weightedSum = 0.22 * observationScore +
-                        0.15 * seasonScore +
+                val weightedSum = 0.21 * observationScore +
+                        0.14 * seasonScore +
                         0.11 * rainTriggerScore +
-                        0.10 * canopyScore +
-                        0.06 * terrainScore +
+                        0.08 * canopyScore +
+                        0.05 * hostTreeScore +
+                        0.05 * terrainScore +
                         0.08 * 0.7 + // Aggregate habitat baseline (diverse catalogue)
                         0.05 * elevationScore +
                         0.06 * tempScore +
@@ -1651,6 +1687,9 @@ class FungiRepository(
                     }
                     env.twi.getOrNull(idx)?.let { tw ->
                         factors.add("🏞️ Wetness index (TWI): ${String.format(Locale.US, "%.1f", tw)} → ${String.format(Locale.US, "%.0f", twiScore * 100)}%")
+                    }
+                    env.forestType.getOrNull(idx)?.let { ft ->
+                        factors.add("🌲 Forest type: ${forestTypeLabel(ft)} → ${String.format(Locale.US, "%.0f", hostTreeScore * 100)}%")
                     }
                 } else {
                     factors.add(when (landClass) {
@@ -1743,6 +1782,23 @@ class FungiRepository(
 
     private fun isMonthInSeason(month: Int, start: Int, end: Int): Boolean =
         MycoMath.isMonthInSeason(month, start, end)
+
+    /** Human label for a Copernicus forest leaf-type class code. */
+    private fun forestTypeLabel(forestType: Int?): String = when (forestType) {
+        1 -> "evergreen-needleleaf forest"
+        2 -> "evergreen-broadleaf forest"
+        3 -> "deciduous-needleleaf forest"
+        4 -> "deciduous-broadleaf forest"
+        5 -> "mixed forest"
+        else -> "no mapped forest"
+    }
+
+    /** Short label for a host tree group. */
+    private fun hostGroupLabel(g: MycoMath.HostGroup): String = when (g) {
+        MycoMath.HostGroup.NEEDLELEAF -> "pine/conifer"
+        MycoMath.HostGroup.EVERGREEN_BROADLEAF -> "eucalypt/native"
+        MycoMath.HostGroup.DECIDUOUS_BROADLEAF -> "oak/birch"
+    }
 
     private fun monthName(month: Int): String {
         return when (month) {
