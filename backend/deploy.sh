@@ -6,7 +6,12 @@
 #   1. gcloud CLI installed and `gcloud auth login` done.
 #   2. Earth Engine API enabled on the project, and the project registered
 #      for Earth Engine at https://code.earthengine.google.com/.
-#   3. A service account that has `roles/earthengine.viewer` (or broader).
+#   3. A service account with BOTH `roles/earthengine.viewer` (or broader) and
+#      `roles/serviceusage.serviceUsageConsumer` — the latter is required for
+#      ee.Initialize(project=...) to call the Service Usage API, e.g.:
+#        gcloud projects add-iam-policy-binding "$GCP_PROJECT" \
+#          --member="serviceAccount:$SERVICE_ACCOUNT" \
+#          --role="roles/serviceusage.serviceUsageConsumer"
 #
 # Usage:
 #   cd backend
