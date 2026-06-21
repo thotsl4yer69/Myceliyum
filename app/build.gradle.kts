@@ -31,12 +31,15 @@ android {
     if (localPropsFile.exists()) {
       localPropsFile.inputStream().use { localProps.load(it) }
     }
-    // Google Cloud API key (Geocoding / Elevation / Vision). Read from
-    // local.properties or the GOOGLE_API_KEY env var (CI) — never committed.
+    // Google Cloud API key — used only for the place-search bar (Geocoding API);
+    // the app falls back to the device geocoder if blank. Precedence:
+    // local.properties > GOOGLE_API_KEY env var (CI) > the hardcoded default
+    // below. RESTRICT this key in Cloud Console to the Geocoding API + this
+    // app's package/SHA-1, since it ships inside the (decompilable) APK.
     buildConfigField(
       "String",
       "GOOGLE_API_KEY",
-      "\"${localProps.getProperty("GOOGLE_API_KEY", System.getenv("GOOGLE_API_KEY") ?: "")}\""
+      "\"${localProps.getProperty("GOOGLE_API_KEY", System.getenv("GOOGLE_API_KEY") ?: "AIzaSyCHMNlANTRjpPCEJxqZ-W-LIRATIc6fVMY")}\""
     )
     // Earth Engine layers backend (Cloud Run). Blank = use free OSM canopy.
     buildConfigField(
