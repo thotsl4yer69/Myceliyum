@@ -484,6 +484,52 @@ object MycoMath {
         else -> 0.6                                        // likely standing water/channel
     }.coerceIn(0.0, 1.0)
 
+    /** Broad mycorrhizal/host tree groups, matched against the Earth Engine
+     *  forest leaf-type layer. */
+    enum class HostGroup { NEEDLELEAF, EVERGREEN_BROADLEAF, DECIDUOUS_BROADLEAF }
+
+    /**
+     * Derives a species' host tree groups from its free-text habitat/substrate
+     * descriptors (the catalogue already names hosts, e.g. "mycorrhizal with
+     * Pinus radiata, Birch"). An empty result means the species isn't tree-bound
+     * (dung/grass/woodchip saprobes), so the host-tree factor stays neutral.
+     */
+    fun hostGroupsFor(habitatTypes: List<String>, substrates: List<String>): Set<HostGroup> {
+        val t = (habitatTypes + substrates).joinToString(" ").lowercase()
+        val out = mutableSetOf<HostGroup>()
+        if (Regex("pine|pinus|conifer|needle|spruce|\\bfir\\b|larch|cedar|cypress").containsMatchIn(t))
+            out += HostGroup.NEEDLELEAF
+        if (Regex("eucalypt|sclerophyll|banksia|melaleuca|acacia|wattle|myrtle|tea.?tree|native forest|gum\\b").containsMatchIn(t))
+            out += HostGroup.EVERGREEN_BROADLEAF
+        if (Regex("birch|betula|oak|quercus|beech|fagus|nothofagus|poplar|willow|deciduous|hazel|chestnut|exotic").containsMatchIn(t))
+            out += HostGroup.DECIDUOUS_BROADLEAF
+        return out
+    }
+
+    /**
+     * Host-tree suitability (0.0–1.0) from the Copernicus forest leaf-type class
+     * (1 evergreen-needleleaf, 2 evergreen-broadleaf, 3 deciduous-needleleaf,
+     * 4 deciduous-broadleaf, 5 mixed; 0/null unknown) against a species' host
+     * groups. Neutral when the species isn't tree-bound or there's no forest-type
+     * data — a wrong host type in a clearly forested cell is gently penalised.
+     */
+    fun hostTreeMatchScore(forestType: Int?, hostGroups: Set<HostGroup>): Double {
+        if (hostGroups.isEmpty()) return 0.6                 // saprobic/dung/grass — not host-bound
+        if (forestType == null || forestType == 0) return 0.55 // no data → mild neutral
+        if (forestType == 5) return 0.85                     // mixed forest — likely contains a host
+        val cellGroup = when (forestType) {
+            1, 3 -> HostGroup.NEEDLELEAF                      // evergreen/deciduous needleleaf
+            2 -> HostGroup.EVERGREEN_BROADLEAF
+            4 -> HostGroup.DECIDUOUS_BROADLEAF
+            else -> null
+        }
+        return when {
+            cellGroup == null -> 0.5                          // unclassified / non-forest
+            cellGroup in hostGroups -> 1.0                    // host tree present
+            else -> 0.4                                       // forest, but wrong host type
+        }
+    }
+
     /**
      * Multiplicative HABITAT GATE (0.05–1.0) — the counter-weight that stops
      * cities, roads, car parks and water from scoring high.

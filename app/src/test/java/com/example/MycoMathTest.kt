@@ -239,4 +239,31 @@ class MycoMathTest {
         assertTrue(MycoMath.twiWetnessScore(18.0) < MycoMath.twiWetnessScore(10.0)) // waterlogged tapers off
         assertEquals(0.5, MycoMath.twiWetnessScore(null), 1e-9)            // no data → neutral
     }
+
+    @Test
+    fun `host groups are derived from habitat and substrate text`() {
+        val pineBirch = MycoMath.hostGroupsFor(
+            listOf("Conifer Plantation", "Exotic Deciduous Woodlands"),
+            listOf("Soil (mycorrhizal with Pinus radiata, Birch)")
+        )
+        assertTrue(MycoMath.HostGroup.NEEDLELEAF in pineBirch)
+        assertTrue(MycoMath.HostGroup.DECIDUOUS_BROADLEAF in pineBirch)
+
+        val euc = MycoMath.hostGroupsFor(listOf("Eucalypt Woodland"), listOf("Base of living trees (Eucalyptus)"))
+        assertTrue(MycoMath.HostGroup.EVERGREEN_BROADLEAF in euc)
+
+        // Dung/pasture saprobes are not tree-bound.
+        val dung = MycoMath.hostGroupsFor(listOf("Pasture / Grazing Land"), listOf("Cattle dung"))
+        assertTrue(dung.isEmpty())
+    }
+
+    @Test
+    fun `host tree match rewards the right forest type and is neutral off-grid`() {
+        val pine = setOf(MycoMath.HostGroup.NEEDLELEAF)
+        assertEquals(1.0, MycoMath.hostTreeMatchScore(1, pine), 1e-9)      // evergreen-needleleaf → host present
+        assertTrue(MycoMath.hostTreeMatchScore(2, pine) < 0.6)            // eucalypt forest, wrong host
+        assertTrue(MycoMath.hostTreeMatchScore(5, pine) > 0.7)           // mixed forest → likely host
+        assertEquals(0.6, MycoMath.hostTreeMatchScore(2, emptySet()), 1e-9) // not tree-bound → neutral
+        assertEquals(0.55, MycoMath.hostTreeMatchScore(null, pine), 1e-9)   // no data → mild neutral
+    }
 }

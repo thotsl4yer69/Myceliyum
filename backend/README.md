@@ -70,7 +70,9 @@ curl -s -X POST "$URL/env-grid" \
 #    "water_dist":[180.0, null],     # metres to nearest water; null = >2 km / no data
 #    "soil_ph":[5.8, 6.3], "soil_sand":[42, 31],   # surface soil pH / sand mass %
 #    "soil_moisture":[0.27, 0.19],   # 14-day mean volumetric soil water (m³/m³)
-#    "twi":[7.4, 5.1]}               # topographic wetness index (higher = wetter)
+#    "twi":[7.4, 5.1],               # topographic wetness index (higher = wetter)
+#    "forest_type":[2, 1]}           # Copernicus forest leaf-type (1 evgr-needle,
+#                                    #   2 evgr-broad, 3 dec-needle, 4 dec-broad, 5 mixed)
 ```
 
 The `soil_*` and `twi` fields are the v2 ecology layers (see
@@ -83,4 +85,4 @@ never affected.
 | Method | Path        | Body / Result |
 |--------|-------------|---------------|
 | GET    | `/health`   | `{"status":"ok"}` |
-| POST   | `/env-grid` | `{"points":[[lat,lng],...]}` (≤600) → `{"landcover":[...],"canopy":[...],"ndvi":[...],"water_dist":[...],"soil_ph":[...],"soil_sand":[...],"soil_moisture":[...],"twi":[...]}` aligned 1:1 |
+| POST   | `/env-grid` | `{"points":[[lat,lng],...]}` (≤600) → `{"landcover":[...],"canopy":[...],"ndvi":[...],"water_dist":[...],"soil_ph":[...],"soil_sand":[...],"soil_moisture":[...],"twi":[...],"forest_type":[...]}` aligned 1:1 |

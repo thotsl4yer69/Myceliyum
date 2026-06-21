@@ -15,7 +15,8 @@ Endpoints:
                                "soil_ph": [...],        # surface soil pH (H2O)
                                "soil_sand": [...],      # surface sand mass %
                                "soil_moisture": [...],  # 14-day mean vol. soil water (m³/m³)
-                               "twi": [...]}            # topographic wetness index
+                               "twi": [...],            # topographic wetness index
+                               "forest_type": [...]}    # Copernicus forest leaf-type class
                             arrays are aligned 1:1 with the input points;
                             entries may be null where a layer has no value. The
                             v2 layers (soil_*, twi) are each independently
@@ -221,6 +222,25 @@ def env_grid():
     except Exception as exc:  # noqa: BLE001
         app.logger.warning("soil moisture layer failed: %s", exc)
 
+    # ── v2/P2: forest leaf-type → mycorrhizal host group ────────────────
+    # Copernicus 100 m forest_type: 1 evergreen-needleleaf, 2 evergreen-broadleaf,
+    # 3 deciduous-needleleaf, 4 deciduous-broadleaf, 5 mixed (0/none = unknown).
+    # Lets the app match a cell's trees to each species' host (pine/eucalypt/oak).
+    forest_col = [None] * n
+    try:
+        ft = ee.Image("COPERNICUS/Landcover/100m/Proba-V-C3/Global/2019").select("forest_type")
+        # Single band → output property is "first".
+        ftfeat = ft.reduceRegions(
+            collection=fc, reducer=ee.Reducer.first(), scale=100
+        ).getInfo()["features"]
+        ftby = {f["properties"].get("idx"): f["properties"].get("first") for f in ftfeat}
+        forest_col = []
+        for i in range(n):
+            v = ftby.get(i)
+            forest_col.append(int(v) if v is not None else None)
+    except Exception as exc:  # noqa: BLE001
+        app.logger.warning("forest type layer failed: %s", exc)
+
     return jsonify(
         {
             "landcover": col("landcover"),
@@ -231,6 +251,7 @@ def env_grid():
             "soil_sand": soil_sand_col,
             "soil_moisture": sm_col,
             "twi": twi_col,
+            "forest_type": forest_col,
         }
     )
 
