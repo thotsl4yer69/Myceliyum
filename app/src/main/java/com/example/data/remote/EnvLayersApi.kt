@@ -31,5 +31,9 @@ data class EnvGridResponse(
     @Json(name = "landcover") val landcover: List<Double?>?, // ESA WorldCover class codes
     @Json(name = "canopy") val canopy: List<Double?>?,       // tree-canopy cover %
     @Json(name = "ndvi") val ndvi: List<Double?>?,           // NDVI greenness (−1..1)
-    @Json(name = "water_dist") val waterDist: List<Double?>? = null // metres to nearest surface water
+    @Json(name = "water_dist") val waterDist: List<Double?>? = null, // metres to nearest surface water
+    @Json(name = "soil_ph") val soilPh: List<Double?>? = null,       // surface soil pH (H2O)
+    @Json(name = "soil_sand") val soilSand: List<Double?>? = null,   // surface sand mass-fraction %
+    @Json(name = "soil_moisture") val soilMoisture: List<Double?>? = null, // 14-day mean vol. soil water (m³/m³)
+    @Json(name = "twi") val twi: List<Double?>? = null       // topographic wetness index
 )

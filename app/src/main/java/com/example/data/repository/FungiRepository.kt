@@ -614,7 +614,11 @@ class FungiRepository(
     // makes re-scoring the same area (species/radius changes, revisits, small
     // pans) instant and avoids repeat network / Earth-Engine cost.
     private val elevCache = java.util.concurrent.ConcurrentHashMap<Long, Double>()
-    private data class EnvCell(val landcover: Int?, val canopyPct: Double?, val ndvi: Double?, val waterDistM: Double?)
+    private data class EnvCell(
+        val landcover: Int?, val canopyPct: Double?, val ndvi: Double?, val waterDistM: Double?,
+        val soilPh: Double? = null, val soilSand: Double? = null,
+        val soilMoisture: Double? = null, val twi: Double? = null
+    )
     private val envCache = java.util.concurrent.ConcurrentHashMap<Long, EnvCell>()
 
     /** Snap a coordinate to a global grid index so the same place always keys the same. */
@@ -646,8 +650,14 @@ class FungiRepository(
             try {
                 if (envCacheFile.exists()) envCacheFile.forEachLine { line ->
                     val p = line.split('\t')
-                    if (p.size == 5) p[0].toLongOrNull()?.let { k ->
-                        envCache[k] = EnvCell(p[1].toIntOrNull(), p[2].toDoubleOrNull(), p[3].toDoubleOrNull(), p[4].toDoubleOrNull())
+                    // ≥5 fields: core layers; ≥9 adds the v2 soil/moisture/twi
+                    // layers. Older 5-field rows still load (extras stay null).
+                    if (p.size >= 5) p[0].toLongOrNull()?.let { k ->
+                        envCache[k] = EnvCell(
+                            p[1].toIntOrNull(), p[2].toDoubleOrNull(), p[3].toDoubleOrNull(), p[4].toDoubleOrNull(),
+                            p.getOrNull(5)?.toDoubleOrNull(), p.getOrNull(6)?.toDoubleOrNull(),
+                            p.getOrNull(7)?.toDoubleOrNull(), p.getOrNull(8)?.toDoubleOrNull()
+                        )
                     }
                 }
             } catch (e: Exception) { Log.w(TAG, "env cache load failed: ${e.message}") }
@@ -667,7 +677,10 @@ class FungiRepository(
         try {
             envCacheFile.bufferedWriter().use { w ->
                 envCache.entries.asSequence().take(CACHE_MAX).forEach { (k, v) ->
-                    w.write("$k\t${v.landcover ?: ""}\t${v.canopyPct ?: ""}\t${v.ndvi ?: ""}\t${v.waterDistM ?: ""}\n")
+                    w.write(
+                        "$k\t${v.landcover ?: ""}\t${v.canopyPct ?: ""}\t${v.ndvi ?: ""}\t${v.waterDistM ?: ""}" +
+                            "\t${v.soilPh ?: ""}\t${v.soilSand ?: ""}\t${v.soilMoisture ?: ""}\t${v.twi ?: ""}\n"
+                    )
                 }
             }
         } catch (e: Exception) { Log.w(TAG, "env cache save failed: ${e.message}") }
@@ -872,7 +885,11 @@ class FungiRepository(
         val landcover: List<Int?>,
         val canopyPct: List<Double?>,
         val ndvi: List<Double?>,
-        val waterDistM: List<Double?>
+        val waterDistM: List<Double?>,
+        val soilPh: List<Double?>,
+        val soilSand: List<Double?>,
+        val soilMoisture: List<Double?>,
+        val twi: List<Double?>
     )
 
     /**
@@ -889,6 +906,10 @@ class FungiRepository(
             val canopyPct = arrayOfNulls<Double>(points.size)
             val ndvi = arrayOfNulls<Double>(points.size)
             val waterDist = arrayOfNulls<Double>(points.size)
+            val soilPh = arrayOfNulls<Double>(points.size)
+            val soilSand = arrayOfNulls<Double>(points.size)
+            val soilMoisture = arrayOfNulls<Double>(points.size)
+            val twi = arrayOfNulls<Double>(points.size)
             var haveAny = false
             val missIdx = ArrayList<Int>()
             val missPts = ArrayList<Pair<Double, Double>>()
@@ -896,6 +917,7 @@ class FungiRepository(
                 val c = envCache[gridKey(points[i].first, points[i].second)]
                 if (c != null) {
                     landcover[i] = c.landcover; canopyPct[i] = c.canopyPct; ndvi[i] = c.ndvi; waterDist[i] = c.waterDistM
+                    soilPh[i] = c.soilPh; soilSand[i] = c.soilSand; soilMoisture[i] = c.soilMoisture; twi[i] = c.twi
                     haveAny = true
                 } else {
                     missIdx.add(i); missPts.add(points[i])
@@ -914,9 +936,15 @@ class FungiRepository(
                         val cp = resp.canopy?.getOrNull(c)
                         val nv = resp.ndvi?.getOrNull(c)
                         val wd = resp.waterDist?.getOrNull(c)
+                        val sph = resp.soilPh?.getOrNull(c)
+                        val ssand = resp.soilSand?.getOrNull(c)
+                        val smoist = resp.soilMoisture?.getOrNull(c)
+                        val tw = resp.twi?.getOrNull(c)
                         val orig = missIdx[k + c]
                         landcover[orig] = lc; canopyPct[orig] = cp; ndvi[orig] = nv; waterDist[orig] = wd
-                        envCache[gridKey(missPts[k + c].first, missPts[k + c].second)] = EnvCell(lc, cp, nv, wd)
+                        soilPh[orig] = sph; soilSand[orig] = ssand; soilMoisture[orig] = smoist; twi[orig] = tw
+                        envCache[gridKey(missPts[k + c].first, missPts[k + c].second)] =
+                            EnvCell(lc, cp, nv, wd, sph, ssand, smoist, tw)
                         haveAny = true
                     }
                 } catch (e: Exception) {
@@ -927,7 +955,10 @@ class FungiRepository(
             if (missPts.isNotEmpty()) persistEnvCache()
             // Fall back to OSM canopy only if we got nothing at all.
             if (!haveAny) return@withContext null
-            EnvLayers(landcover.toList(), canopyPct.toList(), ndvi.toList(), waterDist.toList())
+            EnvLayers(
+                landcover.toList(), canopyPct.toList(), ndvi.toList(), waterDist.toList(),
+                soilPh.toList(), soilSand.toList(), soilMoisture.toList(), twi.toList()
+            )
         }
     }
 
@@ -1048,17 +1079,19 @@ class FungiRepository(
      *
      * Scoring factors and weights (sum to 1.0):
      *   1. Observation evidence (iNat + ALA + GBIF + user)          — 0.22
-     *   2. Seasonal fitness (week-level precision)                 — 0.16
+     *   2. Seasonal fitness (week-level precision)                 — 0.15
      *   3. Rainfall trigger (20mm+ event 10-21 days ago with lag)  — 0.11
-     *   4. Canopy/forest (EE land cover/canopy/NDVI, or OSM)       — 0.11
-     *   5. Terrain moisture (per-cell slope/concavity from DEM)    — 0.08
-     *   6. Habitat suitability (species substrate/habitat breadth) — 0.08
-     *   7. Elevation fitness (per-cell altitude vs species band)   — 0.06
-     *   8. Temperature fitness (species-specific ideal range)      — 0.06
-     *   9. Riparian (per-cell distance to surface water, EE)       — 0.04
-     *  10. Slope aspect (per-cell; south/east-facing favoured)     — 0.04
-     *  11. Background moisture (rainfall + real 0-7cm soil moisture)— 0.03
-     *  12. Moon phase (optional, traditional forager signal)       — 0.01
+     *   4. Canopy/forest (EE land cover/canopy/NDVI, or OSM)       — 0.10
+     *   5. Habitat suitability (species substrate/habitat breadth) — 0.08
+     *   6. Terrain moisture (per-cell slope/concavity from DEM)    — 0.06
+     *   7. Temperature fitness (species-specific ideal range)      — 0.06
+     *   8. Elevation fitness (per-cell altitude vs species band)   — 0.05
+     *   9. Soil (EE surface pH + texture, OpenLandMap)             — 0.04
+     *  10. Background + per-cell soil moisture (rain + EE 14-day)  — 0.03
+     *  11. Topographic Wetness Index (EE MERIT Hydro)             — 0.03
+     *  12. Riparian (per-cell distance to surface water, EE)       — 0.03
+     *  13. Slope aspect (per-cell; south/east-facing favoured)     — 0.03
+     *  14. Moon phase (optional, traditional forager signal)       — 0.01
      *
      * Factors 4, 5, 7, 9 and 10 vary cell-to-cell (real elevation + EE/OSM),
      * so the map reflects genuine landscape instead of only record density.
@@ -1235,6 +1268,16 @@ class FungiRepository(
                 }
                 // Riparian: closeness to surface water (EE only; neutral otherwise).
                 val riparianScore = if (env != null) MycoMath.riparianScore(env.waterDistM.getOrNull(idx)) else 0.45
+                // Soil (pH + texture) and topographic wetness — Earth Engine only;
+                // neutral when the backend isn't configured (no penalty).
+                val soilScore = if (env != null)
+                    MycoMath.richSoilScore(env.soilPh.getOrNull(idx), env.soilSand.getOrNull(idx)) else 0.6
+                val twiScore = if (env != null) MycoMath.twiWetnessScore(env.twi.getOrNull(idx)) else 0.5
+                // Per-cell soil moisture (EE 14-day mean) blended with the area-wide
+                // rain/soil moisture signal, for real per-cell differentiation.
+                val cellSoilMoisture = env?.soilMoisture?.getOrNull(idx)?.let { MycoMath.soilMoistureFitness(it) }
+                val moistureScoreCell = if (cellSoilMoisture != null)
+                    (0.5 * moistureScore + 0.5 * cellSoilMoisture) else moistureScore
 
                 // ── C. Weighted factor combination ──────────────────
                 // Evidence stays dominant; terrain, elevation, aspect and
@@ -1244,16 +1287,18 @@ class FungiRepository(
 
                 val factorWeights = mapOf(
                     "evidence"    to 0.22,
-                    "season"      to 0.16,
+                    "season"      to 0.15,
                     "rainTrigger" to 0.11,
-                    "canopy"      to 0.11,
-                    "terrain"     to 0.08,
+                    "canopy"      to 0.10,
+                    "terrain"     to 0.06,
                     "habitat"     to 0.08,
-                    "elevation"   to 0.06,
+                    "elevation"   to 0.05,
                     "temperature" to 0.06,
-                    "riparian"    to 0.04,
-                    "aspect"      to 0.04,
+                    "riparian"    to 0.03,
+                    "aspect"      to 0.03,
                     "moisture"    to 0.03,
+                    "soil"        to 0.04,
+                    "twi"         to 0.03,
                     "moon"        to 0.01
                 )
                 val factorScores = mapOf(
@@ -1267,7 +1312,9 @@ class FungiRepository(
                     "temperature" to tempScore,
                     "riparian"    to riparianScore,
                     "aspect"      to aspectScore,
-                    "moisture"    to moistureScore,
+                    "moisture"    to moistureScoreCell,
+                    "soil"        to soilScore,
+                    "twi"         to twiScore,
                     "moon"        to moonScore
                 )
 
@@ -1329,8 +1376,19 @@ class FungiRepository(
                 if (env != null) {
                     val wd = env.waterDistM.getOrNull(idx)
                     factors.add("🌊 Water: ${if (wd != null) "~${String.format(Locale.US, "%.0f m", wd)} to water" else ">2 km away"} → ${String.format(Locale.US, "%.0f", riparianScore * 100)}%")
+                    val ph = env.soilPh.getOrNull(idx)
+                    val sand = env.soilSand.getOrNull(idx)
+                    if (ph != null || sand != null) factors.add(
+                        "🧪 Soil: ${if (ph != null) "pH ${String.format(Locale.US, "%.1f", ph)}" else "pH n/a"}, ${if (sand != null) "${String.format(Locale.US, "%.0f", sand)}% sand" else "texture n/a"} → ${String.format(Locale.US, "%.0f", soilScore * 100)}%"
+                    )
+                    env.soilMoisture.getOrNull(idx)?.let { sm ->
+                        factors.add("💧 Soil moisture (14-day): ${String.format(Locale.US, "%.2f", sm)} m³/m³ → ${String.format(Locale.US, "%.0f", MycoMath.soilMoistureFitness(sm) * 100)}%")
+                    }
+                    env.twi.getOrNull(idx)?.let { tw ->
+                        factors.add("🏞️ Wetness index (TWI): ${String.format(Locale.US, "%.1f", tw)} → ${String.format(Locale.US, "%.0f", twiScore * 100)}%")
+                    }
                 }
-                weather.avgSoilMoisture?.let { factors.add("💧 Soil moisture: ${String.format(Locale.US, "%.2f", it)} m³/m³ → ${String.format(Locale.US, "%.0f", MycoMath.soilMoistureFitness(it) * 100)}%") }
+                if (env == null) weather.avgSoilMoisture?.let { factors.add("💧 Soil moisture: ${String.format(Locale.US, "%.2f", it)} m³/m³ → ${String.format(Locale.US, "%.0f", MycoMath.soilMoistureFitness(it) * 100)}%") }
                 if (moonScore > 0.7) factors.add("🌙 Moon phase favourable (traditional signal)")
                 if (habitatGate < 0.95) factors.add("⛔ Habitat gate ×${String.format(Locale.US, "%.2f", habitatGate)} — built-up/water/bare ground suppresses this cell")
                 factors.add("Multi-factor Bayesian estimate — not a guarantee of presence.")
@@ -1535,19 +1593,27 @@ class FungiRepository(
                     LandClass.NEUTRAL -> MycoMath.canopyProximityScore(canopyDist)
                 }
                 val riparianScore = if (env != null) MycoMath.riparianScore(env.waterDistM.getOrNull(idx)) else 0.45
+                val soilScore = if (env != null)
+                    MycoMath.richSoilScore(env.soilPh.getOrNull(idx), env.soilSand.getOrNull(idx)) else 0.6
+                val twiScore = if (env != null) MycoMath.twiWetnessScore(env.twi.getOrNull(idx)) else 0.5
+                val cellSoilMoisture = env?.soilMoisture?.getOrNull(idx)?.let { MycoMath.soilMoistureFitness(it) }
+                val moistureScoreCell = if (cellSoilMoisture != null)
+                    (0.5 * moistureScore + 0.5 * cellSoilMoisture) else moistureScore
 
                 // Weighted combination (weights sum to 1.0)
                 val weightedSum = 0.22 * observationScore +
-                        0.16 * seasonScore +
+                        0.15 * seasonScore +
                         0.11 * rainTriggerScore +
-                        0.11 * canopyScore +
-                        0.08 * terrainScore +
+                        0.10 * canopyScore +
+                        0.06 * terrainScore +
                         0.08 * 0.7 + // Aggregate habitat baseline (diverse catalogue)
-                        0.06 * elevationScore +
+                        0.05 * elevationScore +
                         0.06 * tempScore +
-                        0.04 * riparianScore +
-                        0.04 * aspectScore +
-                        0.03 * moistureScore +
+                        0.03 * riparianScore +
+                        0.03 * aspectScore +
+                        0.03 * moistureScoreCell +
+                        0.04 * soilScore +
+                        0.03 * twiScore +
                         0.01 * moonScore
 
                 val seasonRainFloor = minOf(seasonScore, rainTriggerScore + 0.2)
@@ -1575,6 +1641,17 @@ class FungiRepository(
                     val cv = env.canopyPct.getOrNull(idx)
                     val nv = env.ndvi.getOrNull(idx)
                     factors.add("🛰️ Earth Engine: canopy ${if (cv != null) String.format(Locale.US, "%.0f%%", cv) else "n/a"}, NDVI ${if (nv != null) String.format(Locale.US, "%.2f", nv) else "n/a"} → ${String.format(Locale.US, "%.0f", canopyScore * 100)}%")
+                    val ph = env.soilPh.getOrNull(idx)
+                    val sand = env.soilSand.getOrNull(idx)
+                    if (ph != null || sand != null) factors.add(
+                        "🧪 Soil: ${if (ph != null) "pH ${String.format(Locale.US, "%.1f", ph)}" else "pH n/a"}, ${if (sand != null) "${String.format(Locale.US, "%.0f", sand)}% sand" else "texture n/a"} → ${String.format(Locale.US, "%.0f", soilScore * 100)}%"
+                    )
+                    env.soilMoisture.getOrNull(idx)?.let { sm ->
+                        factors.add("💧 Soil moisture (14-day): ${String.format(Locale.US, "%.2f", sm)} m³/m³ → ${String.format(Locale.US, "%.0f", MycoMath.soilMoistureFitness(sm) * 100)}%")
+                    }
+                    env.twi.getOrNull(idx)?.let { tw ->
+                        factors.add("🏞️ Wetness index (TWI): ${String.format(Locale.US, "%.1f", tw)} → ${String.format(Locale.US, "%.0f", twiScore * 100)}%")
+                    }
                 } else {
                     factors.add(when (landClass) {
                         LandClass.GREEN -> "🌳 Green space (park / forest / reserve) → strong habitat → ${String.format(Locale.US, "%.0f", canopyScore * 100)}%"
