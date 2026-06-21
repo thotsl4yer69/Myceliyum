@@ -207,4 +207,36 @@ class MycoMathTest {
         val neutral = MycoMath.richCanopyScore(null, null, null, "amanita_muscaria")
         assertTrue(neutral in 0.0..1.0)
     }
+
+    @Test
+    fun `soil pH fitness peaks in the slightly acidic to neutral range`() {
+        assertEquals(1.0, MycoMath.soilPhFitness(6.0), 1e-9)   // ideal
+        assertEquals(1.0, MycoMath.soilPhFitness(7.0), 1e-9)   // neutral edge
+        assertTrue(MycoMath.soilPhFitness(3.5) < MycoMath.soilPhFitness(6.0)) // strongly acidic worse
+        assertTrue(MycoMath.soilPhFitness(8.5) < MycoMath.soilPhFitness(7.0)) // alkaline falls off
+        assertEquals(0.6, MycoMath.soilPhFitness(null), 1e-9)  // no data → neutral
+    }
+
+    @Test
+    fun `soil drainage fitness favours loam over clay and pure sand`() {
+        assertEquals(1.0, MycoMath.soilDrainageFitness(40.0), 1e-9)        // loamy → ideal
+        assertTrue(MycoMath.soilDrainageFitness(95.0) < 1.0)               // very sandy → dries out
+        assertTrue(MycoMath.soilDrainageFitness(5.0) < 1.0)               // very clayey → waterlogs
+        assertEquals(0.6, MycoMath.soilDrainageFitness(null), 1e-9)        // no data → neutral
+    }
+
+    @Test
+    fun `rich soil score stays in range and is neutral with no data`() {
+        assertTrue(MycoMath.richSoilScore(6.0, 40.0) > 0.9)
+        assertEquals(0.6, MycoMath.richSoilScore(null, null), 1e-9)
+        assertTrue(MycoMath.richSoilScore(9.0, 95.0) in 0.0..1.0)
+    }
+
+    @Test
+    fun `twi wetness score rewards moist hollows over dry ridges`() {
+        assertEquals(1.0, MycoMath.twiWetnessScore(10.0), 1e-9)            // moist footslope → ideal
+        assertTrue(MycoMath.twiWetnessScore(2.0) < MycoMath.twiWetnessScore(10.0)) // dry ridge worse
+        assertTrue(MycoMath.twiWetnessScore(18.0) < MycoMath.twiWetnessScore(10.0)) // waterlogged tapers off
+        assertEquals(0.5, MycoMath.twiWetnessScore(null), 1e-9)            // no data → neutral
+    }
 }

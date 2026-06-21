@@ -431,6 +431,60 @@ object MycoMath {
     }.coerceIn(0.0, 1.0)
 
     /**
+     * Soil-pH suitability (0.0–1.0) from surface soil pH (H2O). Most fungi
+     * favour slightly acidic to neutral soils (≈4.5–7.0); strongly acidic or
+     * alkaline ground is less productive. Generic curve (per-species pH bands
+     * are a v2/P3 model concern) — null is neutral, never penalised.
+     */
+    fun soilPhFitness(ph: Double?): Double = when {
+        ph == null -> 0.6
+        ph < 4.0 -> 0.35                                   // strongly acidic
+        ph < 5.0 -> 0.35 + (ph - 4.0) * 0.65              // 0.35 → 1.0 across 4.0–5.0
+        ph <= 7.0 -> 1.0                                   // slightly acidic–neutral: ideal
+        ph <= 8.5 -> 1.0 - (ph - 7.0) / 1.5 * 0.5         // 1.0 → 0.5 alkaline falloff
+        else -> 0.5
+    }.coerceIn(0.0, 1.0)
+
+    /**
+     * Soil-drainage suitability (0.0–1.0) from surface sand mass-fraction (%).
+     * Loamy ground (moderate sand) holds moisture while still draining; very
+     * clayey soils waterlog/compact and very sandy ones dry out fast.
+     */
+    fun soilDrainageFitness(sandPct: Double?): Double = when {
+        sandPct == null -> 0.6
+        sandPct < 15.0 -> 0.6                              // very clayey — waterlogs/compacts
+        sandPct <= 70.0 -> 1.0                             // loamy — ideal
+        sandPct <= 90.0 -> 1.0 - (sandPct - 70.0) / 20.0 * 0.4  // sandy — drains fast/dry
+        else -> 0.55
+    }.coerceIn(0.0, 1.0)
+
+    /**
+     * Blends surface soil pH and texture into a single soil suitability
+     * (0.0–1.0). pH is weighted higher as the more ecologically discriminating
+     * signal. Both null → neutral (0.6).
+     */
+    fun richSoilScore(ph: Double?, sandPct: Double?): Double {
+        if (ph == null && sandPct == null) return 0.6
+        return (0.6 * soilPhFitness(ph) + 0.4 * soilDrainageFitness(sandPct)).coerceIn(0.0, 1.0)
+    }
+
+    /**
+     * Topographic Wetness Index suitability (0.0–1.0). Higher TWI = larger
+     * upslope catchment over flatter ground, so moisture accumulates (gully
+     * lines, footslopes, flats) — ground fungi favour. Dry ridge tops shed
+     * water (low TWI); extreme values are likely water channels, tapered off.
+     * Null is neutral.
+     */
+    fun twiWetnessScore(twi: Double?): Double = when {
+        twi == null -> 0.5
+        twi < 3.0 -> 0.45                                  // dry ridgeline / steep
+        twi < 7.0 -> 0.45 + (twi - 3.0) / 4.0 * 0.45      // 0.45 → 0.90
+        twi <= 12.0 -> 1.0                                 // moist hollows / footslopes — ideal
+        twi <= 16.0 -> 1.0 - (twi - 12.0) / 4.0 * 0.3     // 1.0 → 0.7 wet channels
+        else -> 0.6                                        // likely standing water/channel
+    }.coerceIn(0.0, 1.0)
+
+    /**
      * Multiplicative HABITAT GATE (0.05–1.0) — the counter-weight that stops
      * cities, roads, car parks and water from scoring high.
      *
