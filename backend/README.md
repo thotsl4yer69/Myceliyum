@@ -61,12 +61,20 @@ curl -s -X POST "$URL/env-grid" \
   -H "X-Api-Token: $TOKEN" -H "Content-Type: application/json" \
   -d '{"points": [[-37.8136, 144.9631], [-37.8386, 145.3524]]}' | jq
 # → {"landcover":[50,10], "canopy":[3.1, 78.4], "ndvi":[0.21, 0.74],
-#    "water_dist":[180.0, null]}   # metres to nearest water; null = >2 km / no data
+#    "water_dist":[180.0, null],     # metres to nearest water; null = >2 km / no data
+#    "soil_ph":[5.8, 6.3], "soil_sand":[42, 31],   # surface soil pH / sand mass %
+#    "soil_moisture":[0.27, 0.19],   # 14-day mean volumetric soil water (m³/m³)
+#    "twi":[7.4, 5.1]}               # topographic wetness index (higher = wetter)
 ```
+
+The `soil_*` and `twi` fields are the v2 ecology layers (see
+`docs/PREDICTION_ENGINE_V2.md`). Each is sampled independently and guarded, so a
+failure in any one returns nulls for that layer only — the core layers above are
+never affected.
 
 ## Endpoints
 
 | Method | Path        | Body / Result |
 |--------|-------------|---------------|
 | GET    | `/health`   | `{"status":"ok"}` |
-| POST   | `/env-grid` | `{"points":[[lat,lng],...]}` (≤600) → `{"landcover":[...],"canopy":[...],"ndvi":[...],"water_dist":[...]}` aligned 1:1 |
+| POST   | `/env-grid` | `{"points":[[lat,lng],...]}` (≤600) → `{"landcover":[...],"canopy":[...],"ndvi":[...],"water_dist":[...],"soil_ph":[...],"soil_sand":[...],"soil_moisture":[...],"twi":[...]}` aligned 1:1 |
