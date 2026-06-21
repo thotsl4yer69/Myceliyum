@@ -63,6 +63,10 @@ jobs:
           KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
           KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           BUILD_NUMBER: ${{ github.run_number }}
+          # Earth Engine env-layers backend (see android-ci.yml). Blank → OSM
+          # land-use fallback.
+          BACKEND_BASE_URL: ${{ secrets.BACKEND_BASE_URL }}
+          BACKEND_TOKEN: ${{ secrets.BACKEND_TOKEN }}
         run: ./gradlew assembleRelease --stacktrace
 
       - name: Upload release APK

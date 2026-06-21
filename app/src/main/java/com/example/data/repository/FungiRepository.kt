@@ -746,6 +746,127 @@ class FungiRepository(
         }
     }
 
+    // ─── OSM land-use classification (offline habitat discrimination) ───
+    //
+    // When the Earth Engine backend isn't configured, this is what lets the map
+    // actually tell good ground from bad. We pull real land-use *polygons* —
+    // green space (forest/park/reserve/scrub/wetland…) and built-up
+    // (residential/industrial/retail/parking/aerodrome…) — and classify each
+    // grid cell by point-in-polygon. Green cells get a high habitat gate;
+    // built-up cells are suppressed toward zero so suburbs go dark instead of
+    // every cell scoring the same.
+
+    /** A classified land-use ring. [ring] is a flat [lat0,lng0,lat1,lng1,…] array. */
+    private class LandPolygon(
+        val green: Boolean,
+        val ring: DoubleArray,
+        val minLat: Double, val minLng: Double, val maxLat: Double, val maxLng: Double
+    )
+
+    private enum class LandClass { GREEN, BUILT, NEUTRAL }
+
+    private fun isGreenTags(tags: Map<String, String>?): Boolean {
+        if (tags == null) return false
+        if (tags["boundary"] == "protected_area") return true
+        when (tags["leisure"]) { "park", "nature_reserve", "garden", "golf_course" -> return true }
+        when (tags["natural"]) { "wood", "scrub", "heath", "grassland", "wetland", "scree" -> return true }
+        when (tags["landuse"]) {
+            "forest", "meadow", "recreation_ground", "village_green", "allotments", "orchard" -> return true
+        }
+        return false
+    }
+
+    private fun isBuiltTags(tags: Map<String, String>?): Boolean {
+        if (tags == null) return false
+        if (tags["amenity"] == "parking") return true
+        if (tags["aeroway"] == "aerodrome") return true
+        when (tags["landuse"]) {
+            "residential", "industrial", "commercial", "retail",
+            "construction", "garages", "railway", "quarry" -> return true
+        }
+        return false
+    }
+
+    /**
+     * Fetches classified green / built-up land-use polygons in the bbox via
+     * Overpass `out geom`. Returns empty on failure (callers fall back to the
+     * canopy-proximity heuristic), so the map degrades gracefully.
+     */
+    private suspend fun fetchLandUsePolygons(
+        minLat: Double, minLng: Double, maxLat: Double, maxLng: Double
+    ): List<LandPolygon> = withContext(Dispatchers.IO) {
+        try {
+            val bbox = String.format(Locale.US, "%.5f,%.5f,%.5f,%.5f", minLat, minLng, maxLat, maxLng)
+            val ql = """
+                [out:json][timeout:40];
+                (
+                  way["leisure"~"park|nature_reserve|garden|golf_course"]($bbox);
+                  way["natural"~"wood|scrub|heath|grassland|wetland|scree"]($bbox);
+                  way["landuse"~"forest|meadow|recreation_ground|village_green|allotments|orchard"]($bbox);
+                  way["boundary"="protected_area"]($bbox);
+                  way["landuse"~"residential|industrial|commercial|retail|construction|garages|railway|quarry"]($bbox);
+                  way["amenity"="parking"]($bbox);
+                  way["aeroway"="aerodrome"]($bbox);
+                );
+                out geom;
+            """.trimIndent()
+            val resp = overpassApi.query(ql)
+            resp.elements.orEmpty().mapNotNull { el ->
+                val geom = el.geometry ?: return@mapNotNull null
+                val green = isGreenTags(el.tags)
+                val built = isBuiltTags(el.tags)
+                // Green wins ties; ignore anything we can't classify.
+                if (!green && !built) return@mapNotNull null
+                val pts = geom.mapNotNull { p ->
+                    val la = p.lat; val lo = p.lon
+                    if (la != null && lo != null) la to lo else null
+                }
+                if (pts.size < 3) return@mapNotNull null
+                val ring = DoubleArray(pts.size * 2)
+                pts.forEachIndexed { k, (la, lo) -> ring[k * 2] = la; ring[k * 2 + 1] = lo }
+                LandPolygon(
+                    green = green,
+                    ring = ring,
+                    minLat = pts.minOf { it.first }, minLng = pts.minOf { it.second },
+                    maxLat = pts.maxOf { it.first }, maxLng = pts.maxOf { it.second }
+                )
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Land-use (Overpass) fetch failed, neutral habitat: ${e.message}")
+            emptyList()
+        }
+    }
+
+    /** Ray-casting point-in-polygon test. [ring] is flat [lat,lng,lat,lng,…]. */
+    private fun pointInRing(lat: Double, lng: Double, ring: DoubleArray): Boolean {
+        var inside = false
+        val n = ring.size / 2
+        var j = n - 1
+        for (i in 0 until n) {
+            val yi = ring[i * 2]; val xi = ring[i * 2 + 1]
+            val yj = ring[j * 2]; val xj = ring[j * 2 + 1]
+            if (((yi > lat) != (yj > lat)) &&
+                (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi)
+            ) inside = !inside
+            j = i
+        }
+        return inside
+    }
+
+    /** Classify a cell against the land-use polygons; green takes priority. */
+    private fun classifyLandCell(lat: Double, lng: Double, polys: List<LandPolygon>): LandClass {
+        if (polys.isEmpty()) return LandClass.NEUTRAL
+        var built = false
+        for (p in polys) {
+            if (lat < p.minLat || lat > p.maxLat || lng < p.minLng || lng > p.maxLng) continue
+            if (pointInRing(lat, lng, p.ring)) {
+                if (p.green) return LandClass.GREEN
+                built = true
+            }
+        }
+        return if (built) LandClass.BUILT else LandClass.NEUTRAL
+    }
+
     /** Per-cell Earth Engine layers, aligned 1:1 with the grid points. */
     data class EnvLayers(
         val landcover: List<Int?>,
@@ -944,49 +1065,6 @@ class FungiRepository(
      * The weighted score is then multiplied by a season/rain penalty AND a
      * habitat gate that collapses built-up/water/bare cells toward zero.
      */
-    /**
-     * Re-tier the grid RELATIVE to the current search radius so the best local
-     * cells always surface. Absolute scores are heavily compressed — a weighted
-     * 0–1 average multiplied by a season/rain penalty AND a habitat gate — and
-     * when the Earth Engine backend isn't configured the OSM fallback pushes
-     * even good forest cells below the old fixed 0.20 "Possible" cutoff, leaving
-     * the map blank everywhere. Ranking by percentile within the visible grid
-     * keeps the map useful (it always points you at the best ground nearby)
-     * while an absolute "dead floor" keeps genuinely unsuitable cells —
-     * built-up / water / bare ground gated toward zero — as Unlikely so cities
-     * never light up. The per-cell `score` and factor breakdown are untouched,
-     * so the "why this score" panel still shows the real numbers.
-     */
-    private fun applyRelativeTiers(cells: List<HotspotCell>): List<HotspotCell> {
-        // Cells at/under this carry no real signal (habitat-gated or no positive
-        // factors) and must never be promoted out of Unlikely.
-        val deadFloor = 0.08
-        val alive = cells.filter { it.score > deadFloor }
-        // Too few live cells to rank meaningfully — keep absolute tiers.
-        if (alive.size < 4) return cells
-
-        val sorted = alive.map { it.score }.sorted()
-        fun percentile(p: Double): Double =
-            sorted[(p * (sorted.size - 1)).toInt().coerceIn(0, sorted.size - 1)]
-
-        // Top ~15% Excellent, next ~20% Very Good, next ~30% Promising, the rest
-        // of the live cells Possible. Dead cells stay Unlikely.
-        val tExcellent = percentile(0.85)
-        val tVeryGood = percentile(0.65)
-        val tPromising = percentile(0.35)
-
-        return cells.map { c ->
-            val tier = when {
-                c.score <= deadFloor -> "Unlikely"
-                c.score >= tExcellent -> "Excellent"
-                c.score >= tVeryGood -> "VeryGood"
-                c.score >= tPromising -> "Promising"
-                else -> "Possible"
-            }
-            if (tier == c.tier) c else c.copy(tier = tier)
-        }
-    }
-
     suspend fun generateHotspots(
         species: Species,
         centerLat: Double,
@@ -1075,6 +1153,11 @@ class FungiRepository(
             cellLL.minOf { it.first }, cellLL.minOf { it.second },
             cellLL.maxOf { it.first }, cellLL.maxOf { it.second }
         ) else emptyList()
+        // Real land-use polygons drive habitat discrimination when EE is off.
+        val landPolys = if (env == null && cellLL.isNotEmpty()) fetchLandUsePolygons(
+            cellLL.minOf { it.first }, cellLL.minOf { it.second },
+            cellLL.maxOf { it.first }, cellLL.maxOf { it.second }
+        ) else emptyList()
 
         for (idx in cellIJ.indices) {
             coroutineContext.ensureActive()
@@ -1142,9 +1225,14 @@ class FungiRepository(
                 // Canopy/vegetation suitability — Earth Engine layers when
                 // available, else OSM forest proximity (mycorrhizal & wood-rot).
                 val canopyDist = if (canopy.isEmpty()) null else nearestFeatureMeters(cellLat, cellLng, canopy)
+                val landClass = if (env == null) classifyLandCell(cellLat, cellLng, landPolys) else LandClass.NEUTRAL
                 val canopyScore = if (env != null) MycoMath.richCanopyScore(
                     env.canopyPct.getOrNull(idx), env.ndvi.getOrNull(idx), env.landcover.getOrNull(idx), species.id
-                ) else MycoMath.canopyProximityScore(canopyDist)
+                ) else when (landClass) {
+                    LandClass.GREEN -> maxOf(0.85, MycoMath.canopyProximityScore(canopyDist))
+                    LandClass.BUILT -> 0.10
+                    LandClass.NEUTRAL -> MycoMath.canopyProximityScore(canopyDist)
+                }
                 // Riparian: closeness to surface water (EE only; neutral otherwise).
                 val riparianScore = if (env != null) MycoMath.riparianScore(env.waterDistM.getOrNull(idx)) else 0.45
 
@@ -1200,8 +1288,11 @@ class FungiRepository(
                 // canopy-proximity fallback.
                 val habitatGate = if (env != null)
                     MycoMath.habitatGate(env.landcover.getOrNull(idx), env.ndvi.getOrNull(idx), species.id)
-                else
-                    (0.35 + 0.65 * canopyScore)
+                else when (landClass) {
+                    LandClass.GREEN -> 0.95
+                    LandClass.BUILT -> 0.10
+                    LandClass.NEUTRAL -> (0.45 + 0.40 * MycoMath.canopyProximityScore(canopyDist))
+                }
 
                 val finalScore = (weightedSum * penaltyMultiplier * habitatGate).coerceIn(0.0, 1.0)
 
@@ -1229,7 +1320,11 @@ class FungiRepository(
                     val nv = env.ndvi.getOrNull(idx)
                     factors.add("🛰️ Earth Engine: canopy ${if (cv != null) String.format(Locale.US, "%.0f%%", cv) else "n/a"}, NDVI ${if (nv != null) String.format(Locale.US, "%.2f", nv) else "n/a"} → ${String.format(Locale.US, "%.0f", canopyScore * 100)}%")
                 } else {
-                    factors.add("🌳 Canopy: ${if (canopyDist != null) "~${String.format(Locale.US, "%.0f m", canopyDist)} to woodland" else "no map data"} → ${String.format(Locale.US, "%.0f", canopyScore * 100)}%")
+                    factors.add(when (landClass) {
+                        LandClass.GREEN -> "🌳 Green space (park / forest / reserve) → strong habitat → ${String.format(Locale.US, "%.0f", canopyScore * 100)}%"
+                        LandClass.BUILT -> "🏙️ Built-up land (residential / industrial / car park) → habitat suppressed → ${String.format(Locale.US, "%.0f", canopyScore * 100)}%"
+                        LandClass.NEUTRAL -> "🌳 Canopy: ${if (canopyDist != null) "~${String.format(Locale.US, "%.0f m", canopyDist)} to woodland" else "no land-use map data"} → ${String.format(Locale.US, "%.0f", canopyScore * 100)}%"
+                    })
                 }
                 if (env != null) {
                     val wd = env.waterDistM.getOrNull(idx)
@@ -1242,7 +1337,7 @@ class FungiRepository(
 
                 cells.add(HotspotCell(cellLat, cellLng, finalScore, tier, factors))
         }
-        return@withContext applyRelativeTiers(cells)
+        return@withContext cells
     }
 
 
@@ -1368,6 +1463,11 @@ class FungiRepository(
             cellLL.minOf { it.first }, cellLL.minOf { it.second },
             cellLL.maxOf { it.first }, cellLL.maxOf { it.second }
         ) else emptyList()
+        // Real land-use polygons drive habitat discrimination when EE is off.
+        val landPolys = if (env == null && cellLL.isNotEmpty()) fetchLandUsePolygons(
+            cellLL.minOf { it.first }, cellLL.minOf { it.second },
+            cellLL.maxOf { it.first }, cellLL.maxOf { it.second }
+        ) else emptyList()
 
         for (idx in cellIJ.indices) {
             coroutineContext.ensureActive()
@@ -1426,9 +1526,14 @@ class FungiRepository(
                     elevByIJ[i to (j + 1)], elevByIJ[i to (j - 1)]
                 ) else 0.7
                 val canopyDist = if (canopy.isEmpty()) null else nearestFeatureMeters(cellLat, cellLng, canopy)
+                val landClass = if (env == null) classifyLandCell(cellLat, cellLng, landPolys) else LandClass.NEUTRAL
                 val canopyScore = if (env != null) MycoMath.richCanopyScore(
                     env.canopyPct.getOrNull(idx), env.ndvi.getOrNull(idx), env.landcover.getOrNull(idx), "aggregate_default"
-                ) else MycoMath.canopyProximityScore(canopyDist)
+                ) else when (landClass) {
+                    LandClass.GREEN -> maxOf(0.85, MycoMath.canopyProximityScore(canopyDist))
+                    LandClass.BUILT -> 0.10
+                    LandClass.NEUTRAL -> MycoMath.canopyProximityScore(canopyDist)
+                }
                 val riparianScore = if (env != null) MycoMath.riparianScore(env.waterDistM.getOrNull(idx)) else 0.45
 
                 // Weighted combination (weights sum to 1.0)
@@ -1450,8 +1555,11 @@ class FungiRepository(
                 // Habitat gate — suppress built-up/water/bare cells (see single-species note).
                 val habitatGate = if (env != null)
                     MycoMath.habitatGate(env.landcover.getOrNull(idx), env.ndvi.getOrNull(idx), "aggregate_default")
-                else
-                    (0.35 + 0.65 * canopyScore)
+                else when (landClass) {
+                    LandClass.GREEN -> 0.95
+                    LandClass.BUILT -> 0.10
+                    LandClass.NEUTRAL -> (0.45 + 0.40 * MycoMath.canopyProximityScore(canopyDist))
+                }
                 val finalScore = (weightedSum * penaltyMultiplier * habitatGate).coerceIn(0.0, 1.0)
 
                 val tier = MycoMath.classifyTier(finalScore)
@@ -1468,7 +1576,11 @@ class FungiRepository(
                     val nv = env.ndvi.getOrNull(idx)
                     factors.add("🛰️ Earth Engine: canopy ${if (cv != null) String.format(Locale.US, "%.0f%%", cv) else "n/a"}, NDVI ${if (nv != null) String.format(Locale.US, "%.2f", nv) else "n/a"} → ${String.format(Locale.US, "%.0f", canopyScore * 100)}%")
                 } else {
-                    factors.add("🌳 Canopy: ${if (canopyDist != null) "~${String.format(Locale.US, "%.0f m", canopyDist)} to woodland" else "no map data"} → ${String.format(Locale.US, "%.0f", canopyScore * 100)}%")
+                    factors.add(when (landClass) {
+                        LandClass.GREEN -> "🌳 Green space (park / forest / reserve) → strong habitat → ${String.format(Locale.US, "%.0f", canopyScore * 100)}%"
+                        LandClass.BUILT -> "🏙️ Built-up land (residential / industrial / car park) → habitat suppressed → ${String.format(Locale.US, "%.0f", canopyScore * 100)}%"
+                        LandClass.NEUTRAL -> "🌳 Canopy: ${if (canopyDist != null) "~${String.format(Locale.US, "%.0f m", canopyDist)} to woodland" else "no land-use map data"} → ${String.format(Locale.US, "%.0f", canopyScore * 100)}%"
+                    })
                 }
                 if (habitatGate < 0.95) factors.add("⛔ Habitat gate ×${String.format(Locale.US, "%.2f", habitatGate)} — built-up/water/bare ground suppresses this cell")
                 if (nearbySpecies.size >= 3) factors.add("🌿 Diversity bonus: ${nearbySpecies.size} distinct species recorded nearby")
@@ -1476,7 +1588,7 @@ class FungiRepository(
 
                 cells.add(HotspotCell(cellLat, cellLng, finalScore, tier, factors))
         }
-        return@withContext applyRelativeTiers(cells)
+        return@withContext cells
     }
 
     // ─── Darwin Core Export ─────────────────────────────────────────

@@ -288,7 +288,7 @@ fun MapScreen(
                             verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Text(
-                                text = "Best spots near you",
+                                text = "Likelihood",
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 10.sp,
@@ -297,34 +297,28 @@ fun MapScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(modifier = Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFFFF6B6B)))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Top — walk here first", color = Color.White, fontSize = 9.sp)
+                                Text("Excellent >80%", color = Color.White, fontSize = 9.sp)
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(modifier = Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFF54E0A0)))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Strong", color = Color.White, fontSize = 9.sp)
+                                Text("Very Good 60-80%", color = Color.White, fontSize = 9.sp)
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(modifier = Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFFE6B24C)))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Promising", color = Color.White, fontSize = 9.sp)
+                                Text("Promising 40-60%", color = Color.White, fontSize = 9.sp)
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(modifier = Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFF8B9D93)))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Possible", color = Color.White, fontSize = 9.sp)
+                                Text("Possible 20-40%", color = Color.White, fontSize = 9.sp)
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(modifier = Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFF5B6353).copy(alpha = 0.3f)))
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text("Built-up / bare — skip", color = Color.White, fontSize = 9.sp)
                             }
-                            Text(
-                                text = "Ranked within your radius",
-                                color = Color.White.copy(alpha = 0.55f),
-                                fontSize = 8.sp,
-                                modifier = Modifier.padding(top = 2.dp)
-                            )
                         }
                     }
 
@@ -1098,10 +1092,10 @@ fun MapScreen(
                         }
                         
                         Text(
-                            text = "Ranked within your search radius · model score ${String.format(Locale.getDefault(), "%.0f%%", cell.score * 100.0)}",
+                            text = "Likelihood score: ${String.format(Locale.getDefault(), "%.0f%%", cell.score * 100.0)}",
                             fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.padding(vertical = 4.dp)
                         )

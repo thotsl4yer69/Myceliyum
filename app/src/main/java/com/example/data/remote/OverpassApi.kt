@@ -28,12 +28,16 @@ data class OverpassResponse(
 /**
  * An Overpass element. For ways/relations we request `out center;`, so the
  * representative coordinate arrives in [center]; nodes carry [lat]/[lon].
+ * When a query uses `out geom;` instead, the full ring is in [geometry] and the
+ * OSM [tags] are present so callers can classify the feature (green vs built).
  */
 data class OverpassElement(
     @Json(name = "type") val type: String?,
     @Json(name = "lat") val lat: Double?,
     @Json(name = "lon") val lon: Double?,
-    @Json(name = "center") val center: OverpassCenter?
+    @Json(name = "center") val center: OverpassCenter?,
+    @Json(name = "tags") val tags: Map<String, String>? = null,
+    @Json(name = "geometry") val geometry: List<OverpassGeom>? = null
 ) {
     /** Best-available latitude for this element (node lat or way/relation centre). */
     fun resolvedLat(): Double? = lat ?: center?.lat
@@ -43,6 +47,12 @@ data class OverpassElement(
 }
 
 data class OverpassCenter(
+    @Json(name = "lat") val lat: Double?,
+    @Json(name = "lon") val lon: Double?
+)
+
+/** A single vertex of a way's geometry, present when a query uses `out geom;`. */
+data class OverpassGeom(
     @Json(name = "lat") val lat: Double?,
     @Json(name = "lon") val lon: Double?
 )
