@@ -11,9 +11,16 @@ Endpoints:
   GET  /health            → liveness probe
   POST /env-grid          → body {"points": [[lat,lng], ...]} (≤600)
                             → {"landcover": [...], "canopy": [...], "ndvi": [...],
-                               "water_dist": [...]}   # metres to nearest water
+                               "water_dist": [...],     # metres to nearest water
+                               "soil_ph": [...],        # surface soil pH (H2O)
+                               "soil_sand": [...],      # surface sand mass %
+                               "soil_moisture": [...],  # 14-day mean vol. soil water (m³/m³)
+                               "twi": [...]}            # topographic wetness index
                             arrays are aligned 1:1 with the input points;
-                            entries may be null where a layer has no value.
+                            entries may be null where a layer has no value. The
+                            v2 layers (soil_*, twi) are each independently
+                            guarded — a failure in any one returns nulls for that
+                            layer only and never affects the core layers above.
 
 Security: if BACKEND_TOKEN is set, every request (except /health) must send
 a matching `X-Api-Token` header. Deploy authenticated where possible; the
@@ -21,6 +28,7 @@ token is a lightweight guard against casual abuse of the public endpoint.
 """
 import datetime
 import hmac
+import math
 import os
 
 import ee
@@ -146,12 +154,83 @@ def env_grid():
     except Exception as exc:  # noqa: BLE001
         app.logger.warning("water distance failed: %s", exc)
 
+    # ── v2: soil pH/texture + topographic wetness (static layers) ───────
+    # Sampled as their own guarded group, separate from the proven core
+    # stack above, so a wrong asset id or band here can only null these
+    # columns — it can never break landcover/canopy/ndvi.
+    soil_ph_col = [None] * n
+    soil_sand_col = [None] * n
+    twi_col = [None] * n
+    try:
+        # OpenLandMap surface (0 cm) soil pH (H2O); stored ×10, so ÷10 → real pH.
+        ph = (
+            ee.Image("OpenLandMap/SOL/SOL_PH-H2O_USDA-4C1A2A_M/v02")
+            .select("b0")
+            .divide(10)
+            .rename("soil_ph")
+        )
+        # OpenLandMap surface sand mass-fraction (%). High sand → fast-draining.
+        sand = (
+            ee.Image("OpenLandMap/SOL/SOL_SAND-WFRACTION_USDA-3A1A1A_M/v02")
+            .select("b0")
+            .rename("soil_sand")
+        )
+        # Topographic Wetness Index = ln(specific catchment area / tan(slope)).
+        # MERIT Hydro 'upa' = upstream drainage area (km²) → m², divided by the
+        # ~90 m cell width for specific catchment area; slope from its DEM.
+        # tan(slope) is floored away from 0 so flats don't divide by zero.
+        merit = ee.Image("MERIT/Hydro/v1_0_1")
+        slope_rad = ee.Terrain.slope(merit.select("elv")).multiply(math.pi / 180.0)
+        tan_slope = slope_rad.tan().max(0.001)
+        twi = (
+            merit.select("upa").multiply(1e6).divide(90.0).divide(tan_slope)
+            .log().rename("twi")
+        )
+        soil_stack = ph.addBands(sand).addBands(twi)
+        # Multi-band image → reduceRegions names each output property after its
+        # band (unlike the single-band "first" quirk used for water below).
+        sfeat = soil_stack.reduceRegions(
+            collection=fc, reducer=ee.Reducer.first(), scale=90
+        ).getInfo()["features"]
+        sby = {f["properties"].get("idx"): f["properties"] for f in sfeat}
+        soil_ph_col = [sby.get(i, {}).get("soil_ph") for i in range(n)]
+        soil_sand_col = [sby.get(i, {}).get("soil_sand") for i in range(n)]
+        twi_col = [sby.get(i, {}).get("twi") for i in range(n)]
+    except Exception as exc:  # noqa: BLE001
+        app.logger.warning("soil/twi layers failed: %s", exc)
+
+    # ── v2: antecedent soil moisture — the fruiting trigger ─────────────
+    # 14-day mean volumetric soil water (m³/m³) from ERA5-Land daily aggregates.
+    # A trailing window, not a snapshot, since fruiting follows rain by ~1-3 wks.
+    sm_col = [None] * n
+    try:
+        sm_end = datetime.date.today()
+        sm_start = sm_end - datetime.timedelta(days=14)
+        sm = (
+            ee.ImageCollection("ECMWF/ERA5_LAND/DAILY_AGGR")
+            .filterDate(sm_start.isoformat(), sm_end.isoformat())
+            .select("volumetric_soil_water_layer_1")
+            .mean()
+        )
+        # Single band → output property is "first" (same quirk as water below).
+        smfeat = sm.reduceRegions(
+            collection=fc, reducer=ee.Reducer.first(), scale=10000
+        ).getInfo()["features"]
+        smby = {f["properties"].get("idx"): f["properties"].get("first") for f in smfeat}
+        sm_col = [smby.get(i) for i in range(n)]
+    except Exception as exc:  # noqa: BLE001
+        app.logger.warning("soil moisture layer failed: %s", exc)
+
     return jsonify(
         {
             "landcover": col("landcover"),
             "canopy": col("canopy"),
             "ndvi": col("ndvi"),
             "water_dist": water_col,
+            "soil_ph": soil_ph_col,
+            "soil_sand": soil_sand_col,
+            "soil_moisture": sm_col,
+            "twi": twi_col,
         }
     )
 
