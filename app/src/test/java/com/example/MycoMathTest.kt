@@ -299,6 +299,35 @@ class MycoMathTest {
     }
 
     @Test
+    fun `terrain moisture is scale-aware and backward compatible`() {
+        val cell = 100.0
+        val gentle = listOf(99.5, 99.5, 100.5, 100.5)  // ~1 m relief across the cell
+        // Default param reproduces the legacy (500 m) calibration exactly.
+        assertEquals(
+            MycoMath.terrainMoistureScore(cell, gentle),
+            MycoMath.terrainMoistureScore(cell, gentle, 500.0),
+            1e-9
+        )
+        // At a fine (15 m) spacing the same 1 m relief reads as a real slope, so
+        // the score discriminates instead of collapsing to the flat baseline.
+        assertTrue(
+            MycoMath.terrainMoistureScore(cell, gentle, 15.0) >
+                MycoMath.terrainMoistureScore(cell, gentle, 500.0)
+        )
+    }
+
+    @Test
+    fun `slope aspect is scale-aware and backward compatible`() {
+        // South-facing: terrain ~1 m higher to the north, lower to the south.
+        val sFineDefault = MycoMath.slopeAspectMoistureScore(100.0, 100.5, 99.5, 100.0, 100.0)
+        val sFine500 = MycoMath.slopeAspectMoistureScore(100.0, 100.5, 99.5, 100.0, 100.0, 500.0)
+        val sFine15 = MycoMath.slopeAspectMoistureScore(100.0, 100.5, 99.5, 100.0, 100.0, 15.0)
+        assertEquals(sFineDefault, sFine500, 1e-9)             // default == legacy 500 m
+        assertTrue(sFine15 > sFine500)                          // fine scale sees the aspect
+        assertTrue(sFine15 > 0.85)                              // clearly south-facing
+    }
+
+    @Test
     fun `rainfall trigger detects a multi-day soaking pulse`() {
         // 45 days, all light (5mm) except a 3-day soak ~15 days ago where no single
         // 2-day window hits 20mm but the 3-day total (24mm) does.

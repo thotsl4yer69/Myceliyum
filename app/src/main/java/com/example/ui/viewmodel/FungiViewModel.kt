@@ -25,6 +25,14 @@ sealed interface HotspotState {
     data class Error(val message: String) : HotspotState
 }
 
+/** Two-tier "Deep Search": a fine sub-grid drilled into one overview cell. */
+sealed interface DeepSearchState {
+    object Idle : DeepSearchState
+    data class Loading(val parent: HotspotCell) : DeepSearchState
+    data class Success(val parent: HotspotCell, val cells: List<HotspotCell>) : DeepSearchState
+    data class Error(val message: String) : DeepSearchState
+}
+
 class FungiViewModel(
     application: Application,
     private val repository: FungiRepository,
@@ -137,6 +145,12 @@ class FungiViewModel(
     private val _hotspotState = MutableStateFlow<HotspotState>(HotspotState.Idle)
     val hotspotState: StateFlow<HotspotState> = _hotspotState.asStateFlow()
 
+    // Deep Search (drill-down) — independent of the overview hotspot state so the
+    // broad grid stays put underneath while a fine sub-grid is computed/overlaid.
+    private val _deepSearchState = MutableStateFlow<DeepSearchState>(DeepSearchState.Idle)
+    val deepSearchState: StateFlow<DeepSearchState> = _deepSearchState.asStateFlow()
+    private var deepJob: kotlinx.coroutines.Job? = null
+
     private val _observationPins = MutableStateFlow<List<Observation>>(emptyList())
     val observationPins: StateFlow<List<Observation>> = _observationPins.asStateFlow()
 
@@ -234,6 +248,7 @@ class FungiViewModel(
         if (!multiSpecies && species == null) return
 
         computeJob?.cancel()
+        clearDeepSearch()  // a new overview invalidates any open drill-down
         computeJob = viewModelScope.launch {
             _hotspotState.value = HotspotState.Loading
             _isRecomputationsRunning.value = true
@@ -273,6 +288,40 @@ class FungiViewModel(
                 _isRecomputationsRunning.value = false
             }
         }
+    }
+
+    /** Whether a cell can be drilled into: single-species mode, VeryGood+ tier. */
+    fun canDeepSearch(cell: HotspotCell): Boolean =
+        !isAllSpeciesMode.value &&
+            selectedSpeciesForHotspot.value != null &&
+            (cell.tier == "Excellent" || cell.tier == "VeryGood")
+
+    /**
+     * Drill into one promising overview cell, computing a fine sub-grid via the
+     * repository (single-species only in v1). Runs independently of the overview.
+     */
+    fun deepSearch(parentCell: HotspotCell) {
+        val species = selectedSpeciesForHotspot.value ?: return
+        if (isAllSpeciesMode.value) return
+        val radius = searchRadiusKm.value
+        deepJob?.cancel()
+        deepJob = viewModelScope.launch {
+            _deepSearchState.value = DeepSearchState.Loading(parentCell)
+            try {
+                val sub = repository.deepSearchCell(species, parentCell, radius)
+                _deepSearchState.value = DeepSearchState.Success(parentCell, sub)
+            } catch (e: Exception) {
+                if (e !is kotlinx.coroutines.CancellationException) {
+                    _deepSearchState.value = DeepSearchState.Error(e.message ?: "Deep search failed.")
+                }
+            }
+        }
+    }
+
+    /** Dismiss the drill-down and return to the broad overview grid. */
+    fun clearDeepSearch() {
+        deepJob?.cancel()
+        _deepSearchState.value = DeepSearchState.Idle
     }
 
     /** Toggle between single-species and aggregate "all species" hotspot mode. */

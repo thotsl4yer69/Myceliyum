@@ -93,5 +93,10 @@ data class HotspotCell(
     val lng: Double,
     val score: Double, // 0 to 1
     val tier: String,  // "Excellent" / "VeryGood" / "Promising" / "Possible" / "Unlikely"
-    val contributingFactors: List<String>
+    val contributingFactors: List<String>,
+    // Edge length (metres) of this cell's square — the grid resolution it was
+    // scored at. Lets the map draw each cell at its true size, so the broad
+    // ~250 m overview grid and a fine Deep-Search sub-grid render correctly on
+    // the same map. Defaults to the overview grid's nominal size.
+    val cellSizeMeters: Double = 250.0
 )

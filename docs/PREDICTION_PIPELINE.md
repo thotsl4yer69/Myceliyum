@@ -17,7 +17,12 @@ Two public suspend functions on `FungiRepository` produce the map:
 | Function | File:line | Produces |
 |----------|-----------|----------|
 | `generateHotspots(species, centerLat, centerLng, radiusKm, forceRefresh)` | `app/.../data/repository/FungiRepository.kt:1110` | Single-species hotspot grid |
-| `generateMultiSpeciesHotspots(centerLat, centerLng, radiusKm, forceRefresh)` | `FungiRepository.kt:1435` | Aggregate (whole-catalogue) grid |
+| `generateMultiSpeciesHotspots(centerLat, centerLng, radiusKm, forceRefresh)` | `FungiRepository.kt` | Aggregate (whole-catalogue) grid |
+| `deepSearchCell(species, parentCell, parentRadiusKm, …)` | `FungiRepository.kt` | Fine ~15 m sub-grid drilled into one overview cell (single-species). See `PREDICTION_ENGINE_V2.md` §7. |
+
+Both grid functions are thin callers of a shared private `runSpeciesGrid(...)`, so
+the broad overview and the Deep-Search drill-down score through the *identical*
+pipeline (just a different cell size / extent / `terrainSpacingM`).
 
 Both return `List<HotspotCell>`; the `MapScreen` composable renders each cell as
 a coloured square with a tap-through factor breakdown. The UI trigger is the
