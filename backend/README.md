@@ -19,11 +19,17 @@ key you exported.
 
 1. Enable the **Earth Engine API** on the project (you already have it).
 2. Register the project for Earth Engine: https://code.earthengine.google.com/
-   (or `earthengine` CLI), and grant the service account access:
+   (or `earthengine` CLI), and grant the service account **both** roles below.
+   `serviceUsageConsumer` is required for `ee.Initialize(project=...)` to call
+   the Service Usage API — without it you get
+   *"Caller does not have required permission to use project …"*:
    ```bash
    gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
      --member="serviceAccount:YOUR_SA@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
      --role="roles/earthengine.viewer"
+   gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
+     --member="serviceAccount:YOUR_SA@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
+     --role="roles/serviceusage.serviceUsageConsumer"
    ```
 
 ## Deploy (no key file)

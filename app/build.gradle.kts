@@ -42,6 +42,10 @@ android {
       "\"${localProps.getProperty("GOOGLE_API_KEY", System.getenv("GOOGLE_API_KEY") ?: "AIzaSyCHMNlANTRjpPCEJxqZ-W-LIRATIc6fVMY")}\""
     )
     // Earth Engine layers backend (Cloud Run). Blank = use free OSM canopy.
+    // Injected at build time from the BACKEND_BASE_URL / BACKEND_TOKEN GitHub
+    // Actions secrets (see android-ci.yml / android-release.yml) or
+    // local.properties for local builds — NEVER hardcoded, since this is a
+    // public repo and the token guards a billable endpoint.
     buildConfigField(
       "String",
       "BACKEND_BASE_URL",
