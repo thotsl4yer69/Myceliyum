@@ -1520,7 +1520,7 @@ class FungiRepository(
             forceRefresh = false
         )
         deepCache[key] = result
-        result
+        return result
     }
 
     /**
