@@ -49,6 +49,12 @@ jobs:
       - name: Assemble debug APK
         env:
           BUILD_NUMBER: ${{ github.run_number }}
+          # Earth Engine env-layers backend. When these repo secrets are set
+          # (after deploying backend/ to Cloud Run), the rolling APK ships with
+          # real satellite canopy/NDVI/land-cover. Blank → free OSM land-use
+          # fallback. Safe to leave unset.
+          BACKEND_BASE_URL: ${{ secrets.BACKEND_BASE_URL }}
+          BACKEND_TOKEN: ${{ secrets.BACKEND_TOKEN }}
         run: ./gradlew assembleDebug --stacktrace
 
       - name: Upload debug APK
