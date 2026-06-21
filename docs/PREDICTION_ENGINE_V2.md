@@ -154,11 +154,47 @@ the current snapshot engine cannot.
   immediate accuracy bump while v2 is built.
 - **P2 — Host-tree layer** — ingest GBIF/ALA tree occurrences; compute per-cell
   host-tree density for each species' known associates. Biggest single jump.
-- **P3 — Trained SDM** — build the offline training pipeline, train per-species
-  models on iNat/GBIF/ALA history, serve via `/predict`. App switches from the
-  weighted sum to model probabilities. Keep the heuristic as a fallback.
+- **P3 — Trained SDM** — *parked.* The rule-based engine after P2 is already
+  strong enough for personal use, and a trained model is a large investment that
+  only pays off with a validation backtest first. Superseded for now by **Deep
+  Search** (below), which buys precision without the model. Revisit if/when the
+  backtest shows the heuristic plateauing.
+- **Deep Search (two-tier drill-down)** — *shipped in place of P3.* See §7.
 - **P4 — Dynamics & niche signals** — phenology learned from records, burned-area
   for morels, forecast-driven "fruiting soon" (rain just fell → predict +10 d).
+
+## 7. Deep Search — two-tier resolution
+
+Rather than train a model for more precision, the engine is **two-tier**:
+
+1. **Overview grid** — the broad adaptive ~250 m grid (unchanged), tuned for
+   performance and Earth-Engine cost over the whole 1–30 km search radius.
+2. **Deep Search** — when the user taps a promising cell (VeryGood+, single-
+   species), `deepSearchCell(...)` computes a fine **~15 m** sub-grid over just
+   that square (parent cell × `extentFactor`, ≈300–600 m), overlaid on the same
+   map. It **reuses the exact scoring pipeline** (`runSpeciesGrid`) at a finer
+   cell size — no separate code path.
+
+Design notes:
+- **Reuse:** `generateHotspots` and `deepSearchCell` are both thin callers of the
+  private `runSpeciesGrid`, so the overview and the drill-down score identically.
+- **Scale-aware terrain:** `terrainMoistureScore` / `slopeAspectMoistureScore`
+  take a `cellSpacingM` (default 500 m → overview unchanged); Deep Search passes
+  the sub-cell size so slope/aspect/concavity stay meaningful at 15 m instead of
+  collapsing to "flat".
+- **Caching:** the overview's ~250 m-snap caches would collapse every fine
+  sub-cell onto one value, so Deep Search uses dedicated ~12 m-snap session
+  caches (`deepElevCache`/`deepEnvCache`) plus a per-cell result memo
+  (`deepCache`). EE batching (`≤500`/request) is reused as-is.
+- **Limits:** sub-cells are capped (~1500) by coarsening the resolution when the
+  area is large, so a Deep Search is always a single small EE request.
+- **Honest ceiling:** true detail is bounded by the source data (elevation ~90 m,
+  canopy 30 m, soil 250 m), so Deep Search sharpens interpolation, terrain/aspect
+  and the actionable zoom — not literal 15 m ground truth.
+- **Degradation:** inherits every overview fallback (EE → OSM → neutral terrain →
+  weather defaults), plus `habitatGate` and the season/rain penalty.
+- **Scope (v1):** single-species only; aggregate "all species" drill-down is a
+  straightforward follow-up (reuse the aggregate loop the same way).
 
 ## 6. Risks & honest caveats
 

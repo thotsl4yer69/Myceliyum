@@ -43,6 +43,7 @@ import com.example.model.HotspotCell
 import com.example.model.MapObservation
 import com.example.model.Observation
 import com.example.model.Species
+import com.example.ui.viewmodel.DeepSearchState
 import com.example.ui.viewmodel.FungiViewModel
 import com.example.ui.viewmodel.HotspotState
 import com.google.android.gms.location.LocationServices
@@ -89,6 +90,7 @@ fun MapScreen(
     val allSpeciesMode by viewModel.isAllSpeciesMode.collectAsState()
 
     val hotspotState by viewModel.hotspotState.collectAsState()
+    val deepSearchState by viewModel.deepSearchState.collectAsState()
     val pins by viewModel.observationPins.collectAsState()
     val allFungiPins by viewModel.allFungiPins.collectAsState()
     val showAllSightings by viewModel.showAllSightings.collectAsState()
@@ -110,6 +112,13 @@ fun MapScreen(
             emptyList()
         }
     }
+
+    // Cells drawn on the map: the broad overview grid, with any Deep-Search fine
+    // sub-grid overlaid on top (each polygon is sized from its own cellSizeMeters).
+    val overviewCells = if (hotspotState is HotspotState.Success)
+        (hotspotState as HotspotState.Success).cells else emptyList()
+    val deepCells = (deepSearchState as? DeepSearchState.Success)?.cells ?: emptyList()
+    val displayedCells = remember(overviewCells, deepCells) { overviewCells + deepCells }
 
     // Navigation and coordinates editing states
     var manualLatText by remember { mutableStateOf(String.format(Locale.US, "%.5f", mapCenter.first)) }
@@ -200,7 +209,7 @@ fun MapScreen(
                         centerY = mapCenter.second,
                         radiusKm = searchRadiusKm,
                         mapTheme = mapTheme,
-                        hotspotCells = if (hotspotState is HotspotState.Success) (hotspotState as HotspotState.Success).cells else emptyList(),
+                        hotspotCells = displayedCells,
                         // In aggregate mode the cells already represent combined
                         // evidence; pinning one species' records on top is noisy
                         // and misleading, so skip them.
@@ -238,6 +247,62 @@ fun MapScreen(
                             .align(Alignment.Center)
                             .size(30.dp)
                     )
+
+                    // Deep Search status chip (top-centre): a spinner while the fine
+                    // sub-grid computes, then a "Back to overview" affordance once it
+                    // is overlaid so the broad grid is always one tap away.
+                    when (val ds = deepSearchState) {
+                        is DeepSearchState.Loading -> Surface(
+                            color = MaterialTheme.colorScheme.surfaceColorAtElevation(12.dp),
+                            shape = RoundedCornerShape(20.dp),
+                            modifier = Modifier.align(Alignment.TopCenter).padding(top = 12.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                            ) {
+                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Deep searching this square…", fontSize = 12.sp)
+                            }
+                        }
+                        is DeepSearchState.Success -> Surface(
+                            color = MaterialTheme.colorScheme.surfaceColorAtElevation(12.dp),
+                            shape = RoundedCornerShape(20.dp),
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .padding(top = 12.dp)
+                                .clickable { viewModel.clearDeepSearch() }
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                            ) {
+                                Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(14.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    "Fine grid: ${ds.cells.count { it.tier != "Unlikely" }} cells • Back to overview",
+                                    fontSize = 12.sp, fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                        is DeepSearchState.Error -> Surface(
+                            color = MaterialTheme.colorScheme.errorContainer,
+                            shape = RoundedCornerShape(20.dp),
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .padding(top = 12.dp)
+                                .clickable { viewModel.clearDeepSearch() }
+                        ) {
+                            Text(
+                                "Deep search failed — tap to dismiss",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                            )
+                        }
+                        DeepSearchState.Idle -> {}
+                    }
 
                     // Compass Indicator & Scale Overlay (hidden in fullscreen)
                     androidx.compose.animation.AnimatedVisibility(
@@ -1135,6 +1200,27 @@ fun MapScreen(
                         
                         Spacer(modifier = Modifier.height(10.dp))
                         
+                        // Deep Search — refine this promising square into a fine
+                        // (~15 m) sub-grid for pinpoint foraging. Single-species,
+                        // VeryGood+ only (a finer grid on a weak cell isn't useful).
+                        if (viewModel.canDeepSearch(cell)) {
+                            Button(
+                                onClick = {
+                                    viewModel.deepSearch(cell)
+                                    selectedHotspotCell = null
+                                    Toast.makeText(context, "Deep searching this square — pinch to zoom in.", Toast.LENGTH_SHORT).show()
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = tierColor(cell.tier)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(imageVector = Icons.Default.Search, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Deep Search this square (~15 m)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                             Button(
                                 onClick = {
@@ -1252,17 +1338,17 @@ fun OSMMapView(
             }
             mapView.overlays.add(circlePolygon)
 
-            // 2. Add Hotspot Cells
+            // 2. Add Hotspot Cells — each drawn at its OWN resolution so the broad
+            // ~250 m overview grid and a fine Deep-Search sub-grid both render true
+            // to size on the same map.
             val rad = centerX * Math.PI / 180.0
             val cosLngFactor = Math.cos(rad)
-            val cellWidth = 0.0057
-            val cellHeight = 0.0045
-            
+
             for (cell in hotspotCells) {
                 if (cell.tier == "Unlikely") continue // Skip lowest tier for visual clarity
 
-                val halfW = cellWidth / 2.0
-                val halfH = cellHeight / 2.0
+                val halfH = (cell.cellSizeMeters / 2.0) / 111_000.0
+                val halfW = (cell.cellSizeMeters / 2.0) / (111_000.0 * cosLngFactor)
                 val pts = listOf(
                     GeoPoint(cell.lat + halfH, cell.lng - halfW),
                     GeoPoint(cell.lat + halfH, cell.lng + halfW),

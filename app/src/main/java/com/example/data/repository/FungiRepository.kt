@@ -620,9 +620,22 @@ class FungiRepository(
         val soilMoisture: Double? = null, val twi: Double? = null, val forestType: Int? = null
     )
     private val envCache = java.util.concurrent.ConcurrentHashMap<Long, EnvCell>()
+    // Deep Search uses its OWN session caches at a ~12 m snap. The overview caches
+    // snap at ~250 m, which would collapse every fine sub-cell onto one value, so
+    // a finer key is essential for the drill-down to actually resolve detail.
+    private val deepElevCache = java.util.concurrent.ConcurrentHashMap<Long, Double>()
+    private val deepEnvCache = java.util.concurrent.ConcurrentHashMap<Long, EnvCell>()
 
-    /** Snap a coordinate to a global grid index so the same place always keys the same. */
-    private fun gridKey(lat: Double, lng: Double): Long {
+    /** Snap a coordinate to a global grid index so the same place always keys the
+     *  same. [fine] uses a ~12 m snap (Deep Search, in separate caches); the
+     *  default ~250 m snap backs the broad overview grid. The coarse formula is
+     *  unchanged so existing on-disk caches stay valid. */
+    private fun gridKey(lat: Double, lng: Double, fine: Boolean = false): Long {
+        if (fine) {
+            val la = Math.round(lat / 0.000108) + 40_000_000L
+            val ln = Math.round(lng / 0.000137) + 40_000_000L
+            return la * 100_000_000L + ln
+        }
         val la = Math.round(lat / 0.00225) + 4_000_000L
         val ln = Math.round(lng / 0.00285) + 4_000_000L
         return la * 10_000_000L + ln
@@ -695,14 +708,18 @@ class FungiRepository(
      * entries are null where elevation could not be resolved, so callers can
      * fall back to neutral terrain scoring.
      */
-    suspend fun fetchElevations(coords: List<Pair<Double, Double>>): List<Double?> = withContext(Dispatchers.IO) {
+    suspend fun fetchElevations(
+        coords: List<Pair<Double, Double>>,
+        fine: Boolean = false
+    ): List<Double?> = withContext(Dispatchers.IO) {
         if (coords.isEmpty()) return@withContext emptyList()
         ensureCachesLoaded()
+        val cache = if (fine) deepElevCache else elevCache
         val out = MutableList<Double?>(coords.size) { null }
         val missIdx = ArrayList<Int>()
         val missCoords = ArrayList<Pair<Double, Double>>()
         for (i in coords.indices) {
-            val cached = elevCache[gridKey(coords[i].first, coords[i].second)]
+            val cached = cache[gridKey(coords[i].first, coords[i].second, fine)]
             if (cached != null) out[i] = cached else { missIdx.add(i); missCoords.add(coords[i]) }
         }
         if (missCoords.isNotEmpty()) {
@@ -718,12 +735,12 @@ class FungiRepository(
                 for (k in missIdx.indices) {
                     val v = fetched.getOrNull(k)
                     out[missIdx[k]] = v
-                    if (v != null) elevCache[gridKey(missCoords[k].first, missCoords[k].second)] = v
+                    if (v != null) cache[gridKey(missCoords[k].first, missCoords[k].second, fine)] = v
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Elevation fetch failed, using neutral terrain: ${e.message}")
             }
-            persistElevCache()
+            if (!fine) persistElevCache()
         }
         out
     }
@@ -900,11 +917,12 @@ class FungiRepository(
      * the optional Cloud Run backend. Returns null when the backend isn't
      * configured or the call fails, so callers fall back to free OSM canopy.
      */
-    suspend fun fetchEnvLayers(points: List<Pair<Double, Double>>): EnvLayers? {
+    suspend fun fetchEnvLayers(points: List<Pair<Double, Double>>, fine: Boolean = false): EnvLayers? {
         val api = envLayersApi ?: return null
         if (points.isEmpty()) return null
         return withContext(Dispatchers.IO) {
             ensureCachesLoaded()
+            val cache = if (fine) deepEnvCache else envCache
             val landcover = arrayOfNulls<Int>(points.size)
             val canopyPct = arrayOfNulls<Double>(points.size)
             val ndvi = arrayOfNulls<Double>(points.size)
@@ -918,7 +936,7 @@ class FungiRepository(
             val missIdx = ArrayList<Int>()
             val missPts = ArrayList<Pair<Double, Double>>()
             for (i in points.indices) {
-                val c = envCache[gridKey(points[i].first, points[i].second)]
+                val c = cache[gridKey(points[i].first, points[i].second, fine)]
                 if (c != null) {
                     landcover[i] = c.landcover; canopyPct[i] = c.canopyPct; ndvi[i] = c.ndvi; waterDist[i] = c.waterDistM
                     soilPh[i] = c.soilPh; soilSand[i] = c.soilSand; soilMoisture[i] = c.soilMoisture; twi[i] = c.twi
@@ -950,7 +968,7 @@ class FungiRepository(
                         landcover[orig] = lc; canopyPct[orig] = cp; ndvi[orig] = nv; waterDist[orig] = wd
                         soilPh[orig] = sph; soilSand[orig] = ssand; soilMoisture[orig] = smoist; twi[orig] = tw
                         forestType[orig] = ft
-                        envCache[gridKey(missPts[k + c].first, missPts[k + c].second)] =
+                        cache[gridKey(missPts[k + c].first, missPts[k + c].second, fine)] =
                             EnvCell(lc, cp, nv, wd, sph, ssand, smoist, tw, ft)
                         haveAny = true
                     }
@@ -959,7 +977,7 @@ class FungiRepository(
                 }
                 k = end
             }
-            if (missPts.isNotEmpty()) persistEnvCache()
+            if (!fine && missPts.isNotEmpty()) persistEnvCache()
             // Fall back to OSM canopy only if we got nothing at all.
             if (!haveAny) return@withContext null
             EnvLayers(
@@ -1113,12 +1131,43 @@ class FungiRepository(
         centerLng: Double,
         radiusKm: Double,
         forceRefresh: Boolean = false
+    ): List<HotspotCell> = runSpeciesGrid(
+        species, centerLat, centerLng,
+        halfExtentMeters = radiusKm * 1000.0,
+        cellMeters = maxOf(250.0, radiusKm * 1000.0 / 60.0),
+        obsRadiusKm = radiusKm,
+        terrainSpacingM = 500.0,   // preserve the overview grid's terrain calibration
+        circularClip = true,
+        fine = false,
+        forceRefresh = forceRefresh
+    )
+
+    /**
+     * Shared single-species scoring pipeline used by both the broad overview grid
+     * (generateHotspots) and the fine Deep-Search sub-grid (deepSearchCell). Builds
+     * a grid of [cellMeters] cells out to [halfExtentMeters] from the centre
+     * (circular for the overview, square for deep), fetches per-cell terrain +
+     * Earth-Engine layers ([fine] selects the ~12 m caches for deep), and runs the
+     * full multi-factor scoring. [terrainSpacingM] feeds the scale-aware
+     * terrain/aspect curves (500 m for the overview, the sub-cell size for deep).
+     */
+    private suspend fun runSpeciesGrid(
+        species: Species,
+        centerLat: Double,
+        centerLng: Double,
+        halfExtentMeters: Double,
+        cellMeters: Double,
+        obsRadiusKm: Double,
+        terrainSpacingM: Double,
+        circularClip: Boolean,
+        fine: Boolean,
+        forceRefresh: Boolean
     ): List<HotspotCell> = withContext(Dispatchers.Default) {
         // ── 1. Gather all evidence sources ──────────────────────────
-        val iNatObs = getObservations(species, centerLat, centerLng, radiusKm, forceRefresh)
+        val iNatObs = getObservations(species, centerLat, centerLng, obsRadiusKm, forceRefresh)
         val userSightings = dao.getAllUserSightings().filter {
             it.speciesId == species.id &&
-            calculateDistanceMeters(centerLat, centerLng, it.lat, it.lng) <= radiusKm * 1000.0
+            calculateDistanceMeters(centerLat, centerLng, it.lat, it.lng) <= obsRadiusKm * 1000.0
         }
         // ── 2. Fetch detailed weather for lag analysis ──────────────
         val weather = getDetailedWeather(centerLat, centerLng)
@@ -1162,27 +1211,27 @@ class FungiRepository(
         val hostGroups = MycoMath.hostGroupsFor(species.habitatTypes, species.substrates)
 
         // ── 4. Grid generation ──────────────────────────────────────
-        // Adaptive cell size: ~250 m for typical searches (fine per-cell detail),
-        // growing only for very large radii so the cell count — and Earth Engine
-        // cost — stays bounded (~60 steps per axis max).
-        val cellMeters = maxOf(250.0, radiusKm * 1000.0 / 60.0)
+        // cellMeters / halfExtentMeters come from the caller: the overview uses an
+        // adaptive ~250 m cell out to the search radius; Deep Search a fine sub-cell
+        // over a single overview square.
         val latStep = cellMeters / 111_000.0
         val lngStep = cellMeters / (111_000.0 * Math.cos(Math.toRadians(centerLat)))
-        val latRangeSteps = ceil((radiusKm * 1000.0) / cellMeters).toInt()
+        val steps = ceil(halfExtentMeters / cellMeters).toInt()
         val cells = mutableListOf<HotspotCell>()
 
         val kernelRadiusMeters = 2500.0  // Wider search for evidence
         val maxDaysBack = 5.0 * 365.0
 
-        // 4a. Enumerate the in-radius cells up front so the real terrain
-        // elevation for the whole grid can be fetched in one batched call.
+        // 4a. Enumerate the in-extent cells up front so the real terrain elevation
+        // for the whole grid can be fetched in one batched call. The overview clips
+        // to a circle (the search radius); Deep Search fills the square sub-area.
         val cellIJ = mutableListOf<Pair<Int, Int>>()
         val cellLL = mutableListOf<Pair<Double, Double>>()
-        for (i in -latRangeSteps..latRangeSteps) {
-            for (j in -latRangeSteps..latRangeSteps) {
+        for (i in -steps..steps) {
+            for (j in -steps..steps) {
                 val cLat = centerLat + i * latStep
                 val cLng = centerLng + j * lngStep
-                if (calculateDistanceMeters(centerLat, centerLng, cLat, cLng) > radiusKm * 1000.0) continue
+                if (circularClip && calculateDistanceMeters(centerLat, centerLng, cLat, cLng) > halfExtentMeters) continue
                 cellIJ.add(i to j)
                 cellLL.add(cLat to cLng)
             }
@@ -1190,14 +1239,14 @@ class FungiRepository(
 
         // 4b. Per-cell ground elevation (Open-Meteo, no key). Build a lookup
         // so each cell can read its neighbours' elevations for slope/aspect.
-        val elevations = fetchElevations(cellLL)
+        val elevations = fetchElevations(cellLL, fine)
         val elevByIJ = HashMap<Pair<Int, Int>, Double>()
         cellIJ.forEachIndexed { idx, ij -> elevations[idx]?.let { elevByIJ[ij] = it } }
 
         // 4c. Canopy/vegetation. Prefer Earth Engine layers (land cover, tree
         // canopy %, NDVI) when the backend is configured; otherwise fall back
         // to free OSM forest proximity.
-        val env = fetchEnvLayers(cellLL)
+        val env = fetchEnvLayers(cellLL, fine)
         val canopy = if (env == null && cellLL.isNotEmpty()) fetchCanopyFeatures(
             cellLL.minOf { it.first }, cellLL.minOf { it.second },
             cellLL.maxOf { it.first }, cellLL.maxOf { it.second }
@@ -1264,12 +1313,13 @@ class FungiRepository(
                 val elevationScore = if (cellElev != null)
                     MycoMath.elevationFitness(cellElev, species.id) else 0.6
                 val terrainScore = if (cellElev != null && neighbourElevs.isNotEmpty())
-                    MycoMath.terrainMoistureScore(cellElev, neighbourElevs) else 0.5
+                    MycoMath.terrainMoistureScore(cellElev, neighbourElevs, terrainSpacingM) else 0.5
                 // Slope aspect (south/east-facing favoured in S. Hemisphere).
                 val aspectScore = if (cellElev != null) MycoMath.slopeAspectMoistureScore(
                     cellElev,
                     elevByIJ[(i + 1) to j], elevByIJ[(i - 1) to j],
-                    elevByIJ[i to (j + 1)], elevByIJ[i to (j - 1)]
+                    elevByIJ[i to (j + 1)], elevByIJ[i to (j - 1)],
+                    cellSpacingM = terrainSpacingM
                 ) else 0.7
                 // Canopy/vegetation suitability — Earth Engine layers when
                 // available, else OSM forest proximity (mycorrhizal & wood-rot).
@@ -1418,11 +1468,60 @@ class FungiRepository(
                 if (habitatGate < 0.95) factors.add("⛔ Habitat gate ×${String.format(Locale.US, "%.2f", habitatGate)} — built-up/water/bare ground suppresses this cell")
                 factors.add("Multi-factor Bayesian estimate — not a guarantee of presence.")
 
-                cells.add(HotspotCell(cellLat, cellLng, finalScore, tier, factors))
+                cells.add(HotspotCell(cellLat, cellLng, finalScore, tier, factors, cellSizeMeters = cellMeters))
         }
         return@withContext cells
     }
 
+    // ── Deep Search (two-tier drill-down) ───────────────────────────────
+    // In-memory cache of fine sub-grid results, keyed by parent cell + resolution.
+    private val deepCache = java.util.concurrent.ConcurrentHashMap<String, List<HotspotCell>>()
+
+    /**
+     * Refines a single promising overview cell into a fine (~[subResolutionMeters] m)
+     * sub-grid for pinpoint foraging, WITHOUT touching the broad overview grid.
+     * Reuses the exact single-species scoring pipeline (runSpeciesGrid) at a finer
+     * cell size over a small area — the parent cell grown by [extentFactor] (≈300–600 m
+     * for a 250 m parent at factor 2). The sub-cell count is capped (~1500) by
+     * coarsening the resolution when the area is large, and the fine terrain/Earth
+     * Engine samples use the dedicated ~12 m caches. Results are memoised per
+     * parent cell + resolution so re-tapping a square is instant.
+     *
+     * @param parentRadiusKm the overview search radius the parent cell came from —
+     *   used only as a fallback if the cell predates the cellSizeMeters field.
+     */
+    suspend fun deepSearchCell(
+        species: Species,
+        parentCell: HotspotCell,
+        parentRadiusKm: Double,
+        subResolutionMeters: Double = 15.0,
+        extentFactor: Double = 2.0
+    ): List<HotspotCell> {
+        val parentCellMeters = parentCell.cellSizeMeters.takeIf { it > 0.0 }
+            ?: maxOf(250.0, parentRadiusKm * 1000.0 / 60.0)
+        val extentMeters = parentCellMeters * extentFactor.coerceIn(1.0, 4.0)
+        // Adaptive coarsening: keep (extent/cell)² under the cell cap.
+        val maxSubCells = 1500
+        val minCell = extentMeters / sqrt(maxSubCells.toDouble())
+        val cell = maxOf(subResolutionMeters, minCell)
+
+        val key = "${gridKey(parentCell.lat, parentCell.lng)}@${cell.toInt()}"
+        deepCache[key]?.let { return it }
+
+        val result = runSpeciesGrid(
+            species, parentCell.lat, parentCell.lng,
+            halfExtentMeters = extentMeters / 2.0,
+            cellMeters = cell,
+            // Cover the 2.5 km evidence kernel around the parent, not just the cell.
+            obsRadiusKm = maxOf(3.0, extentMeters / 2.0 / 1000.0 + 2.6),
+            terrainSpacingM = cell,    // fine-scale terrain/aspect discrimination
+            circularClip = false,      // fill the square sub-area
+            fine = true,               // use the ~12 m elevation/Earth-Engine caches
+            forceRefresh = false
+        )
+        deepCache[key] = result
+        result
+    }
 
     /**
      * Multi-species aggregate hotspot scoring.
@@ -1702,7 +1801,7 @@ class FungiRepository(
                 if (nearbySpecies.size >= 3) factors.add("🌿 Diversity bonus: ${nearbySpecies.size} distinct species recorded nearby")
                 factors.add("Multi-factor aggregate estimate — not species-specific.")
 
-                cells.add(HotspotCell(cellLat, cellLng, finalScore, tier, factors))
+                cells.add(HotspotCell(cellLat, cellLng, finalScore, tier, factors, cellSizeMeters = cellMeters))
         }
         return@withContext cells
     }

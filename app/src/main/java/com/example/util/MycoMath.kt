@@ -288,12 +288,23 @@ object MycoMath {
      *
      * @param cellElevation elevation of this cell (m)
      * @param neighbourElevations elevations of the surrounding grid cells (m)
+     * @param cellSpacingM grid spacing between neighbours (m). The relief/concavity
+     *   thresholds below were tuned for the ~500 m overview grid, so for a finer
+     *   grid (e.g. Deep Search at ~15 m) the local relief is rescaled to its
+     *   500 m-equivalent — i.e. compared as a slope — so the same thresholds keep
+     *   discriminating instead of collapsing to "flat". Default preserves the
+     *   overview's original calibration exactly.
      */
-    fun terrainMoistureScore(cellElevation: Double, neighbourElevations: List<Double>): Double {
+    fun terrainMoistureScore(
+        cellElevation: Double,
+        neighbourElevations: List<Double>,
+        cellSpacingM: Double = 500.0
+    ): Double {
         if (neighbourElevations.isEmpty()) return 0.5
+        val scale = 500.0 / cellSpacingM            // 1.0 for the overview; >1 amplifies fine relief
         val meanNbr = neighbourElevations.average()
-        val relief = (neighbourElevations.maxOrNull()!! - neighbourElevations.minOrNull()!!)
-        val concavity = meanNbr - cellElevation // >0 ⇒ cell sits in a hollow
+        val relief = (neighbourElevations.maxOrNull()!! - neighbourElevations.minOrNull()!!) * scale
+        val concavity = (meanNbr - cellElevation) * scale // >0 ⇒ cell sits in a hollow
 
         // Local slope (relief over ~500 m cells) — gentle/moderate is best.
         val slopeScore = when {
@@ -329,16 +340,22 @@ object MycoMath {
         elevNorth: Double?,
         elevSouth: Double?,
         elevEast: Double?,
-        elevWest: Double?
+        elevWest: Double?,
+        cellSpacingM: Double = 500.0
     ): Double {
         val n = elevNorth ?: elevCenter
         val s = elevSouth ?: elevCenter
         val e = elevEast ?: elevCenter
         val w = elevWest ?: elevCenter
+        // Aspect is the elevation drop across the cell normalised by spacing, so a
+        // gentle but consistent slope reads as a clear aspect at any resolution.
+        // The divisor scales with spacing (0.06·spacing → 30 at the 500 m default),
+        // so a finer grid stays sensitive instead of seeing ~0 gradient.
+        val divisor = 0.06 * cellSpacingM
         // +southness ⇒ terrain falls away to the south ⇒ south-facing.
-        val southness = ((n - s) / 30.0).coerceIn(-1.0, 1.0)
+        val southness = ((n - s) / divisor).coerceIn(-1.0, 1.0)
         // +eastness ⇒ terrain falls away to the east ⇒ east-facing.
-        val eastness = ((w - e) / 30.0).coerceIn(-1.0, 1.0)
+        val eastness = ((w - e) / divisor).coerceIn(-1.0, 1.0)
         return (0.70 + 0.25 * southness + 0.05 * eastness).coerceIn(0.0, 1.0)
     }
 
