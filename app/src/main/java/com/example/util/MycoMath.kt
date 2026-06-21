@@ -20,6 +20,13 @@ import kotlin.math.sqrt
  */
 object MycoMath {
 
+    // Host-group lexicons, compiled once at class load. hostGroupsFor() runs once
+    // per prediction request (not per cell), but there's no reason to recompile
+    // three patterns on every call.
+    private val needleleafRegex = Regex("pine|pinus|conifer|needle|spruce|\\bfir\\b|larch|cedar|cypress")
+    private val evergreenBroadleafRegex = Regex("eucalypt|sclerophyll|banksia|melaleuca|acacia|wattle|myrtle|tea.?tree|native forest|gum\\b")
+    private val deciduousBroadleafRegex = Regex("birch|betula|oak|quercus|beech|fagus|nothofagus|poplar|willow|deciduous|hazel|chestnut|exotic")
+
     // ─── Temporal helpers ────────────────────────────────────────────
 
     /**
@@ -43,29 +50,29 @@ object MycoMath {
      * Outside the window → 0.0–0.3 (graceful falloff for shoulder weeks).
      */
     fun seasonalFitness(dayOfYear: Int, seasonStart: Int, seasonEnd: Int): Double {
-        // Convert months to approximate day-of-year mid-points
+        // Convert months to approximate day-of-year mid-points.
         val startDay = (seasonStart - 1) * 30 + 15
         val endDay = (seasonEnd - 1) * 30 + 15
 
-        // Handle wrap-around seasons (e.g. Nov-Feb)
-        val seasonLength: Int
-        val peakDay: Int
-        if (startDay <= endDay) {
-            seasonLength = endDay - startDay
-            peakDay = startDay + seasonLength / 2
-        } else {
-            seasonLength = (365 - startDay) + endDay
-            peakDay = (startDay + seasonLength / 2) % 365
-        }
+        // Window length on the 365-day circle (wrap-aware, e.g. Nov-Feb), and the
+        // peak as its mid-point. The modulo is normalised positive so the peak is
+        // always a valid day-of-year for both wrap and non-wrap windows.
+        val seasonLength = if (startDay <= endDay) endDay - startDay else (365 - startDay) + endDay
+        val peakDay = ((startDay + seasonLength / 2) % 365 + 365) % 365
 
-        // Circular distance on the year
+        // Circular distance from the peak.
         val dist = circularDistance(dayOfYear, peakDay, 365)
-        val halfWindow = seasonLength / 2.0 + 14 // +14 days shoulder
+        // Plateau/edge keyed to window length, but floored so short (≈1-month)
+        // windows still get a sensible high-confidence core and a full-month edge
+        // — otherwise a season where start==end collapsed to a single-day plateau.
+        val core = maxOf(seasonLength / 4.0, 15.0)     // full-confidence (≥ half a month)
+        val edge = maxOf(seasonLength / 2.0, 30.0)     // window edge (≥ one month)
+        val shoulder = edge + 14.0                      // +14-day shoulder grace
 
         return when {
-            dist <= seasonLength / 4.0 -> 1.0  // Near peak
-            dist <= seasonLength / 2.0 -> 0.6 + 0.4 * (1.0 - (dist - seasonLength / 4.0) / (seasonLength / 4.0))
-            dist <= halfWindow -> 0.3 * (1.0 - (dist - seasonLength / 2.0) / 14.0) // Shoulder
+            dist <= core -> 1.0                                                  // near peak
+            dist <= edge -> 0.6 + 0.4 * (1.0 - (dist - core) / (edge - core))    // within window
+            dist <= shoulder -> 0.3 * (1.0 - (dist - edge) / 14.0)              // shoulder
             else -> 0.0
         }.coerceIn(0.0, 1.0)
     }
@@ -120,15 +127,21 @@ object MycoMath {
         val totalDays = dailyRainfallMm.size
         var bestTriggerStrength = 0.0
 
-        // Scan the lag window looking for 2-day cumulative rain events
+        // Scan the lag window for a fruiting trigger. A 2-day burst is the classic
+        // signal, but a multi-day soaking (no single 48 h window over threshold)
+        // also triggers fruiting, so take the stronger of a 2-day and 3-day pulse.
         for (lagDay in lagStartDays..lagEndDays) {
             val idx = totalDays - lagDay
             if (idx < 1 || idx >= totalDays) continue
 
             val twoDay = dailyRainfallMm[idx] + dailyRainfallMm[idx - 1]
-            if (twoDay >= triggerThresholdMm) {
-                // Strength scales with rain amount (diminishing returns past 60mm)
-                val strength = minOf(1.0, twoDay / 60.0)
+            val threeDay = twoDay + (if (idx >= 2) dailyRainfallMm[idx - 2] else 0.0)
+            // Strength scales with rain amount (diminishing returns); the 3-day
+            // pulse saturates a little higher since it accumulates over more days.
+            val strength2 = if (twoDay >= triggerThresholdMm) minOf(1.0, twoDay / 60.0) else 0.0
+            val strength3 = if (threeDay >= triggerThresholdMm * 1.25) minOf(1.0, threeDay / 80.0) else 0.0
+            val strength = maxOf(strength2, strength3)
+            if (strength > 0.0) {
                 // Optimal trigger is around 14-17 days ago
                 val optimalLag = 15.5
                 val lagFitness = 1.0 - abs(lagDay - optimalLag) / (lagEndDays - lagStartDays).toDouble()
@@ -137,8 +150,11 @@ object MycoMath {
             }
         }
 
-        // Also factor in sustained moisture (total rain in past 30 days)
-        val recentTotal = dailyRainfallMm.takeLast(minOf(30, totalDays)).sum()
+        // Also factor in sustained moisture (total rain in past 30 days). Summed
+        // with an index loop over a sublist view — no intermediate List allocation.
+        val daysToTake = minOf(30, totalDays)
+        var recentTotal = 0.0
+        for (i in (totalDays - daysToTake) until totalDays) recentTotal += dailyRainfallMm[i]
         val moistureBase = when {
             recentTotal in 40.0..180.0 -> 0.3  // Adequate background moisture
             recentTotal > 180.0 -> 0.2          // Waterlogged — slightly less ideal
@@ -497,12 +513,9 @@ object MycoMath {
     fun hostGroupsFor(habitatTypes: List<String>, substrates: List<String>): Set<HostGroup> {
         val t = (habitatTypes + substrates).joinToString(" ").lowercase()
         val out = mutableSetOf<HostGroup>()
-        if (Regex("pine|pinus|conifer|needle|spruce|\\bfir\\b|larch|cedar|cypress").containsMatchIn(t))
-            out += HostGroup.NEEDLELEAF
-        if (Regex("eucalypt|sclerophyll|banksia|melaleuca|acacia|wattle|myrtle|tea.?tree|native forest|gum\\b").containsMatchIn(t))
-            out += HostGroup.EVERGREEN_BROADLEAF
-        if (Regex("birch|betula|oak|quercus|beech|fagus|nothofagus|poplar|willow|deciduous|hazel|chestnut|exotic").containsMatchIn(t))
-            out += HostGroup.DECIDUOUS_BROADLEAF
+        if (needleleafRegex.containsMatchIn(t)) out += HostGroup.NEEDLELEAF
+        if (evergreenBroadleafRegex.containsMatchIn(t)) out += HostGroup.EVERGREEN_BROADLEAF
+        if (deciduousBroadleafRegex.containsMatchIn(t)) out += HostGroup.DECIDUOUS_BROADLEAF
         return out
     }
 

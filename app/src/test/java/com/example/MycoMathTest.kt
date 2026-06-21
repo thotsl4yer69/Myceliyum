@@ -266,4 +266,48 @@ class MycoMathTest {
         assertEquals(0.6, MycoMath.hostTreeMatchScore(2, emptySet()), 1e-9) // not tree-bound → neutral
         assertEquals(0.55, MycoMath.hostTreeMatchScore(null, pine), 1e-9)   // no data → mild neutral
     }
+
+    @Test
+    fun `seasonal fitness peaks mid-window and falls off outside it`() {
+        // Autumn window April(4)–June(6): peak ≈ mid-May (day ~120).
+        val peak = MycoMath.seasonalFitness(135, 4, 6)      // ~mid-May (peak)
+        val shoulder = MycoMath.seasonalFitness(170, 4, 6)  // in the shoulder grace zone
+        val offSeason = MycoMath.seasonalFitness(330, 4, 6) // late Nov
+        assertEquals(1.0, peak, 1e-9)
+        assertTrue("shoulder should be a partial, non-zero score", shoulder in 0.01..0.99)
+        assertEquals(0.0, offSeason, 1e-9)
+    }
+
+    @Test
+    fun `seasonal fitness wraps across the new year`() {
+        // Summer window November(11)–February(2): peak ≈ late December.
+        val midSummer = MycoMath.seasonalFitness(362, 11, 2) // ~28 Dec
+        val midWinter = MycoMath.seasonalFitness(166, 11, 2) // ~mid-June (opposite)
+        assertEquals(1.0, midSummer, 1e-9)
+        assertTrue("winter should score far below the summer peak", midWinter < 0.2)
+        // A day just inside the wrap (early Jan) should still score well.
+        assertTrue(MycoMath.seasonalFitness(10, 11, 2) > 0.6)
+    }
+
+    @Test
+    fun `short single-month season keeps a sensible plateau`() {
+        // start == end (May only) must not collapse to a single high-scoring day.
+        val atPeak = MycoMath.seasonalFitness(135, 5, 5)     // mid-May
+        val tenDaysOff = MycoMath.seasonalFitness(145, 5, 5) // still within the floored core
+        assertEquals(1.0, atPeak, 1e-9)
+        assertEquals(1.0, tenDaysOff, 1e-9)
+    }
+
+    @Test
+    fun `rainfall trigger detects a multi-day soaking pulse`() {
+        // 45 days, all light (5mm) except a 3-day soak ~15 days ago where no single
+        // 2-day window hits 20mm but the 3-day total (24mm) does.
+        val rain = MutableList(45) { 5.0 }
+        val soakIdx = 45 - 15
+        rain[soakIdx] = 9.0; rain[soakIdx - 1] = 9.0; rain[soakIdx - 2] = 9.0  // 3-day = 27mm
+        val score = MycoMath.rainfallTriggerScore(rain)
+        // Background-only (no pulse) baseline for comparison.
+        val baseline = MycoMath.rainfallTriggerScore(MutableList(45) { 5.0 })
+        assertTrue("multi-day pulse should raise the trigger score", score > baseline)
+    }
 }
