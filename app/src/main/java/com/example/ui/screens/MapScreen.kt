@@ -48,6 +48,11 @@ import com.example.model.Observation
 import com.example.model.Species
 import com.example.ui.theme.HeatHigh
 import com.example.ui.theme.HeatLow
+import com.example.ui.theme.MapPinExcellent
+import com.example.ui.theme.MapPinPossible
+import com.example.ui.theme.MapPinPromising
+import com.example.ui.theme.MapPinUnlikely
+import com.example.ui.theme.MapPinVeryGood
 import com.example.ui.theme.TierExcellent
 import com.example.ui.theme.TierPossible
 import com.example.ui.theme.TierPromising
@@ -150,9 +155,12 @@ fun MapScreen(
         val cells = deepCells.ifEmpty { overviewCells }
         val gridMax = cells.maxOfOrNull { it.score } ?: 0.0
         val pinFloor = minOf(0.40, maxOf(0.12, gridMax * 0.6))
-        cells.filter { it.score >= pinFloor }
-            .sortedByDescending { it.score }
-            .take(8)
+        val above = cells.filter { it.score >= pinFloor }.sortedByDescending { it.score }
+        // Never leave a populated grid pinless: if even the relative floor admits
+        // nothing (a uniformly weak area), still surface the strongest few cells so
+        // foragers always get ranked "best near you" markers, honestly tiered.
+        val ranked = above.ifEmpty { cells.sortedByDescending { it.score }.take(3) }
+        ranked.take(8)
     }
     // One-shot camera focus (Deep Search zoom / "centre here").
     var focusTarget by remember { mutableStateOf<MapFocus?>(null) }
@@ -421,8 +429,8 @@ fun MapScreen(
                                 fontSize = 10.sp,
                                 modifier = Modifier.padding(bottom = 2.dp)
                             )
-                            // Heatmap ramp — single-hue green intensity, matching the
-                            // on-map surface and the tier ramp (greener = better).
+                            // Heatmap ramp — warm intensity (amber → red), matching the
+                            // on-map surface so it stays legible over green/topo tiles.
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(modifier = Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(lerp(HeatLow, HeatHigh, 0f)))
                                 Box(modifier = Modifier.size(10.dp).background(lerp(HeatLow, HeatHigh, 0.33f)))
@@ -433,9 +441,9 @@ fun MapScreen(
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(
-                                    modifier = Modifier.size(12.dp).clip(CircleShape).background(TierExcellent),
+                                    modifier = Modifier.size(12.dp).clip(CircleShape).background(MapPinExcellent),
                                     contentAlignment = Alignment.Center
-                                ) { Text("1", color = Color.Black, fontSize = 7.sp, fontWeight = FontWeight.Bold) }
+                                ) { Text("1", color = Color.White, fontSize = 7.sp, fontWeight = FontWeight.Bold) }
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text("Numbered = best spots", color = Color.White, fontSize = 9.sp)
                             }
@@ -722,9 +730,51 @@ fun MapScreen(
                                     )
                                     Spacer(modifier = Modifier.width(10.dp))
                                     Text(
-                                        text = "Couldn't compute hotspots — check your connection.",
+                                        // Surface the real reason so a failure in the field
+                                        // is diagnosable, not a silent blank map.
+                                        text = "Couldn't compute hotspots — ${errState.message}",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onErrorContainer,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    TextButton(onClick = { viewModel.computeHotspots() }) {
+                                        Text("Retry")
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Empty-grid state — the computation succeeded but produced no
+                    // scored cells for this area (e.g. catalogue not ready, or every
+                    // cell gated out). Without this, the map would just look blank.
+                    if (!isRunning && hotspotState is HotspotState.Success && displayedCells.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .padding(top = 12.dp, start = 12.dp, end = 12.dp)
+                        ) {
+                            Card(
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(12.dp).copy(alpha = 0.95f)
+                                )
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Info,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(
+                                        text = "No prediction grid for this spot — try a larger radius or move the map.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color.White,
                                         modifier = Modifier.weight(1f)
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
@@ -840,9 +890,9 @@ fun MapScreen(
                                     )
                                     Text(
                                         text = if (showAllSightings)
-                                            "${allFungiPins.size} nearby fungal records on the map — tap a pin for details"
+                                            "${allFungiPins.size} raw records shown as muted dots — tap for details"
                                         else
-                                            "Hide recorded fungal sightings",
+                                            "Off — overlay raw iNaturalist records as muted dots",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -1504,7 +1554,7 @@ fun OSMMapView(
                 val marker = Marker(mapView).apply {
                     position = GeoPoint(cell.lat, cell.lng)
                     setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                    icon = numberedPinDrawable(context, i + 1, tierColorInt(cell.tier))
+                    icon = numberedPinDrawable(context, i + 1, mapPinColorInt(cell.tier))
                     infoWindow = null
                     setOnMarkerClickListener { _, _ -> onCellSelected(cell); true }
                 }
@@ -1528,15 +1578,21 @@ fun OSMMapView(
                 }
                 mapView.overlays.add(marker)
             }
+            // Raw iNaturalist sightings (when the layer is on) — drawn as small,
+            // muted hollow dots, deliberately UNLIKE the bold warm numbered
+            // prediction discs, so raw records can't be mistaken for predictions.
+            // One shared drawable for all of them (cheap, vs a bitmap per pin).
+            val sightingDot = sightingDotDrawable(context)
             for (pin in allFungiPins.take(250)) {
                 val name = pin.commonName?.takeIf { it.isNotBlank() } ?: pin.taxonName
                 val whenStr = if (pin.observedAt > 0) " · ${dateFmt.format(java.util.Date(pin.observedAt))}" else ""
                 val marker = Marker(mapView).apply {
                     position = GeoPoint(pin.lat, pin.lng)
-                    setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                    setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                    icon = sightingDot
                     infoWindow = null
                     setOnMarkerClickListener { _, _ ->
-                        Toast.makeText(context, "$name$whenStr", Toast.LENGTH_SHORT).show(); true
+                        Toast.makeText(context, "Sighting · $name$whenStr", Toast.LENGTH_SHORT).show(); true
                     }
                 }
                 mapView.overlays.add(marker)
@@ -1618,26 +1674,38 @@ private fun confidencePips(c: Double): Int = when {
 }
 
 /**
- * Relative probability→colour ramp for the heatmap: a single-hue green intensity
- * ramp (faint sage-green → bright mint) with opacity rising with score, so weak
- * areas stay faint and strong ones pop. Anchored on the same green family as the
- * tier ramp ([HeatLow]/[HeatHigh]) so "greener/brighter = better" reads the same
- * on the surface as on the chips — and no red/green axis to trip up colour-blind
- * users. The ramp is relative to the grid's own [floor, top] range, so the best
- * spots in view always read warm even when absolute scores are modest (sparse
- * evidence / off-season): the map shows "best near you", never a blank surface.
- * Scores below ~0.2 are filtered out by the caller.
+ * Relative probability→colour ramp for the heatmap: a WARM intensity ramp (pale
+ * amber → red, [HeatLow]/[HeatHigh]) with opacity rising with score, so weak
+ * areas stay faint and strong ones pop. Warm — not green — because the surface
+ * sits on a green/topographic basemap that camouflages a green ramp (the very
+ * reason users reported "never see any shading"); amber→red reads clearly over
+ * terrain and follows the universal "hotter = more likely" heatmap convention.
+ * The ramp is relative to the grid's own [floor, top] range, so the best spots
+ * in view always read hot even when absolute scores are modest (sparse evidence
+ * / off-season): the map shows "best near you", never a blank surface. The
+ * minimum opacity (~37%) is high enough that even floor-level cells are visible
+ * over busy terrain tiles. Scores below the caller's floor are filtered out.
  */
 private fun heatColor(score: Double, floor: Double, top: Double): Int {
     val span = (top - floor).coerceAtLeast(0.0001)
     val t = ((score - floor) / span).coerceIn(0.0, 1.0).toFloat()
     val base = lerp(HeatLow, HeatHigh, t)
-    val alpha = (60 + 165 * t).toInt().coerceIn(0, 255)
+    val alpha = (95 + 150 * t).toInt().coerceIn(0, 255)
     return base.copy(alpha = alpha / 255f).toArgb()
 }
 
-/** android.graphics int colour for a tier (the Compose [tierColor] as an ARGB int). */
-private fun tierColorInt(tier: String): Int = tierColor(tier).toArgb()
+/**
+ * Warm ARGB colour for a ranked map-pin disc, by tier. Decoupled from the green
+ * [tierColor] (which the dark-UI card uses) so the numbered "best spot" discs
+ * stand out against the green/topo basemap rather than blending into it.
+ */
+private fun mapPinColorInt(tier: String): Int = when (tier) {
+    "Excellent" -> MapPinExcellent
+    "VeryGood"  -> MapPinVeryGood
+    "Promising" -> MapPinPromising
+    "Possible"  -> MapPinPossible
+    else        -> MapPinUnlikely
+}.toArgb()
 
 /** Builds a numbered, coloured map-pin disc (① ② ③ …) for a ranked spot. */
 private fun numberedPinDrawable(
@@ -1668,6 +1736,30 @@ private fun numberedPinDrawable(
     }
     val fm = text.fontMetrics
     canvas.drawText(number.toString(), r, r - (fm.ascent + fm.descent) / 2f, text)
+    return android.graphics.drawable.BitmapDrawable(ctx.resources, bmp)
+}
+
+/**
+ * A small, muted hollow dot for a raw iNaturalist sighting — intentionally low-key
+ * and unlike the bold warm numbered prediction discs, so raw records read as
+ * "observed here", not as a model prediction. Shared across all sighting markers.
+ */
+private fun sightingDotDrawable(ctx: android.content.Context): android.graphics.drawable.Drawable {
+    val density = ctx.resources.displayMetrics.density
+    val size = (12f * density).toInt().coerceAtLeast(16)
+    val bmp = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
+    val canvas = android.graphics.Canvas(bmp)
+    val r = size / 2f
+    val fill = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.argb(150, 230, 230, 230); style = android.graphics.Paint.Style.FILL
+    }
+    canvas.drawCircle(r, r, r - density, fill)
+    val ring = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.argb(200, 60, 60, 60)
+        style = android.graphics.Paint.Style.STROKE
+        strokeWidth = 1.2f * density
+    }
+    canvas.drawCircle(r, r, r - density, ring)
     return android.graphics.drawable.BitmapDrawable(ctx.resources, bmp)
 }
 

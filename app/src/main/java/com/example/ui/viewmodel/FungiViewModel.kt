@@ -1,6 +1,7 @@
 package com.example.ui.viewmodel
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -15,8 +16,10 @@ import com.example.model.Species
 import com.example.model.UserSighting
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 
 sealed interface HotspotState {
     object Idle : HotspotState
@@ -159,9 +162,11 @@ class FungiViewModel(
     private val _allFungiPins = MutableStateFlow<List<MapObservation>>(emptyList())
     val allFungiPins: StateFlow<List<MapObservation>> = _allFungiPins.asStateFlow()
 
-    // User toggle for the all-sightings layer (default on — the user asked for
-    // all iNaturalist sightings to be visible).
-    val showAllSightings = MutableStateFlow(true)
+    // User toggle for the raw all-sightings layer. Default OFF so the map opens on
+    // the prediction surface (the point of the screen) rather than a clutter of raw
+    // iNaturalist records that read like predictions. The user can switch it on, and
+    // when on the markers are drawn in a distinct muted style (see MapScreen).
+    val showAllSightings = MutableStateFlow(false)
 
     private val _weatherSummary = MutableStateFlow<Pair<Double, Double>?>(null) // Rainfall, MaxTemp
     val weatherSummary: StateFlow<Pair<Double, Double>?> = _weatherSummary.asStateFlow()
@@ -263,23 +268,39 @@ class FungiViewModel(
             }
 
             try {
-                val cells = if (multiSpecies) {
-                    repository.generateMultiSpeciesHotspots(lat, lng, radius)
-                } else {
-                    repository.generateHotspots(species!!, lat, lng, radius)
+                // Bound the grid computation so a stuck/slow upstream (Overpass,
+                // Open-Meteo, Earth Engine over mobile data) can't leave the map
+                // spinning forever — it surfaces a retryable error instead.
+                val cells = withTimeout(GRID_TIMEOUT_MS) {
+                    if (multiSpecies) {
+                        repository.generateMultiSpeciesHotspots(lat, lng, radius)
+                    } else {
+                        repository.generateHotspots(species!!, lat, lng, radius)
+                    }
                 }
 
-                val weather = repository.getWeatherLast30Days(lat, lng)
-                _weatherSummary.value = weather
-
-                // Always populate pins for the current "selected species" — the
-                // Home tab uses these to show recent iNaturalist records. The
-                // map view chooses whether to render them based on mode.
-                _observationPins.value = species?.let {
-                    repository.getObservations(it, lat, lng, radius)
-                } ?: emptyList()
-
+                // Publish the grid as soon as it's ready. The weather summary and
+                // species pins below are non-essential extras for other tabs — they
+                // must NEVER discard a perfectly good grid if they fail, so they run
+                // best-effort AFTER Success is set.
                 _hotspotState.value = HotspotState.Success(cells)
+
+                try {
+                    _weatherSummary.value = repository.getWeatherLast30Days(lat, lng)
+                    // Recent iNaturalist records for the selected species (Home tab).
+                    _observationPins.value = species?.let {
+                        repository.getObservations(it, lat, lng, radius)
+                    } ?: emptyList()
+                } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    Log.w("FungiViewModel", "Hotspot extras (weather/pins) failed: ${e.message}")
+                }
+            } catch (e: TimeoutCancellationException) {
+                // A timeout IS a CancellationException, so it must be caught before
+                // the generic cancellation check below or it would be swallowed and
+                // leave the map stuck on the spinner.
+                _hotspotState.value =
+                    HotspotState.Error("timed out — slow or blocked connection. Tap Retry.")
             } catch (e: Exception) {
                 if (e !is kotlinx.coroutines.CancellationException) {
                     _hotspotState.value = HotspotState.Error(e.message ?: "Failed to compute hotspots.")
@@ -428,6 +449,9 @@ class FungiViewModel(
 
     // Factory Class
     companion object {
+        /** Upper bound on a hotspot-grid computation before it fails retryably. */
+        private const val GRID_TIMEOUT_MS = 45_000L
+
         fun provideFactory(application: Application): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
