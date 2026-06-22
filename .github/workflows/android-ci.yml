@@ -4,6 +4,10 @@ on:
   pull_request:
   push:
     branches: [main]
+  # Allow running the unit tests + debug build on demand (any branch) from the
+  # Actions tab or the API — handy when an automated PR's pushes don't spawn a
+  # pull_request run (GitHub suppresses workflow runs for app-token events).
+  workflow_dispatch:
 
 # Cancel in-progress runs for the same ref to save CI minutes.
 concurrency:
