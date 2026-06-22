@@ -1355,23 +1355,9 @@ class FungiRepository(
                 // global climate factors. Weights sum to 1.0.
                 val adjustedHabitat = (habitatScore * habitatWeight).coerceIn(0.0, 1.0)
 
-                val factorWeights = mapOf(
-                    "evidence"    to 0.21,
-                    "season"      to 0.14,
-                    "rainTrigger" to 0.11,
-                    "canopy"      to 0.08,
-                    "hostTree"    to 0.05,
-                    "terrain"     to 0.05,
-                    "habitat"     to 0.08,
-                    "elevation"   to 0.05,
-                    "temperature" to 0.06,
-                    "riparian"    to 0.03,
-                    "aspect"      to 0.03,
-                    "moisture"    to 0.03,
-                    "soil"        to 0.04,
-                    "twi"         to 0.03,
-                    "moon"        to 0.01
-                )
+                // Per-cell factor scores combined with the canonical, shared
+                // weights (MycoMath.FACTOR_WEIGHTS) so this and the aggregate
+                // pipeline can never drift apart.
                 val factorScores = mapOf(
                     "evidence"    to observationScore,
                     "season"      to seasonScore,
@@ -1394,9 +1380,7 @@ class FungiRepository(
                 // If season OR rain trigger is very low, cap the score —
                 // you won't find fungi out of season in dry conditions
                 // regardless of historical evidence.
-                val weightedSum = factorWeights.entries.sumOf { (k, w) ->
-                    w * (factorScores[k] ?: 0.0)
-                }
+                val weightedSum = MycoMath.weightedFactorScore(factorScores)
                 val seasonRainFloor = minOf(seasonScore, rainTriggerScore + 0.2)
                 val penaltyMultiplier = (0.3 + 0.7 * seasonRainFloor).coerceIn(0.0, 1.0)
 
@@ -1505,7 +1489,10 @@ class FungiRepository(
         val minCell = extentMeters / sqrt(maxSubCells.toDouble())
         val cell = maxOf(subResolutionMeters, minCell)
 
-        val key = "${gridKey(parentCell.lat, parentCell.lng)}@${cell.toInt()}"
+        // Key by species too: Deep Search is per-species, so re-tapping the same
+        // square for a different species must not return another species' cached
+        // sub-grid. Location + resolution alone would collide.
+        val key = "${species.id}@${gridKey(parentCell.lat, parentCell.lng)}@${cell.toInt()}"
         deepCache[key]?.let { return it }
 
         val result = runSpeciesGrid(
@@ -1734,22 +1721,28 @@ class FungiRepository(
                 val moistureScoreCell = if (cellSoilMoisture != null)
                     (0.5 * moistureScore + 0.5 * cellSoilMoisture) else moistureScore
 
-                // Weighted combination (weights sum to 1.0)
-                val weightedSum = 0.21 * observationScore +
-                        0.14 * seasonScore +
-                        0.11 * rainTriggerScore +
-                        0.08 * canopyScore +
-                        0.05 * hostTreeScore +
-                        0.05 * terrainScore +
-                        0.08 * 0.7 + // Aggregate habitat baseline (diverse catalogue)
-                        0.05 * elevationScore +
-                        0.06 * tempScore +
-                        0.03 * riparianScore +
-                        0.03 * aspectScore +
-                        0.03 * moistureScoreCell +
-                        0.04 * soilScore +
-                        0.03 * twiScore +
-                        0.01 * moonScore
+                // Weighted combination using the same canonical weights as the
+                // single-species grid (MycoMath.FACTOR_WEIGHTS); only the habitat
+                // factor differs — a flat baseline for the diverse catalogue.
+                val weightedSum = MycoMath.weightedFactorScore(
+                    mapOf(
+                        "evidence"    to observationScore,
+                        "season"      to seasonScore,
+                        "rainTrigger" to rainTriggerScore,
+                        "canopy"      to canopyScore,
+                        "hostTree"    to hostTreeScore,
+                        "terrain"     to terrainScore,
+                        "habitat"     to 0.7, // aggregate habitat baseline (diverse catalogue)
+                        "elevation"   to elevationScore,
+                        "temperature" to tempScore,
+                        "riparian"    to riparianScore,
+                        "aspect"      to aspectScore,
+                        "moisture"    to moistureScoreCell,
+                        "soil"        to soilScore,
+                        "twi"         to twiScore,
+                        "moon"        to moonScore
+                    )
+                )
 
                 val seasonRainFloor = minOf(seasonScore, rainTriggerScore + 0.2)
                 val penaltyMultiplier = (0.3 + 0.7 * seasonRainFloor).coerceIn(0.0, 1.0)

@@ -1,5 +1,31 @@
 # Changes — completion & stabilization pass
 
+## Engine consistency, safety warnings & test coverage
+
+Acting on an external code review of the prediction stack:
+
+- **Single source of truth for factor weights.** The 15 per-factor weights now
+  live once in `MycoMath.FACTOR_WEIGHTS`, summed via `weightedFactorScore(...)`.
+  Both the single-species grid and the multi-species aggregate read the same
+  constants, so the two pipelines can no longer silently drift apart (the
+  aggregate previously duplicated the weights as an inline sum). A unit test
+  asserts the weights total exactly 1.0.
+- **Deep Search cache key now includes the species.** The fine sub-grid is
+  per-species, but its memo key was location + resolution only — so re-tapping
+  the same square for a different species could return the wrong species'
+  cached result. The species id is now part of the key.
+- **Poisoning safety banner on every species card.** A new, pure/testable
+  `FungiSafety` classifier flags deadly/toxic species (from the catalogue notes
+  plus dangerous-genus heuristics) and the detail screen leads with a red
+  warning when flagged. Every species — flagged or not — now also carries a
+  universal "identification aid only; never eat on app/AI ID alone; many
+  edibles have deadly look-alikes" disclaimer. The classifier only ever warns,
+  never reassures.
+- **Expanded unit tests.** Added JVM coverage for the previously-untested math
+  helpers (temperature, habitat breadth, evidence quality/source/recency/
+  spatial kernels, moon phase, tier thresholds, rainfall-lag edge cases), the
+  shared factor-weight helper, and the safety classifier.
+
 ## Map interaction overhaul (Hotspots tab)
 
 - **The search centre now follows the map.** Pan or zoom and the analysis

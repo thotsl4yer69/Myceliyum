@@ -303,6 +303,12 @@ fun DetailScreen(
 
             Column(modifier = Modifier.padding(16.dp)) {
 
+                // 1b. Safety banner — poisoning warning (when flagged) plus the
+                // universal "never eat on app ID alone" disclaimer on every species.
+                SafetyBanner(species)
+
+                Spacer(modifier = Modifier.height(16.dp))
+
                 // 2. Botanical Details Panel
                 Text(
                     text = "Description",
@@ -547,6 +553,66 @@ fun DetailScreen(
                     )
                 }
             }
+        }
+    }
+}
+
+/**
+ * Poisoning-safety banner for a species. Shows a prominent red warning when the
+ * species (or its genus) is flagged deadly/toxic, and always shows the universal
+ * "never eat on app ID alone" field disclaimer.
+ */
+@Composable
+fun SafetyBanner(species: Species) {
+    val danger = remember(species.id) { com.example.util.FungiSafety.dangerLevel(species) }
+    val headline = remember(species.id) { com.example.util.FungiSafety.warningHeadline(species) }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        if (headline != null) {
+            val deadly = danger == com.example.util.FungiSafety.DangerLevel.DEADLY
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.errorContainer,
+                border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.error),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 10.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = if (deadly) "Deadly" else "Toxic",
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = headline,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        lineHeight = 20.sp,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                }
+            }
+        }
+
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(
+                text = com.example.util.FungiSafety.UNIVERSAL_DISCLAIMER,
+                style = MaterialTheme.typography.bodySmall,
+                lineHeight = 18.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(14.dp)
+            )
         }
     }
 }

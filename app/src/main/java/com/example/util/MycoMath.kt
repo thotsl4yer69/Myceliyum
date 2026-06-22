@@ -680,6 +680,42 @@ object MycoMath {
         return exp(-(distanceMeters * distanceMeters) / (2.0 * sigma * sigma))
     }
 
+    // ─── Canonical factor weights ────────────────────────────────────
+
+    /**
+     * The single source of truth for the per-factor weights of the hotspot
+     * score. Both the single-species grid and the multi-species aggregate read
+     * these same constants via [weightedFactorScore], so the two pipelines can
+     * never silently drift apart. The sum is exactly 1.0 (asserted in tests).
+     *
+     * Insertion-ordered for readable "Why this score?" breakdowns.
+     */
+    val FACTOR_WEIGHTS: Map<String, Double> = linkedMapOf(
+        "evidence"    to 0.21,
+        "season"      to 0.14,
+        "rainTrigger" to 0.11,
+        "canopy"      to 0.08,
+        "habitat"     to 0.08,
+        "temperature" to 0.06,
+        "hostTree"    to 0.05,
+        "terrain"     to 0.05,
+        "elevation"   to 0.05,
+        "soil"        to 0.04,
+        "moisture"    to 0.03,
+        "twi"         to 0.03,
+        "riparian"    to 0.03,
+        "aspect"      to 0.03,
+        "moon"        to 0.01
+    )
+
+    /**
+     * Weighted sum of per-factor [factorScores] using [FACTOR_WEIGHTS]. A factor
+     * with no entry in [factorScores] contributes 0 (so a missing layer never
+     * inflates the score). Result is in 0.0–1.0 since every factor score is.
+     */
+    fun weightedFactorScore(factorScores: Map<String, Double>): Double =
+        FACTOR_WEIGHTS.entries.sumOf { (k, w) -> w * (factorScores[k] ?: 0.0) }
+
     // ─── 5-tier classification ───────────────────────────────────────
 
     /**

@@ -339,4 +339,130 @@ class MycoMathTest {
         val baseline = MycoMath.rainfallTriggerScore(MutableList(45) { 5.0 })
         assertTrue("multi-day pulse should raise the trigger score", score > baseline)
     }
+
+    @Test
+    fun `rainfall trigger is zero for too-little data and rewards a burst at optimal lag`() {
+        assertEquals(0.0, MycoMath.rainfallTriggerScore(emptyList()), 1e-9)
+        assertEquals(0.0, MycoMath.rainfallTriggerScore(listOf(50.0)), 1e-9)  // <2 days
+        // A strong 2-day burst ~15 days ago (optimal) should beat the same burst
+        // sitting outside the 10-21 day fruiting window (e.g. only 2 days ago).
+        val optimal = MutableList(45) { 0.0 }
+        optimal[45 - 15] = 30.0; optimal[45 - 16] = 30.0
+        val tooRecent = MutableList(45) { 0.0 }
+        tooRecent[45 - 2] = 30.0; tooRecent[45 - 3] = 30.0
+        assertTrue(MycoMath.rainfallTriggerScore(optimal) > MycoMath.rainfallTriggerScore(tooRecent))
+    }
+
+    // ─── Canonical factor weights (shared by both pipelines) ─────────
+
+    @Test
+    fun `factor weights sum to exactly one`() {
+        // If this drifts, every score is silently mis-scaled — and the
+        // single-species and aggregate maps would no longer be comparable.
+        assertEquals(1.0, MycoMath.FACTOR_WEIGHTS.values.sum(), 1e-9)
+    }
+
+    @Test
+    fun `weighted factor score honours the weights and treats missing factors as zero`() {
+        // All factors perfect → the weighted sum equals the total weight (1.0).
+        val allPerfect = MycoMath.FACTOR_WEIGHTS.keys.associateWith { 1.0 }
+        assertEquals(1.0, MycoMath.weightedFactorScore(allPerfect), 1e-9)
+        // An empty map → 0.0 (a missing layer never inflates the score).
+        assertEquals(0.0, MycoMath.weightedFactorScore(emptyMap()), 1e-9)
+        // A single factor contributes exactly its weight.
+        assertEquals(
+            MycoMath.FACTOR_WEIGHTS.getValue("evidence"),
+            MycoMath.weightedFactorScore(mapOf("evidence" to 1.0)),
+            1e-9
+        )
+        // Unknown keys are ignored, not summed.
+        assertEquals(0.0, MycoMath.weightedFactorScore(mapOf("not_a_factor" to 1.0)), 1e-9)
+    }
+
+    // ─── Temperature fitness ─────────────────────────────────────────
+
+    @Test
+    fun `temperature fitness peaks in the species band and decays outside it`() {
+        // Psilocybe band is 5-15 C → 10 C sits mid-band.
+        assertEquals(1.0, MycoMath.temperatureFitness(10.0, "psilocybe_subaeruginosa"), 1e-9)
+        // Boletus prefers warmer (10-20 C), so at 18 C it beats the cool-loving psilocybe.
+        assertTrue(
+            MycoMath.temperatureFitness(18.0, "boletus_edulis") >
+                MycoMath.temperatureFitness(18.0, "psilocybe_subaeruginosa")
+        )
+        // Far outside any band scores low and stays in range.
+        val hot = MycoMath.temperatureFitness(40.0, "psilocybe_subaeruginosa")
+        assertTrue("expected a low score, got $hot", hot < 0.3)
+        assertTrue(hot in 0.0..1.0)
+    }
+
+    // ─── Habitat breadth & affinity ──────────────────────────────────
+
+    @Test
+    fun `habitat diversity rewards broader tolerance and stays clamped`() {
+        val broad = MycoMath.habitatDiversityScore(
+            listOf("a", "b", "c", "d"), listOf("x", "y", "z")
+        )
+        val narrow = MycoMath.habitatDiversityScore(listOf("a"), listOf("x"))
+        assertTrue("broad ($broad) should beat narrow ($narrow)", broad > narrow)
+        // Even a species with no listed habitat keeps the 0.2 floor.
+        assertEquals(0.2, MycoMath.habitatDiversityScore(emptyList(), emptyList()), 1e-9)
+        assertTrue(broad in 0.2..1.0)
+    }
+
+    @Test
+    fun `habitat-specific species weight more than broad generalists`() {
+        assertTrue(
+            MycoMath.speciesHabitatWeight("psilocybe_subaeruginosa") >
+                MycoMath.speciesHabitatWeight("trametes_versicolor")
+        )
+    }
+
+    // ─── Evidence kernel components ──────────────────────────────────
+
+    @Test
+    fun `evidence quality, source and recency weights rank as expected`() {
+        assertTrue(MycoMath.qualityWeight("research") > MycoMath.qualityWeight("casual"))
+        assertEquals(0.5, MycoMath.qualityWeight("anything-unknown"), 1e-9)
+        // First-hand user sightings and verified ALA/GBIF records outweigh casual iNat.
+        assertTrue(MycoMath.sourceWeight("USER") > MycoMath.sourceWeight("INATURALIST"))
+        assertTrue(MycoMath.sourceWeight("ALA") > MycoMath.sourceWeight("INATURALIST"))
+        // Recency: one half-life (365 d) halves the weight; today's record is full.
+        assertEquals(1.0, MycoMath.recencyWeight(0.0), 1e-9)
+        assertEquals(0.5, MycoMath.recencyWeight(365.0), 1e-3)
+        assertEquals(0.0, MycoMath.recencyWeight(-5.0), 1e-9)   // future date → no weight
+    }
+
+    @Test
+    fun `spatial kernel is full at the centre and decays with distance`() {
+        assertEquals(1.0, MycoMath.spatialKernel(0.0), 1e-9)
+        assertTrue(MycoMath.spatialKernel(400.0) > MycoMath.spatialKernel(1600.0))
+        assertTrue(MycoMath.spatialKernel(5000.0) < 0.01)
+    }
+
+    // ─── Moon phase ──────────────────────────────────────────────────
+
+    @Test
+    fun `moon phase is a normalised cycle and the fruiting score stays in band`() {
+        for (t in listOf(0L, 1_600_000_000_000L, 1_700_000_000_000L)) {
+            val phase = MycoMath.moonPhase(t)
+            assertTrue("phase $phase out of [0,1)", phase >= 0.0 && phase < 1.0)
+            val s = MycoMath.moonFruitingScore(t)
+            assertTrue("moon score $s out of [0.3,1.0]", s in 0.3..1.0)
+        }
+    }
+
+    // ─── Tier classification ─────────────────────────────────────────
+
+    @Test
+    fun `tier thresholds classify each band`() {
+        assertEquals("Excellent", MycoMath.classifyTier(0.85))
+        assertEquals("VeryGood", MycoMath.classifyTier(0.70))
+        assertEquals("Promising", MycoMath.classifyTier(0.45))
+        assertEquals("Possible", MycoMath.classifyTier(0.25))
+        assertEquals("Unlikely", MycoMath.classifyTier(0.10))
+        // Boundaries are inclusive at the lower edge of each tier.
+        assertEquals("Excellent", MycoMath.classifyTier(0.80))
+        assertEquals("Possible", MycoMath.classifyTier(0.20))
+    }
 }
