@@ -1131,16 +1131,27 @@ class FungiRepository(
         centerLng: Double,
         radiusKm: Double,
         forceRefresh: Boolean = false
-    ): List<HotspotCell> = runSpeciesGrid(
-        species, centerLat, centerLng,
-        halfExtentMeters = radiusKm * 1000.0,
-        cellMeters = maxOf(250.0, radiusKm * 1000.0 / 60.0),
-        obsRadiusKm = radiusKm,
-        terrainSpacingM = 500.0,   // preserve the overview grid's terrain calibration
-        circularClip = true,
-        fine = false,
-        forceRefresh = forceRefresh
-    )
+    ): List<HotspotCell> {
+        // Kingdom-wide nearby fungal activity — a habitat-productivity floor on the
+        // evidence factor, so areas thick with real sightings aren't rated
+        // "Unlikely" just because the target species wasn't logged in that cell.
+        val ambient = try {
+            getAllFungiObservations(centerLat, centerLng, radiusKm, forceRefresh)
+        } catch (e: Exception) {
+            Log.w(TAG, "ambient fungi fetch failed: ${e.message}"); emptyList()
+        }
+        return runSpeciesGrid(
+            species, centerLat, centerLng,
+            halfExtentMeters = radiusKm * 1000.0,
+            cellMeters = maxOf(250.0, radiusKm * 1000.0 / 60.0),
+            obsRadiusKm = radiusKm,
+            terrainSpacingM = 500.0,   // preserve the overview grid's terrain calibration
+            circularClip = true,
+            fine = false,
+            forceRefresh = forceRefresh,
+            ambientObs = ambient
+        )
+    }
 
     /**
      * Shared single-species scoring pipeline used by both the broad overview grid
@@ -1161,7 +1172,12 @@ class FungiRepository(
         terrainSpacingM: Double,
         circularClip: Boolean,
         fine: Boolean,
-        forceRefresh: Boolean
+        forceRefresh: Boolean,
+        // Kingdom-wide nearby fungal records (the "all fungi" sightings layer).
+        // Used as a habitat-productivity floor on the evidence factor, so an area
+        // rich in fungal activity scores up even if the TARGET species itself
+        // hasn't been logged in this exact cell.
+        ambientObs: List<MapObservation> = emptyList()
     ): List<HotspotCell> = withContext(Dispatchers.Default) {
         // ── 1. Gather all evidence sources ──────────────────────────
         val iNatObs = getObservations(species, centerLat, centerLng, obsRadiusKm, forceRefresh)
@@ -1301,6 +1317,26 @@ class FungiRepository(
                 // Saturate: ~4 strong, recent, nearby records max out evidence
                 val observationScore = minOf(1.0, weightedEvidence / 4.0)
 
+                // Ambient fungal activity: nearby records of ANY fungus (the
+                // kingdom-wide layer shown as sightings on the map) indicate
+                // productive, fruiting habitat. They provide a modest evidence
+                // FLOOR even when the target species itself isn't logged in this
+                // exact cell — a weaker, non-species-specific proxy, so it's
+                // capped well below a direct hit and never overrides real evidence.
+                var ambientWeighted = 0.0
+                for (obs in ambientObs) {
+                    if (abs(obs.lat - cellLat) > 0.025 || abs(obs.lng - cellLng) > 0.035) continue
+                    val d = calculateDistanceMeters(cellLat, cellLng, obs.lat, obs.lng)
+                    if (d > kernelRadiusMeters) continue
+                    val diffDays = (nowMs - obs.observedAt).toDouble() / (1000.0 * 60 * 60 * 24)
+                    if (diffDays !in 0.0..maxDaysBack) continue
+                    ambientWeighted += MycoMath.recencyWeight(diffDays, halfLifeDays = 365.0) *
+                        MycoMath.spatialKernel(d, sigma = 1000.0)
+                }
+                val ambientActivity = minOf(1.0, ambientWeighted / 5.0)
+                // Direct target-species evidence wins; ambient only raises a floor.
+                val evidenceScore = maxOf(observationScore, 0.45 * ambientActivity)
+
                 // ── B. Per-cell terrain factors (real elevation) ────
                 // Elevation fitness and local slope/concavity vary cell-to-
                 // cell, so the map reflects genuine landscape rather than
@@ -1359,7 +1395,7 @@ class FungiRepository(
                 // weights (MycoMath.FACTOR_WEIGHTS) so this and the aggregate
                 // pipeline can never drift apart.
                 val factorScores = mapOf(
-                    "evidence"    to observationScore,
+                    "evidence"    to evidenceScore,
                     "season"      to seasonScore,
                     "rainTrigger" to rainTriggerScore,
                     "canopy"      to canopyScore,
@@ -1381,8 +1417,12 @@ class FungiRepository(
                 // you won't find fungi out of season in dry conditions
                 // regardless of historical evidence.
                 val weightedSum = MycoMath.weightedFactorScore(factorScores)
-                val seasonRainFloor = minOf(seasonScore, rainTriggerScore + 0.2)
-                val penaltyMultiplier = (0.3 + 0.7 * seasonRainFloor).coerceIn(0.0, 1.0)
+                // Season/rain modifier — a gentle de-rating, NOT a crusher. Season
+                // and rain are already weighted factors above, so this only softly
+                // discounts clearly off-season / bone-dry conditions (floor 0.625)
+                // instead of slashing genuinely good habitat down to "Unlikely".
+                val seasonRainFloor = maxOf(0.25, minOf(seasonScore, rainTriggerScore + 0.3))
+                val penaltyMultiplier = (0.5 + 0.5 * seasonRainFloor).coerceIn(0.0, 1.0)
 
                 // Multiplicative HABITAT GATE — built-up/water/bare collapse the
                 // score toward zero so cities, roads and car parks can't rank
@@ -1410,6 +1450,8 @@ class FungiRepository(
                 val sourceStr = sourceCounts.entries.joinToString(" | ") { "${it.key}: ${it.value}" }
                 val totalSources = if (sourceStr.isNotEmpty()) " [$sourceStr]" else ""
                 factors.add("🔬 Evidence: $nearbyRecords record(s) within 2.5 km$totalSources → ${String.format(Locale.US, "%.0f", observationScore * 100)}%")
+                if (0.45 * ambientActivity > observationScore && ambientActivity > 0.0)
+                    factors.add("🍄 Fungal activity nearby: lots of recorded sightings → evidence floor ${String.format(Locale.US, "%.0f", evidenceScore * 100)}%")
 
                 factors.add("📅 Season: ${if (seasonScore > 0.5) "In window" else "Outside/shoulder"} ${monthName(species.seasonStart)}–${monthName(species.seasonEnd)} → ${String.format(Locale.US, "%.0f", seasonScore * 100)}%")
                 factors.add("🌧️ Rain trigger: ${if (rainTriggerScore > 0.5) "Trigger event detected" else "No strong trigger"} (10-21d lag) → ${String.format(Locale.US, "%.0f", rainTriggerScore * 100)}%")
@@ -1746,8 +1788,12 @@ class FungiRepository(
                     )
                 )
 
-                val seasonRainFloor = minOf(seasonScore, rainTriggerScore + 0.2)
-                val penaltyMultiplier = (0.3 + 0.7 * seasonRainFloor).coerceIn(0.0, 1.0)
+                // Season/rain modifier — a gentle de-rating, NOT a crusher. Season
+                // and rain are already weighted factors above, so this only softly
+                // discounts clearly off-season / bone-dry conditions (floor 0.625)
+                // instead of slashing genuinely good habitat down to "Unlikely".
+                val seasonRainFloor = maxOf(0.25, minOf(seasonScore, rainTriggerScore + 0.3))
+                val penaltyMultiplier = (0.5 + 0.5 * seasonRainFloor).coerceIn(0.0, 1.0)
                 // Habitat gate — suppress built-up/water/bare cells (see single-species note).
                 val habitatGate = if (env != null)
                     MycoMath.habitatGate(env.landcover.getOrNull(idx), env.ndvi.getOrNull(idx), "aggregate_default")

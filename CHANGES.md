@@ -1,5 +1,36 @@
 # Changes — completion & stabilization pass
 
+## Hotspot calibration — good habitat no longer reads "Unlikely"
+
+Field testing in productive country (e.g. box-ironbark forest around Bendigo,
+thick with fungi and iNaturalist sightings) was rating whole areas "Unlikely".
+Two causes, both fixed:
+
+- **The season/rain penalty was a crusher, not a modifier.** It multiplied the
+  whole score by `0.3 + 0.7·min(season, rain)` — flooring at 0.3 and
+  *double-counting* season and rain, which are already weighted factors. Out of
+  peak season or in a dry spell it slashed genuinely good habitat by up to 70%.
+  Softened to `0.5 + 0.5·max(0.25, min(season, rain+0.3))` (range ≈ 0.625–1.0):
+  a gentle de-rating of clearly off-season / bone-dry cells, not a wipe-out.
+- **Single-species scoring ignored the sightings you can see.** The map's green
+  pins are the kingdom-wide "all fungi" layer, but the evidence factor only
+  counted records of the *exact* target species — so an area dense with fungal
+  activity got zero evidence credit unless that one species was logged in that
+  cell. Nearby fungal activity now provides a modest **evidence floor** (capped
+  well below a direct hit, and never overriding real records), so productive
+  habitat scores up. The cell breakdown shows it as "Fungal activity nearby".
+
+Combined with the adaptive map display, genuinely good ground now reads
+Possible/Promising instead of a blank "Unlikely" map. Tier labels stay honest.
+
+## Map display — adaptive heatmap & pins (never a blank map)
+
+The hotspot heatmap, ranked pins and list used fixed absolute thresholds
+(≥0.20 / ≥0.40 / tier≠Unlikely), so an evidence-sparse or off-season area
+painted nothing at all. They now scale to the grid's own best score, so the
+strongest spots near you always surface as a warm heat surface + ranked pins,
+while weak/gated city/water cells still drop out and tier labels stay absolute.
+
 ## Engine consistency, safety warnings & test coverage
 
 Acting on an external code review of the prediction stack:
