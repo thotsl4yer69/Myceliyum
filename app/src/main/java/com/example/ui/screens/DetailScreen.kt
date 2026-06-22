@@ -303,6 +303,12 @@ fun DetailScreen(
 
             Column(modifier = Modifier.padding(16.dp)) {
 
+                // 1b. Safety banner — poisoning warning (when flagged) plus the
+                // universal "never eat on app ID alone" disclaimer on every species.
+                SafetyBanner(species)
+
+                Spacer(modifier = Modifier.height(16.dp))
+
                 // 2. Botanical Details Panel
                 Text(
                     text = "Description",
@@ -550,6 +556,90 @@ fun DetailScreen(
         }
     }
 }
+
+/**
+ * Edibility banner for a species. Shows the curated, per-species edibility/
+ * toxicity (FungiSafety) — deadly/poisonous in red, psychoactive and edible in
+ * their own accents, inedible/unknown neutral — with a brief factual caption.
+ */
+@Composable
+fun SafetyBanner(species: Species) {
+    val edibility = remember(species.id) { com.example.util.FungiSafety.edibilityOf(species.id) }
+    val label = remember(edibility) { com.example.util.FungiSafety.label(edibility) }
+
+    val edibleGreen = Color(0xFF2E7D32)
+    val (container, accent, onContainer, icon) = when (edibility) {
+        com.example.util.FungiSafety.Edibility.DEADLY,
+        com.example.util.FungiSafety.Edibility.POISONOUS -> Quad(
+            MaterialTheme.colorScheme.errorContainer,
+            MaterialTheme.colorScheme.error,
+            MaterialTheme.colorScheme.onErrorContainer,
+            Icons.Default.Warning
+        )
+        com.example.util.FungiSafety.Edibility.PSYCHOACTIVE -> Quad(
+            MaterialTheme.colorScheme.tertiaryContainer,
+            MaterialTheme.colorScheme.tertiary,
+            MaterialTheme.colorScheme.onTertiaryContainer,
+            Icons.Default.Info
+        )
+        com.example.util.FungiSafety.Edibility.EDIBLE -> Quad(
+            edibleGreen.copy(alpha = 0.12f),
+            edibleGreen,
+            MaterialTheme.colorScheme.onBackground,
+            Icons.Default.CheckCircle
+        )
+        else -> Quad( // INEDIBLE / UNKNOWN — neutral
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            MaterialTheme.colorScheme.onSurfaceVariant,
+            MaterialTheme.colorScheme.onSurfaceVariant,
+            Icons.Default.Info
+        )
+    }
+    val dangerous = com.example.util.FungiSafety.isDangerous(edibility)
+
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = container,
+        border = BorderStroke(if (dangerous) 1.5.dp else 1.dp, accent.copy(alpha = if (dangerous) 1f else 0.4f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = accent,
+                modifier = Modifier.size(if (dangerous) 28.dp else 22.dp)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = if (dangerous) FontWeight.Bold else FontWeight.SemiBold,
+                    lineHeight = 20.sp,
+                    color = onContainer
+                )
+                Text(
+                    text = "Edibility from the project reference catalogue — research use.",
+                    style = MaterialTheme.typography.bodySmall,
+                    lineHeight = 16.sp,
+                    color = onContainer.copy(alpha = 0.7f)
+                )
+            }
+        }
+    }
+}
+
+/** Tiny 4-tuple so the banner's per-edibility style can be destructured. */
+private data class Quad(
+    val container: Color,
+    val accent: Color,
+    val onContainer: Color,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector
+)
 
 @Composable
 fun FeatureDetailRow(

@@ -1,5 +1,35 @@
 # Changes — completion & stabilization pass
 
+## Engine consistency, safety warnings & test coverage
+
+Acting on an external code review of the prediction stack:
+
+- **Single source of truth for factor weights.** The 15 per-factor weights now
+  live once in `MycoMath.FACTOR_WEIGHTS`, summed via `weightedFactorScore(...)`.
+  Both the single-species grid and the multi-species aggregate read the same
+  constants, so the two pipelines can no longer silently drift apart (the
+  aggregate previously duplicated the weights as an inline sum). A unit test
+  asserts the weights total exactly 1.0.
+- **Deep Search cache key now includes the species.** The fine sub-grid is
+  per-species, but its memo key was location + resolution only — so re-tapping
+  the same square for a different species could return the wrong species'
+  cached result. The species id is now part of the key.
+- **Accurate per-species edibility banner.** A new, pure/testable `FungiSafety`
+  map gives each catalogue species its real edibility — `DEADLY`, `POISONOUS`,
+  `PSYCHOACTIVE`, `INEDIBLE`, `EDIBLE`, or `UNKNOWN` — curated from the project's
+  reference notes for scientific accuracy rather than coarse genus rules. It
+  fixes the two ways naive matching errs: look-alike mentions never flag the
+  species (e.g. *Psilocybe cyanescens* "confused with the DEADLY Galerina" is
+  PSYCHOACTIVE, *Agaricus campestris* is EDIBLE, not deadly), and a toxic species
+  is never reported edible because its note names an edible relative (the
+  yellow-stainer *A. xanthodermus* is POISONOUS). Only the two confirmed-lethal
+  species (*A. phalloides*, *G. marginata*) are DEADLY. The detail card leads
+  with a colour-coded edibility chip.
+- **Expanded unit tests.** Added JVM coverage for the previously-untested math
+  helpers (temperature, habitat breadth, evidence quality/source/recency/
+  spatial kernels, moon phase, tier thresholds, rainfall-lag edge cases), the
+  shared factor-weight helper, and the safety classifier.
+
 ## Map interaction overhaul (Hotspots tab)
 
 - **The search centre now follows the map.** Pan or zoom and the analysis
