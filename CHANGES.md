@@ -1,5 +1,32 @@
 # Changes — completion & stabilization pass
 
+## AI Identify — camera crash & "cannot read image" fixed
+
+Two hard bugs in the AI Identify screen:
+
+- **Camera crashed the app.** Captures are written to `filesDir/identify_photos/`,
+  but that path wasn't declared in `res/xml/file_paths.xml`, so
+  `FileProvider.getUriForFile()` threw `IllegalArgumentException` the moment the
+  Camera button ran. Added the `identify_photos/` FileProvider root.
+- **Gallery photos always failed with "Cannot read image."** The image decoder
+  did a bounds pass with `inJustDecodeBounds = true`, which makes
+  `BitmapFactory.decodeStream` return `null` *by design* (only the dimensions
+  are filled) — but the code treated that null as a read failure and threw.
+  It now validates the input stream and the parsed dimensions instead, so valid
+  photos decode and encode correctly for the vision request.
+
+## Tanbark / woodchip detection for mulch-loving species
+
+Gold tops and other wood-chip lovers fruit in mulched garden beds that the
+land-cover gate would otherwise suppress as "built-up". The engine now pulls
+real tanbark/woodchip features from OpenStreetMap (`surface=woodchips|bark_mulch
+|tan`, `landuse=flowerbed|plant_nursery`, `leisure=garden|playground`, garden
+centres) — but only for mulch-associated species (`MycoMath.mulchAffinity`) —
+and a cell near a mapped bed gets its habitat factor and gate floor lifted (never
+lowered). Forest fungi are unaffected. The cell breakdown shows "Tanbark/
+woodchip bed ~Nm away". (No mulch data layer existed before; this is the closest
+mapped source — true bed-by-bed coverage depends on OSM completeness.)
+
 ## Weighting shift — trust real conditions over the calendar
 
 Climate shift makes textbook fruiting "seasons" unreliable; fungi increasingly
