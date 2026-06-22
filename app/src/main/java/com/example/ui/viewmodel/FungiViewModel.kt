@@ -71,6 +71,10 @@ class FungiViewModel(
     suspend fun fetchSpeciesPhotos(scientificName: String): List<com.example.model.SpeciesPhoto> =
         repository.fetchSpeciesPhotos(scientificName)
 
+    /** Field-ID diagnostics (checklist + enriched look-alikes) for a species. */
+    suspend fun fetchSpeciesDiagnostics(speciesId: String) =
+        repository.fetchSpeciesDiagnostics(speciesId)
+
     /** Total worldwide GBIF record count for a species (detail screen). */
     suspend fun fetchGlobalRecordCount(scientificName: String): Int? =
         repository.getGlobalRecordCount(scientificName)

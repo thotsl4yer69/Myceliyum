@@ -66,6 +66,19 @@
       "Galerina patagonica (Yellow-brown spore print, no blue bruising, central ring zone)",
       "Hypholoma fasciculare (Sulfur tuft, bright yellow-green gills, bitter taste, no blue bruising)"
     ],
+    "diagnosticFeatures": [
+      "🔵 Bruises blue-green where handled or bruised — stem, cap edge and base. The key live-tissue test; absence of any bluing is a strong red flag.",
+      "🟤 Spore print dark purple-brown — take one on white paper or foil before trusting any identification.",
+      "💧 Hygrophanous cap: dark caramel-brown when wet, fading to pale straw as it dries.",
+      "🪵 Tough fibrous stem that snaps with a fibrous crack; base wrapped in white mycelial cords on woody debris and mulch.",
+      "🍄 Thin, separable gelatinous pellicle — a clear skin that can be peeled from a moist cap."
+    ],
+    "lookAlikeDetails": [
+      { "name": "Galerina marginata (Funeral Bell)", "dangerLevel": "Deadly", "keyDifference": "Contains the same liver-destroying amatoxins as the death cap. NEVER bruises blue; rusty-brown spore print (not purple-brown), often dusting a stem ring. If in any doubt, do not pick." },
+      { "name": "Leratiomyces ceres (Redlead Roundhead)", "dangerLevel": "Toxic", "keyDifference": "Bright orange-red cap with a white stem, sharing the same wood-chip beds — but NEVER bruises blue." },
+      { "name": "Cortinarius species", "dangerLevel": "Toxic", "keyDifference": "Young caps carry a cobweb-like cortina veil over the gills; rusty-brown spores; no blue bruising. Several are severely kidney-toxic." },
+      { "name": "Hypholoma fasciculare (Sulfur Tuft)", "dangerLevel": "Toxic", "keyDifference": "Bright sulphur-yellow, green-tinged gills, intensely bitter, clustered on wood; no blue bruising." }
+    ],
     "notes": "Native to SE Australia. Potently psychoactive (contains psilocybin). Can grow in abundance in municipal mulch gardens in Melbourne and Victoria hills.",
     "imageUrls": []
   },
@@ -101,6 +114,17 @@
       "Psilocybe subaeruginosa (cooler southern climate, wood/mulch not dung, no persistent ring)",
       "Protostropharia / Stropharia spp. (dung-loving but no blue bruising)",
       "Panaeolus / Galerina spp. on dung (Galerina is DEADLY; no blue bruising)"
+    ],
+    "diagnosticFeatures": [
+      "🟡 Large golden-brown to tan cap, often with a paler centre.",
+      "💍 Persistent white membranous ring on the stem, often dusted dark by falling spores.",
+      "🔵 Strong blue bruising where handled.",
+      "⚫ Spore print very dark purple-black.",
+      "🌡️ Warm-climate species on dung-enriched soil/pasture (not native to cool Victorian bush)."
+    ],
+    "lookAlikeDetails": [
+      { "name": "Galerina marginata (Funeral Bell)", "dangerLevel": "Deadly", "keyDifference": "Deadly amatoxins; rusty-brown spores; no blue bruising." },
+      { "name": "Conocybe filaris and other ringed LBMs", "dangerLevel": "Deadly", "keyDifference": "Amatoxin-bearing, rusty-brown spores, ring on stem, never blue — superficially ring-and-brown like cubensis." }
     ],
     "notes": "Pantropical dung-loving psilocybin species. In Australia it is mainly a SUBTROPICAL species of Queensland and northern NSW cattle pasture in the summer wet season, not the cool southern states. 'Golden Teacher' is a widely cultivated strain of this species. Potently psychoactive (contains psilocybin).",
     "imageUrls": []
@@ -164,6 +188,17 @@
     "bruisingReaction": "No bruising or slight browning.",
     "lookAlikes": [
       "Armillaria luteobubalina (Australian Honey Fungus - white spore print, lacks intense orange color)"
+    ],
+    "diagnosticFeatures": [
+      "🟠 Large, showy orange to rust-brown mushroom in dense clusters on wood and stumps.",
+      "🟤 Rusty-brown spore print (NOT purple-brown — unlike Psilocybe).",
+      "😖 Flesh intensely bitter.",
+      "💍 Ring on the stem, often stained rusty by spores.",
+      "🔵 Bruising is not the blue of Psilocybe; rely on the rusty spores + bitter taste."
+    ],
+    "lookAlikeDetails": [
+      { "name": "Galerina marginata (Funeral Bell)", "dangerLevel": "Deadly", "keyDifference": "Also rusty-spored on wood, but much smaller; Gymnopilus is large and intensely bitter. Never risk a wood-growing brown mushroom without expert confirmation." },
+      { "name": "Cortinarius species", "dangerLevel": "Toxic", "keyDifference": "Cobweb cortina when young; rusty spores; several kidney-toxic." }
     ],
     "notes": "Bitter taste. Often found in massive, visually stunning clusters at the base of Eucalyptus trees across Victoria.",
     "imageUrls": []
@@ -2103,6 +2138,16 @@
       "Panaeolus / Panaeolina spp. on dung (no blue bruising)",
       "Protostropharia semiglobata (ringed, no blue bruising)"
     ],
+    "diagnosticFeatures": [
+      "⚪ Pale grey to light-tan smooth cap that often cracks in dry weather.",
+      "🔵 Strong blue bruising, especially on the stem.",
+      "⚫ Spore print jet black; gills mottled black at maturity.",
+      "🐄 On well-manured pasture and dung in warm, humid conditions."
+    ],
+    "lookAlikeDetails": [
+      { "name": "Other Panaeolus (e.g. P. foenisecii)", "dangerLevel": "Harmless", "keyDifference": "Common lawn Panaeolus are non-bluing with dark-brown (not jet-black) spores." },
+      { "name": "Galerina / Conocybe LBMs", "dangerLevel": "Deadly", "keyDifference": "Amatoxin-bearing brown dung/grass mushrooms with rusty-brown spores that never blue." }
+    ],
     "notes": "Pantropical dung species; in Australia mainly subtropical Queensland and northern NSW. In Australia 'Blue Meanies' usually refers to this strongly blue-bruising Panaeolus — though the name is also used loosely for a blue-bruising Psilocybe cubensis, so it is ambiguous. Contains psilocybin — potently psychoactive.",
     "imageUrls": []
   },
@@ -2137,6 +2182,17 @@
       "Psilocybe subaeruginosa (more slender, less wavy margin)",
       "Galerina marginata (DEADLY — rust-brown spores, no blue bruising)"
     ],
+    "diagnosticFeatures": [
+      "🌊 Mature cap margin distinctly wavy/undulating — the classic 'wavy cap'.",
+      "🔵 Strong blue bruising on handling.",
+      "💧 Hygrophanous chestnut-brown cap fading to yellowish as it dries.",
+      "🟤 Dark purple-brown spore print.",
+      "🪵 In troops on wood-chips and mulch, often bound by white mycelium."
+    ],
+    "lookAlikeDetails": [
+      { "name": "Galerina marginata (Funeral Bell)", "dangerLevel": "Deadly", "keyDifference": "Deadly amatoxins. No blue bruising; rusty-brown spores; smaller and on wood." },
+      { "name": "Cortinarius species", "dangerLevel": "Toxic", "keyDifference": "Cobweb cortina over young gills; rusty spores; never blues." }
+    ],
     "notes": "An introduced temperate wood-chip Psilocybe established in cooler southern Australia (mulched garden beds, parks). 'Wavy caps' refers to the undulating mature cap margin. Contains psilocybin — potently psychoactive. Easily confused with the DEADLY Galerina marginata, which does NOT bruise blue.",
     "imageUrls": []
   },
@@ -2167,6 +2223,17 @@
     "lookAlikes": [
       "Panaeolina / Panaeolus spp. (mottled gills, no sharp papilla)",
       "Galerina marginata (DEADLY — rust-brown spores, no blue bruising)"
+    ],
+    "diagnosticFeatures": [
+      "🎯 Sharply conical to bell-shaped cap with a pronounced pointed nipple (umbo) — the 'liberty cap' silhouette.",
+      "🔵 Bruises blue, most reliably at the slender stem base.",
+      "🌱 In nutrient-rich grassland and pasture (growing from soil/roots, not directly on dung).",
+      "🟤 Dark purple-brown spore print.",
+      "💧 Slimy separable pellicle when moist."
+    ],
+    "lookAlikeDetails": [
+      { "name": "Galerina marginata (Funeral Bell)", "dangerLevel": "Deadly", "keyDifference": "Deadly amatoxins; rusty-brown spores; no blue bruising; grows on wood not open pasture." },
+      { "name": "Conocybe / small brown grassland mushrooms", "dangerLevel": "Deadly", "keyDifference": "Some Conocybe (e.g. C. filaris) carry deadly amatoxins, have rusty-brown spores and never blue. Treat any non-bluing little brown grassland mushroom as suspect." }
     ],
     "notes": "The classic Northern-Hemisphere grassland 'liberty cap', recognised by its sharply pointed conical cap and grassland (not wood-chip or dung) habit. Its occurrence in Australia is doubtful/rare and many local reports are misidentifications — included for reference and look-alike awareness. Contains psilocybin.",
     "imageUrls": []
