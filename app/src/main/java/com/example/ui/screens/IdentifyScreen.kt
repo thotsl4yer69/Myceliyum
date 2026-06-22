@@ -746,8 +746,13 @@ private fun imageUriToBase64(context: Context, uri: Uri): String {
     // low-RAM devices; inSampleSize keeps the in-memory bitmap near the target.
     val maxSize = 1024
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
-        ?: throw Exception("Cannot read image")
+    // inJustDecodeBounds makes decodeStream return null BY DESIGN — it only
+    // fills the out* dimensions — so the bitmap result must NOT be treated as a
+    // failure here (doing so threw "Cannot read image" on every valid photo).
+    // Validate the stream opened and the parsed dimensions instead.
+    (context.contentResolver.openInputStream(uri)
+        ?: throw Exception("Cannot read image"))
+        .use { BitmapFactory.decodeStream(it, null, bounds) }
     if (bounds.outWidth <= 0 || bounds.outHeight <= 0) throw Exception("Cannot decode image")
 
     var sampleSize = 1

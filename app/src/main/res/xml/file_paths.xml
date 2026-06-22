@@ -3,6 +3,9 @@
     <!-- Voucher photos captured by the camera are stored in the app's
          internal files directory under voucher_photos/. -->
     <files-path name="voucher_photos" path="voucher_photos/" />
+    <!-- AI-Identify camera captures live under identify_photos/. Without this
+         root, FileProvider.getUriForFile() throws and the Camera button crashes. -->
+    <files-path name="identify_photos" path="identify_photos/" />
     <!-- Downloaded APK updates live in the app's external Downloads dir; the
          installer reads them through this FileProvider grant. -->
     <external-files-path name="apk_updates" path="Download/" />

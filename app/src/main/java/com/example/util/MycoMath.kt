@@ -242,6 +242,42 @@ object MycoMath {
         else -> 1.0
     }
 
+    // ─── Tanbark / woodchip (mulch substrate) ────────────────────────
+
+    private val mulchSpecialistRegex = Regex("wood.?chip|tanbark|tan.bark|bark.?mulch|\\bmulch\\b|wood.?debris")
+    private val mulchLooseRegex = Regex("disturbed|urban|garden|chip|woody|saw.?dust")
+
+    /**
+     * How strongly a species is tied to woodchip / tanbark / bark-mulch
+     * substrates (0 = not mulch-associated, 1 = mulch specialist). Derived from
+     * the species' habitat/substrate descriptors. Used to decide whether mapped
+     * tanbark/woodchip beds should lift a cell's score — gold tops
+     * (Psilocybe subaeruginosa/cyanescens), Leratiomyces, Tubaria and other
+     * wood-chip lovers score high; mycorrhizal forest fungi score 0 (a tanbark
+     * bed is irrelevant to them).
+     */
+    fun mulchAffinity(habitatTypes: List<String>, substrates: List<String>): Double {
+        val t = (habitatTypes + substrates).joinToString(" ").lowercase()
+        return when {
+            mulchSpecialistRegex.containsMatchIn(t) -> 1.0
+            mulchLooseRegex.containsMatchIn(t) -> 0.6
+            else -> 0.0
+        }
+    }
+
+    /**
+     * Proximity score (0–1) to a mapped tanbark/woodchip/garden-bed feature.
+     * 1.0 right at/in a bed, tapering to 0 by ~300 m. A null distance (no beds
+     * mapped near this cell) is 0 — a pure positive signal that only ever lifts
+     * a mulch-loving species' score, never penalises.
+     */
+    fun mulchProximityScore(distanceMeters: Double?): Double = when {
+        distanceMeters == null -> 0.0
+        distanceMeters <= 60.0 -> 1.0
+        distanceMeters <= 300.0 -> 1.0 - (distanceMeters - 60.0) / 240.0
+        else -> 0.0
+    }.coerceIn(0.0, 1.0)
+
     // ─── Terrain & elevation (per-cell landscape) ────────────────────
 
     /**
