@@ -2,7 +2,7 @@ package com.example.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// === MyceliYUMS brand v3 — "Field Signal Terminal" (dark) ===
+// === Myceliyums brand v3 — "Field Signal Terminal" (dark) ===
 // Tokens mirror the site/brand plate: bg/chassis/rule neutrals, signal-green
 // primary, amber secondary, ink text ramp.
 val NeonMint = Color(0xFF54E0A0)            // primary accent (sig — signal green)
@@ -25,7 +25,26 @@ val PaperWhite = Color(0xFFFFFFFF)
 val SoftStone = Color(0xFFE9E6DE)
 val WarmStoneOutline = Color(0xFFCFCCC2)
 
-// === Tier colours (shared, work on both themes) ===
-val TierPromising = Color(0xFF54E0A0)       // signal green
-val TierPossible = Color(0xFFE6B24C)        // amber
-val TierQuiet = Color(0xFF5B6353)           // ink-faint
+// === Forageability tier ramp (canonical, 5-tier) ==========================
+// THE single source of truth for tier colour — read by the heatmap legend,
+// the ranked map pins, the tier chips and the hotspot card, so the surface,
+// pins and labels can never tell different colour stories (they used to:
+// MapScreen hard-coded its own divergent set). The ramp is MONOTONIC and
+// green-anchored: signal-green = best ("good fungal habitat", the brand
+// signal), stepping down through lime and gold to desaturated sage/forest for
+// the weakest tiers. Deliberately NO alarming red — red reads as
+// "danger / avoid", the opposite of a spot you'd want to forage.
+val TierExcellent = Color(0xFF54E0A0)       // signal green — best
+val TierVeryGood = Color(0xFF9BD96B)        // lime — strong
+val TierPromising = Color(0xFFE6B24C)       // chanterelle gold — promising
+val TierPossible = Color(0xFF8B9D93)        // muted sage — possible
+val TierUnlikely = Color(0xFF5B6353)        // dim forest — unlikely
+
+// Heatmap intensity ramp anchors (low → high), kept in the same green family as
+// the tier ramp so "greener/brighter = better" reads identically on the map
+// surface and on the chips. The surface is RELATIVE (scaled to the grid's own
+// best score), so it stays a single-hue intensity ramp — varying lightness and
+// opacity, not hue — rather than impersonating the absolute tier colours. This
+// also sidesteps the red/green colour-blindness trap entirely.
+val HeatLow = Color(0xFF3C6B57)             // faint sage-green (relatively low)
+val HeatHigh = Color(0xFF6BF2B0)            // bright mint (relatively high)

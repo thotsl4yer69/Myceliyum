@@ -103,7 +103,7 @@ fun HomeScreen(
                 title = {
                     Column {
                         Text(
-                            text = "Mycilliyums",
+                            text = "Myceliyums",
                             fontWeight = FontWeight.Bold,
                             fontSize = 20.sp
                         )

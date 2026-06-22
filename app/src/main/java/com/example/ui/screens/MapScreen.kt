@@ -29,8 +29,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
@@ -43,9 +46,17 @@ import com.example.model.HotspotCell
 import com.example.model.MapObservation
 import com.example.model.Observation
 import com.example.model.Species
+import com.example.ui.theme.HeatHigh
+import com.example.ui.theme.HeatLow
+import com.example.ui.theme.TierExcellent
+import com.example.ui.theme.TierPossible
+import com.example.ui.theme.TierPromising
+import com.example.ui.theme.TierUnlikely
+import com.example.ui.theme.TierVeryGood
 import com.example.ui.viewmodel.DeepSearchState
 import com.example.ui.viewmodel.FungiViewModel
 import com.example.ui.viewmodel.HotspotState
+import com.example.util.MycoMath
 import com.google.android.gms.location.LocationServices
 import java.util.*
 import kotlinx.coroutines.launch
@@ -379,16 +390,24 @@ fun MapScreen(
                         }
                     }
 
-                    // Legend — heatmap ramp + numbered top-spot pins (hidden in fullscreen)
+                    // Legend — heatmap ramp + numbered top-spot pins. Anchored
+                    // bottom-start (clear of the top search card and the bottom-end
+                    // FABs) and hidden while a hotspot card is open (the card itself
+                    // shows the tier colour) so the two never overlap — no fragile
+                    // hard-coded offsets.
                     androidx.compose.animation.AnimatedVisibility(
-                        visible = !isFullscreen,
+                        visible = !isFullscreen && selectedHotspotCell == null,
                         enter = fadeIn(),
                         exit = fadeOut(),
-                        modifier = Modifier.align(Alignment.TopEnd)
+                        modifier = Modifier.align(Alignment.BottomStart)
                     ) {
+                        // When nothing in view reaches the absolute "Promising" line,
+                        // the warm shading is purely relative — say so, so a modest
+                        // area's colours can't be mistaken for strong absolute odds.
+                        val gridBest = displayedCells.maxOfOrNull { it.score } ?: 0.0
                         Column(
                             modifier = Modifier
-                                .padding(top = 130.dp, end = 16.dp)
+                                .padding(start = 16.dp, bottom = 16.dp)
                                 .background(Color.Black.copy(alpha = 0.75f), RoundedCornerShape(8.dp))
                                 .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
                                 .padding(10.dp),
@@ -402,20 +421,21 @@ fun MapScreen(
                                 fontSize = 10.sp,
                                 modifier = Modifier.padding(bottom = 2.dp)
                             )
-                            // Heatmap ramp (matches the on-map green→red surface).
+                            // Heatmap ramp — single-hue green intensity, matching the
+                            // on-map surface and the tier ramp (greener = better).
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(modifier = Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFF54E0A0)))
-                                Box(modifier = Modifier.size(10.dp).background(Color(0xFFE6B24C)))
-                                Box(modifier = Modifier.size(10.dp).background(Color(0xFFFF8C42)))
-                                Box(modifier = Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFFFF6B6B)))
+                                Box(modifier = Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(lerp(HeatLow, HeatHigh, 0f)))
+                                Box(modifier = Modifier.size(10.dp).background(lerp(HeatLow, HeatHigh, 0.33f)))
+                                Box(modifier = Modifier.size(10.dp).background(lerp(HeatLow, HeatHigh, 0.66f)))
+                                Box(modifier = Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(lerp(HeatLow, HeatHigh, 1f)))
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text("Low → High", color = Color.White, fontSize = 9.sp)
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(
-                                    modifier = Modifier.size(12.dp).clip(CircleShape).background(Color(0xFFFF6B6B)),
+                                    modifier = Modifier.size(12.dp).clip(CircleShape).background(TierExcellent),
                                     contentAlignment = Alignment.Center
-                                ) { Text("1", color = Color.White, fontSize = 7.sp, fontWeight = FontWeight.Bold) }
+                                ) { Text("1", color = Color.Black, fontSize = 7.sp, fontWeight = FontWeight.Bold) }
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text("Numbered = best spots", color = Color.White, fontSize = 9.sp)
                             }
@@ -424,6 +444,13 @@ fun MapScreen(
                                 color = Color.White.copy(alpha = 0.6f),
                                 fontSize = 8.sp
                             )
+                            if (gridBest < 0.40) {
+                                Text(
+                                    "Best nearby is modest — shading is relative",
+                                    color = Color(0xFFE6B24C).copy(alpha = 0.9f),
+                                    fontSize = 8.sp
+                                )
+                            }
                         }
                     }
 
@@ -1162,15 +1189,23 @@ fun MapScreen(
                 modifier = Modifier.align(Alignment.BottomCenter)
             ) {
             selectedHotspotCell?.let { cell ->
+                // Cap the card to ~60% of the screen and let its content scroll, so a
+                // cell with a long "Why this score" breakdown can never overflow or
+                // push the action buttons off-screen on a short device.
+                val maxSheetHeight = LocalConfiguration.current.screenHeightDp.dp * 0.6f
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(12.dp)),
                     modifier = Modifier
                         .padding(16.dp)
                         .fillMaxWidth()
-                        .wrapContentHeight()
+                        .heightIn(max = maxSheetHeight)
                         .border(1.5.dp, tierColor(cell.tier), RoundedCornerShape(12.dp))
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                    Column(
+                        modifier = Modifier
+                            .padding(16.dp)
+                            .verticalScroll(rememberScrollState())
+                    ) {
                         Row(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
@@ -1200,31 +1235,44 @@ fun MapScreen(
                         
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(vertical = 4.dp)
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp)
                         ) {
+                            // Score (how good) — kept colour-neutral so the only
+                            // colour carrying "how good" is the tier mark/title above.
                             Text(
-                                text = "Likelihood score: ${String.format(Locale.getDefault(), "%.0f%%", cell.score * 100.0)}",
+                                text = "Likelihood ${String.format(Locale.getDefault(), "%.0f%%", cell.score * 100.0)}",
                                 fontFamily = FontFamily.Monospace,
                                 fontWeight = FontWeight.Bold,
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.primary
+                                color = MaterialTheme.colorScheme.onSurface
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            // Confidence badge — how much to trust this score (evidence +
-                            // real environmental data behind it), distinct from the score.
-                            val confColor = confidenceColor(cell.confidence)
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(confColor.copy(alpha = 0.18f))
-                                    .border(1.dp, confColor.copy(alpha = 0.6f), RoundedCornerShape(6.dp))
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                            ) {
+                            Spacer(modifier = Modifier.weight(1f))
+                            // Confidence (how much to TRUST the score) — a distinct
+                            // dimension from the tier, shown as a neutral 3-pip meter
+                            // so it never competes with the tier colour.
+                            val pips = confidencePips(cell.confidence)
+                            val meterColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                repeat(3) { i ->
+                                    Box(
+                                        modifier = Modifier
+                                            .padding(end = 3.dp)
+                                            .size(6.dp)
+                                            .clip(CircleShape)
+                                            .background(
+                                                if (i < pips) meterColor
+                                                else meterColor.copy(alpha = 0.25f)
+                                            )
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = "${confidenceWord(cell.confidence)} confidence",
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = confColor
+                                    text = "${MycoMath.confidenceLabel(cell.confidence)} confidence",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = meterColor
                                 )
                             }
                         }
@@ -1542,57 +1590,54 @@ private fun tierLabel(tier: String): String = when (tier) {
     else        -> "Unlikely"
 }
 
-/** Maps a 5-tier name to its UI colour. */
+/** Maps a 5-tier name to its UI colour. Reads the canonical, monotonic
+ *  green-anchored ramp from the theme so the heatmap, pins, chips and card can
+ *  never drift apart (see [com.example.ui.theme.TierExcellent]). */
 private fun tierColor(tier: String): Color = when (tier) {
-    "Excellent" -> Color(0xFFFF6B6B)  // warm red
-    "VeryGood"  -> Color(0xFF54E0A0)  // mint green
-    "Promising" -> Color(0xFFE6B24C)  // chanterelle gold
-    "Possible"  -> Color(0xFF8B9D93)  // muted sage
-    else        -> Color(0xFF5B6353)  // dim forest
+    "Excellent" -> TierExcellent
+    "VeryGood"  -> TierVeryGood
+    "Promising" -> TierPromising
+    "Possible"  -> TierPossible
+    else        -> TierUnlikely
 }
 
 /** A one-shot camera move request (Deep Search / "centre here"); [key] makes each
  *  request unique so the map animates once rather than on every recomposition. */
 data class MapFocus(val lat: Double, val lng: Double, val zoom: Double, val key: Long)
 
-/** Three-band word for a prediction-confidence value (0–1). */
-private fun confidenceWord(c: Double): String = when {
-    c >= 0.66 -> "High"
-    c >= 0.33 -> "Medium"
-    else -> "Low"
-}
-
-/** Colour for a prediction-confidence badge. */
-private fun confidenceColor(c: Double): Color = when {
-    c >= 0.66 -> Color(0xFF54E0A0)   // green
-    c >= 0.33 -> Color(0xFFE6B24C)   // amber
-    else -> Color(0xFF8B9D93)        // grey-sage
+/**
+ * Number of filled "pips" (out of 3) for a prediction-confidence value, keyed to
+ * the same three bands as [MycoMath.confidenceLabel] so the meter and its word
+ * label always agree. Confidence is rendered as a neutral dot-meter (not a
+ * coloured chip) so it reads as a distinct dimension from the tier colour.
+ */
+private fun confidencePips(c: Double): Int = when {
+    c >= 0.66 -> 3
+    c >= 0.33 -> 2
+    else -> 1
 }
 
 /**
- * Continuous probability→colour ramp for the heatmap: cool green (low) through
- * gold to warm red (high), with opacity rising with score so weak areas stay
- * faint and strong ones pop. Scores below ~0.2 are filtered out by the caller.
+ * Relative probability→colour ramp for the heatmap: a single-hue green intensity
+ * ramp (faint sage-green → bright mint) with opacity rising with score, so weak
+ * areas stay faint and strong ones pop. Anchored on the same green family as the
+ * tier ramp ([HeatLow]/[HeatHigh]) so "greener/brighter = better" reads the same
+ * on the surface as on the chips — and no red/green axis to trip up colour-blind
+ * users. The ramp is relative to the grid's own [floor, top] range, so the best
+ * spots in view always read warm even when absolute scores are modest (sparse
+ * evidence / off-season): the map shows "best near you", never a blank surface.
+ * Scores below ~0.2 are filtered out by the caller.
  */
 private fun heatColor(score: Double, floor: Double, top: Double): Int {
-    // Ramp is relative to the grid's own [floor, top] range, so the best spots in
-    // view always read warm even when absolute scores are modest (sparse evidence
-    // / off-season) — the map shows "best near you", never a blank surface.
     val span = (top - floor).coerceAtLeast(0.0001)
     val t = ((score - floor) / span).coerceIn(0.0, 1.0).toFloat()
-    val hue = 140f * (1f - t)                       // 140°=green (low) → 0°=red (high)
-    val alpha = (70 + 150 * t).toInt().coerceIn(0, 255)
-    return android.graphics.Color.HSVToColor(alpha, floatArrayOf(hue, 0.80f, 0.95f))
+    val base = lerp(HeatLow, HeatHigh, t)
+    val alpha = (60 + 165 * t).toInt().coerceIn(0, 255)
+    return base.copy(alpha = alpha / 255f).toArgb()
 }
 
 /** android.graphics int colour for a tier (the Compose [tierColor] as an ARGB int). */
-private fun tierColorInt(tier: String): Int = when (tier) {
-    "Excellent" -> android.graphics.Color.parseColor("#FF6B6B")
-    "VeryGood"  -> android.graphics.Color.parseColor("#54E0A0")
-    "Promising" -> android.graphics.Color.parseColor("#E6B24C")
-    "Possible"  -> android.graphics.Color.parseColor("#8B9D93")
-    else        -> android.graphics.Color.parseColor("#5B6353")
-}
+private fun tierColorInt(tier: String): Int = tierColor(tier).toArgb()
 
 /** Builds a numbered, coloured map-pin disc (① ② ③ …) for a ranked spot. */
 private fun numberedPinDrawable(

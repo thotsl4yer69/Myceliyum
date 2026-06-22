@@ -92,7 +92,7 @@ fun UpdatePrompt(viewModel: UpdateViewModel, state: UpdateState) {
                 title = { Text("Allow installs") },
                 text = {
                     Text(
-                        "To update in-app, allow MyceliYUMS to install apps, then tap " +
+                        "To update in-app, allow Myceliyums to install apps, then tap " +
                             "\"Update now\" again."
                     )
                 },

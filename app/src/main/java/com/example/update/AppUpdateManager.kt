@@ -56,7 +56,7 @@ class AppUpdateManager(private val context: Context) {
         if (target.exists()) target.delete()
 
         val request = DownloadManager.Request(Uri.parse(apkUrl))
-            .setTitle("MyceliYUMS update")
+            .setTitle("Myceliyums update")
             .setDescription("Downloading the latest field build")
             .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
             .setMimeType(APK_MIME)

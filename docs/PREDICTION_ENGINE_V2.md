@@ -1,8 +1,15 @@
-# Myceliyum — Prediction Engine v2 (ecology-aware, data-driven)
+# Myceliyums — Prediction Engine v2 (ecology-aware, data-driven)
 
-> Status: design / proposal. Nothing here is wired up yet. This document is the
-> plan for moving from the current hand-tuned heuristic to an ecology-aware,
-> learned model, and a catalogue of the data sources that feed it.
+> Status: **partially shipped.** Phases **P1 (richer feature layers)**,
+> **P2 (host-tree scoring)** and **Deep Search** are live in the rule-based
+> engine today (`MycoMath` + `FungiRepository`); **P0 (Earth Engine backend)**
+> exists in `backend/` and is enabled per-deployment via CI secrets;
+> **P3 (trained SDM)** is parked and **P4 (dynamics/niche signals)** is future.
+> This document is both the original plan for moving from a hand-tuned heuristic
+> toward an ecology-aware model and the catalogue of data sources that feed it —
+> see §5 for what has actually landed.
+>
+> _Last reviewed: 2026-06 (design-critique upgrade pass)._
 
 ## 1. Why v2
 
@@ -26,9 +33,16 @@ It is a reasonable v1, but it has three structural ceilings:
    rain → moisture → temperature sequence. We sample one rainfall number, not
    the antecedent moisture trajectory.
 
-v2 fixes all three: a per-species **species distribution model (SDM)** trained
-on historical fruiting records against real environmental covariates, served
-from the existing Cloud Run backend.
+v2 set out to fix all three with a per-species **species distribution model
+(SDM)** trained on historical fruiting records against real environmental
+covariates, served from the existing Cloud Run backend.
+
+> **Update (shipped):** the rule-based path has since closed most of #2 and #3
+> without a trained model — P1 added soil pH/texture, per-cell soil moisture and
+> TWI, and P2 added a host-tree (forest leaf-type) match (see §5). The remaining
+> gap is #1, **learning the weights** — which is exactly what the parked P3 SDM
+> would buy, and why it stays parked until a backtest shows the heuristic
+> plateauing.
 
 ## 2. Data sources catalogue ("where else can we gather data")
 
@@ -146,22 +160,32 @@ the current snapshot engine cannot.
 
 ## 5. Phased rollout
 
-- **P0 — Deploy the backend** *(blocks everything; you run `backend/deploy.sh`)*.
-  Unlocks all Earth Engine data in one place.
-- **P1 — Richer feature layers** (no model yet): add SoilGrids pH/texture,
-  ERA5/SMAP soil-moisture **lags**, DEM-derived **TWI**, Dynamic World land
-  cover to `/env-grid`. Feed them into the *existing* weighted engine for an
-  immediate accuracy bump while v2 is built.
-- **P2 — Host-tree layer** — ingest GBIF/ALA tree occurrences; compute per-cell
-  host-tree density for each species' known associates. Biggest single jump.
-- **P3 — Trained SDM** — *parked.* The rule-based engine after P2 is already
-  strong enough for personal use, and a trained model is a large investment that
-  only pays off with a validation backtest first. Superseded for now by **Deep
-  Search** (below), which buys precision without the model. Revisit if/when the
-  backtest shows the heuristic plateauing.
-- **Deep Search (two-tier drill-down)** — *shipped in place of P3.* See §7.
-- **P4 — Dynamics & niche signals** — phenology learned from records, burned-area
-  for morels, forecast-driven "fruiting soon" (rain just fell → predict +10 d).
+- **P0 — Deploy the backend** — ✅ **available.** `backend/` (Cloud Run +
+  Earth Engine) serves `/env-grid`; wired to the app via `BACKEND_BASE_URL`/
+  `BACKEND_TOKEN` (CI secrets). Each deployment runs `backend/deploy.sh`; when no
+  backend is configured the app falls back to free OSM canopy. Unlocks the Earth
+  Engine layers below in one place.
+- **P1 — Richer feature layers** (no model yet) — ✅ **shipped.** SoilGrids
+  **pH + sand/texture**, per-cell **soil moisture**, and DEM-derived **TWI** are
+  served by `/env-grid` and scored in `MycoMath` (`richSoilScore`,
+  `soilMoistureFitness`, `twiWetnessScore`), feeding the *existing* weighted
+  engine for an immediate accuracy bump. _Not yet:_ ERA5/SMAP soil-moisture
+  **lags** and Dynamic World land cover (those remain P4 / future).
+- **P2 — Host-tree layer** — ✅ **shipped (proxy).** Per-species host **groups**
+  (needleleaf / evergreen-broadleaf / deciduous-broadleaf, from the catalogue's
+  habitat text via `hostGroupsFor`) are matched against the Copernicus forest
+  **leaf-type** layer (`hostTreeMatchScore`). This is the cheaper host proxy;
+  the richer plan — GBIF/ALA tree-**occurrence density** per associate — is the
+  natural follow-up if accuracy demands it.
+- **P3 — Trained SDM** — ⏸️ **parked.** The rule-based engine after P1+P2 is
+  already strong enough for personal use, and a trained model is a large
+  investment that only pays off with a validation backtest first. Superseded for
+  now by **Deep Search** (below), which buys precision without the model.
+  Revisit if/when a backtest shows the heuristic plateauing.
+- **Deep Search (two-tier drill-down)** — ✅ **shipped in place of P3.** See §7.
+- **P4 — Dynamics & niche signals** — ⏳ **future.** Phenology learned from
+  records, burned-area for morels, forecast-driven "fruiting soon" (rain just
+  fell → predict +10 d), plus the ERA5/SMAP moisture **lags** deferred from P1.
 
 ## 7. Deep Search — two-tier resolution
 
