@@ -456,14 +456,14 @@ class MycoMathTest {
 
     @Test
     fun `tier thresholds classify each band`() {
-        assertEquals("Excellent", MycoMath.classifyTier(0.85))
-        assertEquals("VeryGood", MycoMath.classifyTier(0.70))
-        assertEquals("Promising", MycoMath.classifyTier(0.45))
-        assertEquals("Possible", MycoMath.classifyTier(0.25))
+        assertEquals("Excellent", MycoMath.classifyTier(0.60))
+        assertEquals("VeryGood", MycoMath.classifyTier(0.50))
+        assertEquals("Promising", MycoMath.classifyTier(0.40))
+        assertEquals("Possible", MycoMath.classifyTier(0.28))
         assertEquals("Unlikely", MycoMath.classifyTier(0.10))
         // Boundaries are inclusive at the lower edge of each tier.
-        assertEquals("Excellent", MycoMath.classifyTier(0.80))
-        assertEquals("Possible", MycoMath.classifyTier(0.20))
+        assertEquals("Excellent", MycoMath.classifyTier(0.58))
+        assertEquals("Possible", MycoMath.classifyTier(0.22))
     }
 
     @Test
