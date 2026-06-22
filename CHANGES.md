@@ -1,5 +1,21 @@
 # Changes — completion & stabilization pass
 
+## Weighting shift — trust real conditions over the calendar
+
+Climate shift makes textbook fruiting "seasons" unreliable; fungi increasingly
+appear off-window when the ground conditions are right. So the engine now leans
+on **actual, measured signals** rather than the calendar:
+
+- **Calendar season de-emphasised** as a score factor (weight 0.14 → 0.08).
+- **Real-condition factors lifted:** recent rain 0.11 → 0.12, soil moisture
+  0.03 → 0.05, soil pH/texture 0.04 → 0.05, trees/canopy 0.08 → 0.09, current
+  temperature 0.06 → 0.07. Evidence stays dominant (0.21). Weights still sum to 1.0.
+- **The conditions modifier no longer keys off the calendar.** It was capped by
+  `min(season, rain)`; it's now driven purely by **actual ground wetness**
+  (`max(rain trigger, 0.85·soil moisture)`), range 0.55 (bone-dry) → 1.0 (wet).
+  A species out of its textbook window but in genuinely good, recently-wet
+  habitat is no longer gated down by the date.
+
 ## Hotspot calibration — good habitat no longer reads "Unlikely"
 
 Field testing in productive country (e.g. box-ironbark forest around Bendigo,

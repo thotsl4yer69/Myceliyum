@@ -690,18 +690,24 @@ object MycoMath {
      *
      * Insertion-ordered for readable "Why this score?" breakdowns.
      */
+    // Weighting philosophy: fungi respond to ACTUAL ground conditions far more
+    // than the calendar, and a shifting climate makes textbook "seasons"
+    // increasingly unreliable. So the calendar season is only a light hint
+    // (0.08), while real, measured signals carry the weight — recent rain
+    // (0.12), soil moisture (0.05), soil pH/texture (0.05), trees/canopy (0.09)
+    // + host trees (0.05), terrain/wetness, and current temperature (0.07).
     val FACTOR_WEIGHTS: Map<String, Double> = linkedMapOf(
         "evidence"    to 0.21,
-        "season"      to 0.14,
-        "rainTrigger" to 0.11,
-        "canopy"      to 0.08,
+        "rainTrigger" to 0.12,
+        "canopy"      to 0.09,
+        "season"      to 0.08,
         "habitat"     to 0.08,
-        "temperature" to 0.06,
+        "temperature" to 0.07,
         "hostTree"    to 0.05,
         "terrain"     to 0.05,
         "elevation"   to 0.05,
-        "soil"        to 0.04,
-        "moisture"    to 0.03,
+        "soil"        to 0.05,
+        "moisture"    to 0.05,
         "twi"         to 0.03,
         "riparian"    to 0.03,
         "aspect"      to 0.03,
