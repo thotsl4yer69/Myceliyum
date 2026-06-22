@@ -105,9 +105,19 @@ fun MapScreen(
 
     val hotspotsList = remember(hotspotState) {
         if (hotspotState is HotspotState.Success) {
-            (hotspotState as HotspotState.Success).cells
-                .filter { it.tier != "Unlikely" }
-                .sortedByDescending { it.score }
+            val cells = (hotspotState as HotspotState.Success).cells
+            val promising = cells.filter { it.tier != "Unlikely" }.sortedByDescending { it.score }
+            if (promising.isNotEmpty()) {
+                promising
+            } else {
+                // Nothing crossed the absolute "Possible" line (sparse evidence /
+                // off-season) — still surface the strongest cells relative to this
+                // grid so the list shows the best-available spots, honestly tiered,
+                // rather than an empty "nothing here".
+                val gridMax = cells.maxOfOrNull { it.score } ?: 0.0
+                val floor = maxOf(0.10, gridMax * 0.6)
+                cells.filter { it.score >= floor }.sortedByDescending { it.score }.take(12)
+            }
         } else {
             emptyList()
         }
@@ -121,10 +131,15 @@ fun MapScreen(
     val displayedCells = remember(overviewCells, deepCells) { overviewCells + deepCells }
 
     // Top spots for the numbered map pins: from the active Deep-Search grid if
-    // drilled in, else the overview. Promising+ only, best first.
+    // drilled in, else the overview. Best first. Prefer genuinely Promising+ spots
+    // (>=0.40), but never go empty when the area is modest — fall back to the
+    // strongest cells relative to this grid so foragers always get ranked "best
+    // near you" pins instead of a bare map.
     val rankedPins = remember(overviewCells, deepCells) {
-        (deepCells.ifEmpty { overviewCells })
-            .filter { it.score >= 0.40 }
+        val cells = deepCells.ifEmpty { overviewCells }
+        val gridMax = cells.maxOfOrNull { it.score } ?: 0.0
+        val pinFloor = minOf(0.40, maxOf(0.12, gridMax * 0.6))
+        cells.filter { it.score >= pinFloor }
             .sortedByDescending { it.score }
             .take(8)
     }
@@ -1405,13 +1420,19 @@ fun OSMMapView(
 
             // 2. PROBABILITY HEATMAP — every scored cell drawn as an edge-to-edge,
             // stroke-less tile on a continuous score→colour ramp (cool = low, warm
-            // = high) with opacity rising with score. Dead zones (gated cities /
-            // water, and anything below ~Possible) are left unshaded, so the warm
-            // areas read as "go here" at a glance. Purely visual — the numbered
-            // pins below carry the taps, so there are never stray info-windows.
+            // = high) with opacity rising with score. The ramp is ADAPTIVE: it
+            // scales to the grid's own best score, so the strongest spots always
+            // read warm — even where evidence is sparse or the species is off
+            // season and absolute scores are modest. Gated cities/water still drop
+            // out (low floor), but the map never goes blank when a grid exists.
             val cosLngFactor = Math.cos(centerX * Math.PI / 180.0)
+            val gridMax = heatmapCells.maxOfOrNull { it.score } ?: 0.0
+            // Normally hide weak/gated cells around ~0.18; when the whole area is
+            // modest, drop the floor toward the grid so the relative surface paints.
+            val heatFloor = minOf(0.18, gridMax * 0.45).coerceIn(0.05, 0.18)
+            val heatTop = maxOf(gridMax, heatFloor + 0.05)
             for (cell in heatmapCells) {
-                if (cell.score < 0.20) continue
+                if (cell.score < heatFloor) continue
                 val halfH = (cell.cellSizeMeters / 2.0) / 111_000.0
                 val halfW = (cell.cellSizeMeters / 2.0) / (111_000.0 * cosLngFactor)
                 val tile = Polygon(mapView).apply {
@@ -1421,7 +1442,7 @@ fun OSMMapView(
                         GeoPoint(cell.lat - halfH, cell.lng + halfW),
                         GeoPoint(cell.lat - halfH, cell.lng - halfW)
                     )
-                    fillColor = heatColor(cell.score)
+                    fillColor = heatColor(cell.score, heatFloor, heatTop)
                     strokeColor = android.graphics.Color.TRANSPARENT
                     strokeWidth = 0f
                     infoWindow = null
@@ -1553,8 +1574,12 @@ private fun confidenceColor(c: Double): Color = when {
  * gold to warm red (high), with opacity rising with score so weak areas stay
  * faint and strong ones pop. Scores below ~0.2 are filtered out by the caller.
  */
-private fun heatColor(score: Double): Int {
-    val t = ((score - 0.20) / 0.80).coerceIn(0.0, 1.0).toFloat()
+private fun heatColor(score: Double, floor: Double, top: Double): Int {
+    // Ramp is relative to the grid's own [floor, top] range, so the best spots in
+    // view always read warm even when absolute scores are modest (sparse evidence
+    // / off-season) — the map shows "best near you", never a blank surface.
+    val span = (top - floor).coerceAtLeast(0.0001)
+    val t = ((score - floor) / span).coerceIn(0.0, 1.0).toFloat()
     val hue = 140f * (1f - t)                       // 140°=green (low) → 0°=red (high)
     val alpha = (70 + 150 * t).toInt().coerceIn(0, 255)
     return android.graphics.Color.HSVToColor(alpha, floatArrayOf(hue, 0.80f, 0.95f))
