@@ -1417,12 +1417,14 @@ class FungiRepository(
                 // you won't find fungi out of season in dry conditions
                 // regardless of historical evidence.
                 val weightedSum = MycoMath.weightedFactorScore(factorScores)
-                // Season/rain modifier — a gentle de-rating, NOT a crusher. Season
-                // and rain are already weighted factors above, so this only softly
-                // discounts clearly off-season / bone-dry conditions (floor 0.625)
-                // instead of slashing genuinely good habitat down to "Unlikely".
-                val seasonRainFloor = maxOf(0.25, minOf(seasonScore, rainTriggerScore + 0.3))
-                val penaltyMultiplier = (0.5 + 0.5 * seasonRainFloor).coerceIn(0.0, 1.0)
+                // Conditions modifier — driven by ACTUAL ground wetness (recent
+                // rain trigger + soil moisture), not the calendar. Fungi fruit
+                // after rain regardless of the textbook season, and a shifting
+                // climate makes those windows unreliable, so this keys off real
+                // moisture; the calendar season is only a light weighted factor
+                // above, never a gate. Range 0.55 (bone-dry) .. 1.0 (wet).
+                val fruitingConditions = maxOf(rainTriggerScore, 0.85 * moistureScore)
+                val penaltyMultiplier = (0.55 + 0.45 * fruitingConditions).coerceIn(0.0, 1.0)
 
                 // Multiplicative HABITAT GATE — built-up/water/bare collapse the
                 // score toward zero so cities, roads and car parks can't rank
@@ -1788,12 +1790,14 @@ class FungiRepository(
                     )
                 )
 
-                // Season/rain modifier — a gentle de-rating, NOT a crusher. Season
-                // and rain are already weighted factors above, so this only softly
-                // discounts clearly off-season / bone-dry conditions (floor 0.625)
-                // instead of slashing genuinely good habitat down to "Unlikely".
-                val seasonRainFloor = maxOf(0.25, minOf(seasonScore, rainTriggerScore + 0.3))
-                val penaltyMultiplier = (0.5 + 0.5 * seasonRainFloor).coerceIn(0.0, 1.0)
+                // Conditions modifier — driven by ACTUAL ground wetness (recent
+                // rain trigger + soil moisture), not the calendar. Fungi fruit
+                // after rain regardless of the textbook season, and a shifting
+                // climate makes those windows unreliable, so this keys off real
+                // moisture; the calendar season is only a light weighted factor
+                // above, never a gate. Range 0.55 (bone-dry) .. 1.0 (wet).
+                val fruitingConditions = maxOf(rainTriggerScore, 0.85 * moistureScore)
+                val penaltyMultiplier = (0.55 + 0.45 * fruitingConditions).coerceIn(0.0, 1.0)
                 // Habitat gate — suppress built-up/water/bare cells (see single-species note).
                 val habitatGate = if (env != null)
                     MycoMath.habitatGate(env.landcover.getOrNull(idx), env.ndvi.getOrNull(idx), "aggregate_default")
