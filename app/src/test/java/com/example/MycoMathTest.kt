@@ -480,4 +480,30 @@ class MycoMathTest {
         assertEquals("High", MycoMath.confidenceLabel(full))
         assertTrue(full > layersOnly && layersOnly > none)       // monotonic with data richness
     }
+
+    // ─── Tanbark / woodchip (mulch) ──────────────────────────────────
+
+    @Test
+    fun `mulch affinity flags woodchip lovers and ignores forest fungi`() {
+        // Gold tops name woodchips/mulch in their substrates → full affinity.
+        val goldTop = MycoMath.mulchAffinity(
+            listOf("Urban Woodchips", "Disturbed Paths"),
+            listOf("Wood chips", "Decaying eucalyptus mulch")
+        )
+        assertEquals(1.0, goldTop, 1e-9)
+        // A purely mycorrhizal forest species → no mulch association.
+        val forest = MycoMath.mulchAffinity(listOf("Eucalypt Woodland"), listOf("Soil (mycorrhizal with Eucalyptus)"))
+        assertEquals(0.0, forest, 1e-9)
+        // "Disturbed/urban garden" earns a partial (loose) affinity.
+        val loose = MycoMath.mulchAffinity(listOf("Disturbed urban ground"), emptyList())
+        assertTrue(loose in 0.01..0.99)
+    }
+
+    @Test
+    fun `mulch proximity is full at the bed, tapers out, and never penalises`() {
+        assertEquals(1.0, MycoMath.mulchProximityScore(20.0), 1e-9)   // in the bed
+        assertTrue(MycoMath.mulchProximityScore(150.0) in 0.01..0.99) // tapering
+        assertEquals(0.0, MycoMath.mulchProximityScore(500.0), 1e-9)  // far → no bonus
+        assertEquals(0.0, MycoMath.mulchProximityScore(null), 1e-9)   // none mapped → no bonus, not a penalty
+    }
 }

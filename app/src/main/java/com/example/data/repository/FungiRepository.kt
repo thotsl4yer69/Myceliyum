@@ -778,6 +778,46 @@ class FungiRepository(
         }
     }
 
+    /**
+     * Fetches tanbark / woodchip / mulch-bed features (centre points) in the
+     * bbox from OpenStreetMap via Overpass. These are prime substrate for
+     * wood-chip-loving fungi (gold tops etc.) and aren't resolvable from Earth
+     * Engine land cover, so they're fetched separately — but only for
+     * mulch-associated species (see [MycoMath.mulchAffinity]). Tags: explicit
+     * `surface=woodchips|bark_mulch|tan`, `landuse=flowerbed|plant_nursery`,
+     * `leisure=garden|playground` (play areas are commonly bark-mulched), and
+     * garden centres. Returns empty on failure (graceful — just no bonus).
+     */
+    suspend fun fetchMulchFeatures(
+        minLat: Double, minLng: Double, maxLat: Double, maxLng: Double
+    ): List<Pair<Double, Double>> = withContext(Dispatchers.IO) {
+        try {
+            val bbox = String.format(Locale.US, "%.5f,%.5f,%.5f,%.5f", minLat, minLng, maxLat, maxLng)
+            val ql = """
+                [out:json][timeout:25];
+                (
+                  way["surface"~"woodchips|bark_mulch|tan"]($bbox);
+                  way["landuse"="flowerbed"]($bbox);
+                  way["landuse"="plant_nursery"]($bbox);
+                  way["leisure"="garden"]($bbox);
+                  way["leisure"="playground"]($bbox);
+                  node["leisure"="playground"]($bbox);
+                  way["shop"="garden_centre"]($bbox);
+                );
+                out center;
+            """.trimIndent()
+            val resp = overpassApi.query(ql)
+            resp.elements.orEmpty().mapNotNull { el ->
+                val la = el.resolvedLat()
+                val lo = el.resolvedLon()
+                if (la != null && lo != null) la to lo else null
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Mulch (Overpass) fetch failed, no tanbark bonus: ${e.message}")
+            emptyList()
+        }
+    }
+
     // ─── OSM land-use classification (offline habitat discrimination) ───
     //
     // When the Earth Engine backend isn't configured, this is what lets the map
@@ -1272,6 +1312,15 @@ class FungiRepository(
             cellLL.minOf { it.first }, cellLL.minOf { it.second },
             cellLL.maxOf { it.first }, cellLL.maxOf { it.second }
         ) else emptyList()
+        // Tanbark / woodchip beds (OSM) — only for mulch-associated species
+        // (gold tops etc.), since neither EE land cover nor the green/built
+        // land-use layer resolves garden-bed mulch. A strong, specific substrate
+        // signal that lifts those species' score where they actually fruit.
+        val speciesMulchAffinity = MycoMath.mulchAffinity(species.habitatTypes, species.substrates)
+        val mulchFeatures = if (speciesMulchAffinity > 0.0 && cellLL.isNotEmpty()) fetchMulchFeatures(
+            cellLL.minOf { it.first }, cellLL.minOf { it.second },
+            cellLL.maxOf { it.first }, cellLL.maxOf { it.second }
+        ) else emptyList()
 
         for (idx in cellIJ.indices) {
             coroutineContext.ensureActive()
@@ -1389,7 +1438,18 @@ class FungiRepository(
                 // Evidence stays dominant; terrain, elevation, aspect and
                 // canopy give real per-cell differentiation alongside the
                 // global climate factors. Weights sum to 1.0.
-                val adjustedHabitat = (habitatScore * habitatWeight).coerceIn(0.0, 1.0)
+                // Tanbark / woodchip signal: how close this cell is to a mapped
+                // mulch bed, scaled by the species' mulch affinity (0 for forest
+                // fungi → no effect). For gold tops & co. a woodchip bed under
+                // foot is prime substrate, so it lifts the habitat factor and the
+                // habitat gate (so urban mulch beds aren't suppressed as "built-up").
+                val mulchDist = if (mulchFeatures.isEmpty()) null
+                    else nearestFeatureMeters(cellLat, cellLng, mulchFeatures)
+                val mulchSignal = speciesMulchAffinity * MycoMath.mulchProximityScore(mulchDist)
+                val adjustedHabitat = maxOf(
+                    (habitatScore * habitatWeight).coerceIn(0.0, 1.0),
+                    mulchSignal
+                )
 
                 // Per-cell factor scores combined with the canonical, shared
                 // weights (MycoMath.FACTOR_WEIGHTS) so this and the aggregate
@@ -1431,13 +1491,19 @@ class FungiRepository(
                 // high no matter how good the weather or how many records cluster
                 // there. Uses real EE land cover/NDVI when available, else an OSM
                 // canopy-proximity fallback.
-                val habitatGate = if (env != null)
+                val rawGate = if (env != null)
                     MycoMath.habitatGate(env.landcover.getOrNull(idx), env.ndvi.getOrNull(idx), species.id)
                 else when (landClass) {
                     LandClass.GREEN -> 0.95
                     LandClass.BUILT -> 0.10
                     LandClass.NEUTRAL -> (0.45 + 0.40 * MycoMath.canopyProximityScore(canopyDist))
                 }
+                // A mulch-loving species sitting in a mapped tanbark/woodchip bed
+                // genuinely fruits there even on "built-up" ground, so the bed
+                // lifts the gate floor (never lowers it) — keeping gold tops in
+                // suburban garden beds on the map instead of gated to zero.
+                val habitatGate = if (mulchSignal > 0.0)
+                    maxOf(rawGate, (0.50 + 0.45 * mulchSignal).coerceAtMost(1.0)) else rawGate
 
                 val finalScore = (weightedSum * penaltyMultiplier * habitatGate).coerceIn(0.0, 1.0)
 
@@ -1460,6 +1526,9 @@ class FungiRepository(
                 factors.add("🌡️ Temperature: avg ${String.format(Locale.US, "%.1f", weather.avgTemp)}°C → ${String.format(Locale.US, "%.0f", tempScore * 100)}% fit for ${species.scientificName}")
                 factors.add("🌲 Habitat: ${species.habitatTypes.joinToString(", ")} → ${String.format(Locale.US, "%.0f", adjustedHabitat * 100)}%")
                 factors.add("🪵 Substrate: ${species.substrates.joinToString(", ")}")
+                if (mulchSignal > 0.05) factors.add(
+                    "🌰 Tanbark/woodchip bed ${if (mulchDist != null) "~${String.format(Locale.US, "%.0f m", mulchDist)} away" else "nearby"} — prime mulch substrate → habitat lifted to ${String.format(Locale.US, "%.0f", adjustedHabitat * 100)}%"
+                )
                 factors.add("⛰️ Elevation: ${if (cellElev != null) String.format(Locale.US, "%.0f m", cellElev) else "n/a"} → ${String.format(Locale.US, "%.0f", elevationScore * 100)}% fit")
                 factors.add("🏞️ Terrain (slope/moisture): ${String.format(Locale.US, "%.0f", terrainScore * 100)}% | Aspect: ${String.format(Locale.US, "%.0f", aspectScore * 100)}%")
                 if (env != null) {
