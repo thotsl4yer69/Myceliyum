@@ -120,6 +120,23 @@ fun MapScreen(
     val deepCells = (deepSearchState as? DeepSearchState.Success)?.cells ?: emptyList()
     val displayedCells = remember(overviewCells, deepCells) { overviewCells + deepCells }
 
+    // Top spots for the numbered map pins: from the active Deep-Search grid if
+    // drilled in, else the overview. Promising+ only, best first.
+    val rankedPins = remember(overviewCells, deepCells) {
+        (deepCells.ifEmpty { overviewCells })
+            .filter { it.score >= 0.40 }
+            .sortedByDescending { it.score }
+            .take(8)
+    }
+    // One-shot camera focus (Deep Search zoom / "centre here").
+    var focusTarget by remember { mutableStateOf<MapFocus?>(null) }
+    // When a Deep Search completes, zoom into that square so the fine grid is legible.
+    LaunchedEffect(deepSearchState) {
+        (deepSearchState as? DeepSearchState.Success)?.let { ds ->
+            focusTarget = MapFocus(ds.parent.lat, ds.parent.lng, 16.5, System.nanoTime())
+        }
+    }
+
     // Navigation and coordinates editing states
     var manualLatText by remember { mutableStateOf(String.format(Locale.US, "%.5f", mapCenter.first)) }
     var manualLngText by remember { mutableStateOf(String.format(Locale.US, "%.5f", mapCenter.second)) }
@@ -209,7 +226,9 @@ fun MapScreen(
                         centerY = mapCenter.second,
                         radiusKm = searchRadiusKm,
                         mapTheme = mapTheme,
-                        hotspotCells = displayedCells,
+                        heatmapCells = displayedCells,
+                        rankedPins = rankedPins,
+                        focusTarget = focusTarget,
                         // In aggregate mode the cells already represent combined
                         // evidence; pinning one species' records on top is noisy
                         // and misleading, so skip them.
@@ -227,10 +246,15 @@ fun MapScreen(
                         // (debounced in OSMMapView). Guard against tiny deltas so
                         // we don't recompute when the map barely moved.
                         onCameraIdle = { newLat, newLng ->
-                            val (curLat, curLng) = viewModel.mapCenter.value
-                            if (abs(curLat - newLat) > 1e-4 || abs(curLng - newLng) > 1e-4) {
-                                viewModel.mapCenter.value = Pair(newLat, newLng)
-                                selectedHotspotCell = null
+                            // While drilled into a Deep-Search square, panning/zoom must
+                            // NOT relocate the search or recompute — that would wipe the
+                            // drill-down. Exit via "Back to overview" first.
+                            if (deepSearchState !is DeepSearchState.Success) {
+                                val (curLat, curLng) = viewModel.mapCenter.value
+                                if (abs(curLat - newLat) > 1e-4 || abs(curLng - newLng) > 1e-4) {
+                                    viewModel.mapCenter.value = Pair(newLat, newLng)
+                                    selectedHotspotCell = null
+                                }
                             }
                         }
                     )
@@ -272,7 +296,11 @@ fun MapScreen(
                             modifier = Modifier
                                 .align(Alignment.TopCenter)
                                 .padding(top = 12.dp)
-                                .clickable { viewModel.clearDeepSearch() }
+                                .clickable {
+                                    viewModel.clearDeepSearch()
+                                    // Zoom back out to the overview.
+                                    focusTarget = MapFocus(mapCenter.first, mapCenter.second, 13.0, System.nanoTime())
+                                }
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -336,7 +364,7 @@ fun MapScreen(
                         }
                     }
 
-                    // Color Legend Overlay — 5-tier system (hidden in fullscreen)
+                    // Legend — heatmap ramp + numbered top-spot pins (hidden in fullscreen)
                     androidx.compose.animation.AnimatedVisibility(
                         visible = !isFullscreen,
                         enter = fadeIn(),
@@ -359,31 +387,28 @@ fun MapScreen(
                                 fontSize = 10.sp,
                                 modifier = Modifier.padding(bottom = 2.dp)
                             )
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(modifier = Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFFFF6B6B)))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Excellent >80%", color = Color.White, fontSize = 9.sp)
-                            }
+                            // Heatmap ramp (matches the on-map green→red surface).
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(modifier = Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFF54E0A0)))
+                                Box(modifier = Modifier.size(10.dp).background(Color(0xFFE6B24C)))
+                                Box(modifier = Modifier.size(10.dp).background(Color(0xFFFF8C42)))
+                                Box(modifier = Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFFFF6B6B)))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Very Good 60-80%", color = Color.White, fontSize = 9.sp)
+                                Text("Low → High", color = Color.White, fontSize = 9.sp)
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(modifier = Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFFE6B24C)))
+                                Box(
+                                    modifier = Modifier.size(12.dp).clip(CircleShape).background(Color(0xFFFF6B6B)),
+                                    contentAlignment = Alignment.Center
+                                ) { Text("1", color = Color.White, fontSize = 7.sp, fontWeight = FontWeight.Bold) }
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Promising 40-60%", color = Color.White, fontSize = 9.sp)
+                                Text("Numbered = best spots", color = Color.White, fontSize = 9.sp)
                             }
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(modifier = Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFF8B9D93)))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Possible 20-40%", color = Color.White, fontSize = 9.sp)
-                            }
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(modifier = Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFF5B6353).copy(alpha = 0.3f)))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Built-up / bare — skip", color = Color.White, fontSize = 9.sp)
-                            }
+                            Text(
+                                "Built-up / bare left unshaded",
+                                color = Color.White.copy(alpha = 0.6f),
+                                fontSize = 8.sp
+                            )
                         }
                     }
 
@@ -1144,8 +1169,10 @@ fun MapScreen(
                                         .background(tierColor(cell.tier))
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
+                                val rank = rankedPins.indexOfFirst { it.lat == cell.lat && it.lng == cell.lng }
                                 Text(
-                                    text = "${tierLabel(cell.tier)} spot",
+                                    text = if (rank >= 0) "Spot #${rank + 1} · ${tierLabel(cell.tier)}"
+                                           else "${tierLabel(cell.tier)} spot",
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.Bold,
                                     color = tierColor(cell.tier)
@@ -1251,10 +1278,12 @@ fun OSMMapView(
     centerY: Double,
     radiusKm: Double,
     mapTheme: String,
-    hotspotCells: List<HotspotCell>,
+    heatmapCells: List<HotspotCell>,
+    rankedPins: List<HotspotCell>,
     observationPins: List<Observation>,
     allFungiPins: List<MapObservation> = emptyList(),
     selectedSpeciesName: String? = null,
+    focusTarget: MapFocus? = null,
     onCellSelected: (HotspotCell) -> Unit,
     // Fired (debounced) when the user finishes moving the map — the search
     // centre follows the viewport. Tapping is reserved for selecting pins/cells.
@@ -1266,6 +1295,12 @@ fun OSMMapView(
     LaunchedEffect(Unit) {
         Configuration.getInstance().userAgentValue = context.packageName
     }
+
+    // Remember the last externally-applied search centre and focus request so the
+    // camera moves ONLY when those actually change — never fighting the user's pan
+    // or a Deep-Search zoom.
+    val lastCenter = remember { doubleArrayOf(centerX, centerY) }
+    val lastFocusKey = remember { longArrayOf(0L) }
 
     AndroidView(
         factory = { ctx ->
@@ -1302,13 +1337,20 @@ fun OSMMapView(
             mapView.overlayManager.tilesOverlay.setColorFilter(
                 if (mapTheme == "Dark") TilesOverlay.INVERT_COLORS else null
             )
-            // Recenter the map only when the requested centre came from OUTSIDE
-            // the map (search, GPS, presets, manual coords, hotspot list). When
-            // the user pans the map themselves, mapCenter is already in sync, so
-            // we skip animateTo and never fight their gesture.
-            val cur = mapView.mapCenter
-            if (abs(cur.latitude - centerX) > 1e-5 || abs(cur.longitude - centerY) > 1e-5) {
+            // Move the camera only when the SEARCH centre prop actually changes
+            // (search, GPS, presets, manual coords, list) — not when the user pans
+            // or we Deep-Search zoom (handled by focusTarget below).
+            if (centerX != lastCenter[0] || centerY != lastCenter[1]) {
                 mapView.controller.animateTo(GeoPoint(centerX, centerY))
+                lastCenter[0] = centerX; lastCenter[1] = centerY
+            }
+            // Deep-Search / "centre here" zoom: animate + zoom once per request.
+            focusTarget?.let { ft ->
+                if (ft.key != lastFocusKey[0]) {
+                    mapView.controller.animateTo(GeoPoint(ft.lat, ft.lng))
+                    mapView.controller.setZoom(ft.zoom)
+                    lastFocusKey[0] = ft.key
+                }
             }
 
             // Clear all overlays to redraw. No catch-all tap overlay any more:
@@ -1332,96 +1374,78 @@ fun OSMMapView(
                 }
                 geoPoints.add(geoPoints.first()) // close Path
                 points = geoPoints
-                fillColor = android.graphics.Color.argb(30, 76, 175, 80) // 4CAF50 alpha
-                strokeColor = android.graphics.Color.parseColor("#4CAF50")
-                strokeWidth = 3f
+                fillColor = android.graphics.Color.TRANSPARENT
+                strokeColor = android.graphics.Color.argb(120, 76, 175, 80)
+                strokeWidth = 2.5f
+                infoWindow = null   // never show an (empty) info bubble
             }
             mapView.overlays.add(circlePolygon)
 
-            // 2. Add Hotspot Cells — each drawn at its OWN resolution so the broad
-            // ~250 m overview grid and a fine Deep-Search sub-grid both render true
-            // to size on the same map.
-            val rad = centerX * Math.PI / 180.0
-            val cosLngFactor = Math.cos(rad)
-
-            for (cell in hotspotCells) {
-                if (cell.tier == "Unlikely") continue // Skip lowest tier for visual clarity
-
+            // 2. PROBABILITY HEATMAP — every scored cell drawn as an edge-to-edge,
+            // stroke-less tile on a continuous score→colour ramp (cool = low, warm
+            // = high) with opacity rising with score. Dead zones (gated cities /
+            // water, and anything below ~Possible) are left unshaded, so the warm
+            // areas read as "go here" at a glance. Purely visual — the numbered
+            // pins below carry the taps, so there are never stray info-windows.
+            val cosLngFactor = Math.cos(centerX * Math.PI / 180.0)
+            for (cell in heatmapCells) {
+                if (cell.score < 0.20) continue
                 val halfH = (cell.cellSizeMeters / 2.0) / 111_000.0
                 val halfW = (cell.cellSizeMeters / 2.0) / (111_000.0 * cosLngFactor)
-                val pts = listOf(
-                    GeoPoint(cell.lat + halfH, cell.lng - halfW),
-                    GeoPoint(cell.lat + halfH, cell.lng + halfW),
-                    GeoPoint(cell.lat - halfH, cell.lng + halfW),
-                    GeoPoint(cell.lat - halfH, cell.lng - halfW)
-                )
-
-                val cellPoly = Polygon(mapView).apply {
-                    points = pts
-                    // Translucent fills, but opaque enough to actually read on a
-                    // busy topo/satellite basemap. The top tiers are boldest; the
-                    // lower tiers stay lighter but remain clearly visible so the
-                    // grid is never an invisible wash.
-                    fillColor = when (cell.tier) {
-                        "Excellent" -> android.graphics.Color.argb(155, 255, 107, 107)  // warm red — hotspot
-                        "VeryGood"  -> android.graphics.Color.argb(125, 84, 224, 160)   // mint green
-                        "Promising" -> android.graphics.Color.argb(100, 230, 178, 76)   // chanterelle gold
-                        "Possible"  -> android.graphics.Color.argb(70, 139, 157, 147)   // muted sage
-                        else -> android.graphics.Color.argb(18, 91, 99, 83)          // dim sage
-                    }
-                    strokeColor = when (cell.tier) {
-                        "Excellent" -> android.graphics.Color.parseColor("#FF6B6B")
-                        "VeryGood"  -> android.graphics.Color.parseColor("#54E0A0")
-                        "Promising" -> android.graphics.Color.parseColor("#E6B24C")
-                        "Possible"  -> android.graphics.Color.parseColor("#8B9D93")
-                        else -> android.graphics.Color.parseColor("#5B6353")
-                    }
-                    strokeWidth = when (cell.tier) {
-                        "Excellent" -> 3f
-                        "VeryGood" -> 2.5f
-                        else -> 2f
-                    }
-                    // Tap a prediction square to see why it scored. Relocating
-                    // is done by panning the map, so taps are free for selection.
-                    setOnClickListener { _, _, _ ->
-                        onCellSelected(cell)
-                        true
-                    }
+                val tile = Polygon(mapView).apply {
+                    points = listOf(
+                        GeoPoint(cell.lat + halfH, cell.lng - halfW),
+                        GeoPoint(cell.lat + halfH, cell.lng + halfW),
+                        GeoPoint(cell.lat - halfH, cell.lng + halfW),
+                        GeoPoint(cell.lat - halfH, cell.lng - halfW)
+                    )
+                    fillColor = heatColor(cell.score)
+                    strokeColor = android.graphics.Color.TRANSPARENT
+                    strokeWidth = 0f
+                    infoWindow = null
                 }
-                mapView.overlays.add(cellPoly)
+                mapView.overlays.add(tile)
             }
-            
-            val dateFmt = java.text.SimpleDateFormat("d MMM yyyy", java.util.Locale.getDefault())
 
-            // 3a. Selected-species observation markers (single-species mode).
-            // Tap to see the species and when it was recorded.
-            for (pin in observationPins) {
+            // 3. RANKED SPOT PINS — the best spots as numbered discs (① = best).
+            // Tap routes straight to the Compose detail card; no osmdroid bubble.
+            rankedPins.forEachIndexed { i, cell ->
                 val marker = Marker(mapView).apply {
-                    position = GeoPoint(pin.lat, pin.lng)
-                    setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                    title = selectedSpeciesName ?: "Sighting"
-                    snippet = buildString {
-                        if (pin.observedAt > 0) append("Recorded ${dateFmt.format(java.util.Date(pin.observedAt))}\n")
-                        append("${pin.source} · ${pin.qualityGrade}")
-                    }
+                    position = GeoPoint(cell.lat, cell.lng)
+                    setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                    icon = numberedPinDrawable(context, i + 1, tierColorInt(cell.tier))
+                    infoWindow = null
+                    setOnMarkerClickListener { _, _ -> onCellSelected(cell); true }
                 }
                 mapView.overlays.add(marker)
             }
 
-            // 3b. All-fungi sightings layer — every nearby fungal observation,
-            // labelled with its taxon, common name, place and date. Tapping a
-            // pin opens an info window. Capped so dense areas stay responsive.
-            for (pin in allFungiPins.take(250)) {
+            val dateFmt = java.text.SimpleDateFormat("d MMM yyyy", java.util.Locale.getDefault())
+
+            // 4. Sighting markers — no info-window (so no empty bubbles); a tap
+            // shows a quick toast with the species + date instead.
+            for (pin in observationPins) {
+                val label = selectedSpeciesName ?: "Sighting"
+                val whenStr = if (pin.observedAt > 0) " · ${dateFmt.format(java.util.Date(pin.observedAt))}" else ""
                 val marker = Marker(mapView).apply {
                     position = GeoPoint(pin.lat, pin.lng)
                     setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                    title = pin.commonName?.takeIf { it.isNotBlank() } ?: pin.taxonName
-                    snippet = buildString {
-                        // Species (scientific name) first, then when it was found.
-                        append(pin.taxonName)
-                        if (pin.observedAt > 0) append("\nRecorded ${dateFmt.format(java.util.Date(pin.observedAt))}")
-                        pin.placeGuess?.let { append("\n$it") }
-                        append("\n${pin.source} · ${pin.qualityGrade}")
+                    infoWindow = null
+                    setOnMarkerClickListener { _, _ ->
+                        Toast.makeText(context, "$label$whenStr (${pin.source})", Toast.LENGTH_SHORT).show(); true
+                    }
+                }
+                mapView.overlays.add(marker)
+            }
+            for (pin in allFungiPins.take(250)) {
+                val name = pin.commonName?.takeIf { it.isNotBlank() } ?: pin.taxonName
+                val whenStr = if (pin.observedAt > 0) " · ${dateFmt.format(java.util.Date(pin.observedAt))}" else ""
+                val marker = Marker(mapView).apply {
+                    position = GeoPoint(pin.lat, pin.lng)
+                    setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                    infoWindow = null
+                    setOnMarkerClickListener { _, _ ->
+                        Toast.makeText(context, "$name$whenStr", Toast.LENGTH_SHORT).show(); true
                     }
                 }
                 mapView.overlays.add(marker)
@@ -1482,6 +1506,63 @@ private fun tierColor(tier: String): Color = when (tier) {
     "Promising" -> Color(0xFFE6B24C)  // chanterelle gold
     "Possible"  -> Color(0xFF8B9D93)  // muted sage
     else        -> Color(0xFF5B6353)  // dim forest
+}
+
+/** A one-shot camera move request (Deep Search / "centre here"); [key] makes each
+ *  request unique so the map animates once rather than on every recomposition. */
+data class MapFocus(val lat: Double, val lng: Double, val zoom: Double, val key: Long)
+
+/**
+ * Continuous probability→colour ramp for the heatmap: cool green (low) through
+ * gold to warm red (high), with opacity rising with score so weak areas stay
+ * faint and strong ones pop. Scores below ~0.2 are filtered out by the caller.
+ */
+private fun heatColor(score: Double): Int {
+    val t = ((score - 0.20) / 0.80).coerceIn(0.0, 1.0).toFloat()
+    val hue = 140f * (1f - t)                       // 140°=green (low) → 0°=red (high)
+    val alpha = (70 + 150 * t).toInt().coerceIn(0, 255)
+    return android.graphics.Color.HSVToColor(alpha, floatArrayOf(hue, 0.80f, 0.95f))
+}
+
+/** android.graphics int colour for a tier (the Compose [tierColor] as an ARGB int). */
+private fun tierColorInt(tier: String): Int = when (tier) {
+    "Excellent" -> android.graphics.Color.parseColor("#FF6B6B")
+    "VeryGood"  -> android.graphics.Color.parseColor("#54E0A0")
+    "Promising" -> android.graphics.Color.parseColor("#E6B24C")
+    "Possible"  -> android.graphics.Color.parseColor("#8B9D93")
+    else        -> android.graphics.Color.parseColor("#5B6353")
+}
+
+/** Builds a numbered, coloured map-pin disc (① ② ③ …) for a ranked spot. */
+private fun numberedPinDrawable(
+    ctx: android.content.Context,
+    number: Int,
+    colorInt: Int
+): android.graphics.drawable.Drawable {
+    val density = ctx.resources.displayMetrics.density
+    val size = (28f * density).toInt().coerceAtLeast(40)
+    val bmp = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
+    val canvas = android.graphics.Canvas(bmp)
+    val r = size / 2f
+    val fill = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        color = colorInt; style = android.graphics.Paint.Style.FILL
+    }
+    canvas.drawCircle(r, r, r - density, fill)
+    val ring = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.WHITE
+        style = android.graphics.Paint.Style.STROKE
+        strokeWidth = 2f * density
+    }
+    canvas.drawCircle(r, r, r - density, ring)
+    val text = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.WHITE
+        textSize = size * 0.5f
+        textAlign = android.graphics.Paint.Align.CENTER
+        isFakeBoldText = true
+    }
+    val fm = text.fontMetrics
+    canvas.drawText(number.toString(), r, r - (fm.ascent + fm.descent) / 2f, text)
+    return android.graphics.drawable.BitmapDrawable(ctx.resources, bmp)
 }
 
 private fun calculateDistanceBetweenPoints(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
