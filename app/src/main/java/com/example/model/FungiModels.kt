@@ -48,6 +48,28 @@ data class SpeciesPhoto(
 )
 
 /**
+ * One enriched look-alike entry for the field-ID hardening layer. Loaded from
+ * the bundled species.json diagnostic keys (NOT persisted in Room), so it's a
+ * plain Moshi-friendly data class with safe defaults.
+ */
+data class LookAlike(
+    val name: String,
+    val dangerLevel: String = "Unknown",   // "Deadly" | "Toxic" | "Harmless" | "Unknown"
+    val keyDifference: String = ""
+)
+
+/**
+ * Per-species diagnostic field markers + enriched look-alikes, keyed by the
+ * species [id]. Parsed lazily from species.json's extra diagnostic keys and
+ * surfaced on the detail screen; not stored in Room (so no schema migration).
+ */
+data class SpeciesDiagnostics(
+    val id: String,
+    val diagnosticFeatures: List<String> = emptyList(),
+    val lookAlikeDetails: List<LookAlike> = emptyList()
+)
+
+/**
  * A lightweight, in-memory observation for the "all fungi sightings" map
  * layer — NOT persisted to Room (so no schema migration). Carries the taxon
  * label so pins can show the species/genus and common name straight from the

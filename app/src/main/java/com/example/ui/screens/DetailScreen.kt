@@ -28,7 +28,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.example.model.LookAlike
 import com.example.model.Species
+import com.example.ui.theme.ChanterelleGold
+import com.example.ui.theme.NeonMint
 import com.example.ui.viewmodel.FungiViewModel
 import java.util.*
 
@@ -65,6 +68,12 @@ fun DetailScreen(
     LaunchedEffect(species.id) {
         recordCount = viewModel.fetchGlobalRecordCount(species.scientificName)
     }
+
+    // Field-ID diagnostics (checklist + enriched look-alikes) for this species,
+    // loaded from the bundled species.json. Null/empty for species without any
+    // curated diagnostic content, in which case the extra UI renders nothing.
+    var diagnostics by remember(species.id) { mutableStateOf<com.example.model.SpeciesDiagnostics?>(null) }
+    LaunchedEffect(species.id) { diagnostics = viewModel.fetchSpeciesDiagnostics(species.id) }
 
     Scaffold(
         topBar = {
@@ -337,6 +346,58 @@ fun DetailScreen(
                     }
                 }
 
+                // 2b. Field ID checklist — curated diagnostic markers (only for
+                // species that carry them in species.json; nothing otherwise).
+                val features = diagnostics?.diagnosticFeatures.orEmpty()
+                if (features.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    Text(
+                        text = "🔎 Field ID checklist",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)),
+                        color = MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            features.forEach { feature ->
+                                Row(
+                                    verticalAlignment = Alignment.Top,
+                                    modifier = Modifier.padding(vertical = 6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.CheckCircle,
+                                        contentDescription = null,
+                                        tint = NeonMint,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = feature,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        lineHeight = 20.sp
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Field markers for research reference — confirm with an expert before trusting any ID.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                lineHeight = 16.sp
+                            )
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(20.dp))
 
                 // 3. Ecological Settings (Habitats & Substrates)
@@ -466,62 +527,76 @@ fun DetailScreen(
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
 
-                species.lookAlikes.forEach { lookAlike ->
-                    val linked = remember(lookAlike, catalogue) {
-                        resolveLookAlike(lookAlike, catalogue, species.id)
+                val lookAlikeDetails = diagnostics?.lookAlikeDetails.orEmpty()
+                if (lookAlikeDetails.isNotEmpty()) {
+                    // Enriched, danger-level-keyed look-alikes for hardened species.
+                    lookAlikeDetails.forEach { la ->
+                        LookAlikeDetailCard(
+                            lookAlike = la,
+                            catalogue = catalogue,
+                            selfId = species.id,
+                            onOpenSpecies = onOpenSpecies
+                        )
                     }
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.15f),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.3f)),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 10.dp)
-                            .then(
-                                if (linked != null) Modifier.clickable { onOpenSpecies(linked) }
-                                else Modifier
-                            )
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.Warning,
-                                    contentDescription = "Warning",
-                                    tint = MaterialTheme.colorScheme.error,
-                                    modifier = Modifier.size(20.dp)
+                } else {
+                    // Fallback: plain look-alike strings (unchanged for other species).
+                    species.lookAlikes.forEach { lookAlike ->
+                        val linked = remember(lookAlike, catalogue) {
+                            resolveLookAlike(lookAlike, catalogue, species.id)
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.15f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.3f)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 10.dp)
+                                .then(
+                                    if (linked != null) Modifier.clickable { onOpenSpecies(linked) }
+                                    else Modifier
                                 )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "Look-alike",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onErrorContainer
-                                )
-                                if (linked != null) {
-                                    Spacer(modifier = Modifier.weight(1f))
-                                    Text(
-                                        text = "View",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
-                                        imageVector = Icons.Default.ArrowForwardIos,
-                                        contentDescription = "Open ${linked.scientificName}",
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier
-                                            .padding(start = 4.dp)
-                                            .size(12.dp)
+                                        imageVector = Icons.Default.Warning,
+                                        contentDescription = "Warning",
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(20.dp)
                                     )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Look-alike",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onErrorContainer
+                                    )
+                                    if (linked != null) {
+                                        Spacer(modifier = Modifier.weight(1f))
+                                        Text(
+                                            text = "View",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                        Icon(
+                                            imageVector = Icons.Default.ArrowForwardIos,
+                                            contentDescription = "Open ${linked.scientificName}",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier
+                                                .padding(start = 4.dp)
+                                                .size(12.dp)
+                                        )
+                                    }
                                 }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = lookAlike,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onBackground,
+                                    lineHeight = 18.sp
+                                )
                             }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = lookAlike,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onBackground,
-                                lineHeight = 18.sp
-                            )
                         }
                     }
                 }
@@ -661,6 +736,93 @@ fun FeatureDetailRow(
             color = MaterialTheme.colorScheme.onSurface,
             lineHeight = 20.sp
         )
+    }
+}
+
+/**
+ * An enriched look-alike card, colour-keyed by danger level. "Deadly" reads in
+ * the theme error red, "Toxic" in amber, "Harmless"/unknown in a muted neutral.
+ * Reuses [resolveLookAlike] so a look-alike we catalogue stays a tappable
+ * cross-link (the "View" affordance on the right).
+ */
+@Composable
+private fun LookAlikeDetailCard(
+    lookAlike: LookAlike,
+    catalogue: List<Species>,
+    selfId: String,
+    onOpenSpecies: (Species) -> Unit
+) {
+    val accent = when (lookAlike.dangerLevel) {
+        "Deadly" -> MaterialTheme.colorScheme.error
+        "Toxic" -> ChanterelleGold
+        "Harmless" -> MaterialTheme.colorScheme.onSurfaceVariant
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    val linked = remember(lookAlike.name, catalogue) {
+        resolveLookAlike(lookAlike.name, catalogue, selfId)
+    }
+
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = accent.copy(alpha = 0.12f),
+        border = BorderStroke(1.dp, accent.copy(alpha = 0.45f)),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 10.dp)
+            .then(
+                if (linked != null) Modifier.clickable { onOpenSpecies(linked) }
+                else Modifier
+            )
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Warning,
+                    contentDescription = "Warning",
+                    tint = accent,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = lookAlike.dangerLevel.uppercase(Locale.US),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.5.sp,
+                    color = accent
+                )
+                if (linked != null) {
+                    Spacer(modifier = Modifier.weight(1f))
+                    Text(
+                        text = "View",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Icon(
+                        imageVector = Icons.Default.ArrowForwardIos,
+                        contentDescription = "Open ${linked.scientificName}",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .padding(start = 4.dp)
+                            .size(12.dp)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = lookAlike.name,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = lookAlike.keyDifference,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                lineHeight = 18.sp
+            )
+        }
     }
 }
 

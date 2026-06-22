@@ -16,6 +16,7 @@ import com.example.model.HotspotCell
 import com.example.model.MapObservation
 import com.example.model.Observation
 import com.example.model.Species
+import com.example.model.SpeciesDiagnostics
 import com.example.model.UserSighting
 import com.example.util.MycoMath
 import com.example.util.SpeciesSearch
@@ -55,6 +56,11 @@ class FungiRepository(
         .build()
     private val TAG = "FungiRepository"
 
+    // Field-ID diagnostics parsed ONCE from species.json (extra keys Moshi
+    // ignores during the Species seed parse). Not persisted in Room — purely an
+    // in-memory cache, keyed by species id. @Volatile + double-checked locking.
+    @Volatile private var diagnosticsCache: Map<String, SpeciesDiagnostics>? = null
+
     // TTL for iNaturalist observations cache (24 hours)
     private val CACHE_TTL_MS = 24 * 60 * 60 * 1000L
 
@@ -86,6 +92,35 @@ class FungiRepository(
         } catch (e: Exception) {
             Log.e(TAG, "Failed to seed species database from assets or check existing record schema", e)
         }
+    }
+
+    /**
+     * Field-ID diagnostics (checklist markers + enriched look-alikes) for a
+     * species, parsed lazily from the bundled species.json. Moshi ignores the
+     * many unrelated keys in each object and falls back to the data-class
+     * defaults for the diagnostic keys, so objects without diagnostic content
+     * still parse (just empty). Cached for the process lifetime; fails soft to
+     * an empty cache so the detail screen simply shows nothing extra.
+     */
+    suspend fun fetchSpeciesDiagnostics(speciesId: String): SpeciesDiagnostics? = withContext(Dispatchers.IO) {
+        val cache = diagnosticsCache ?: synchronized(this@FungiRepository) {
+            diagnosticsCache ?: run {
+                val built = try {
+                    context.assets.open("species.json").use { inputStream ->
+                        val jsonString = InputStreamReader(inputStream).readText()
+                        val listType = Types.newParameterizedType(List::class.java, SpeciesDiagnostics::class.java)
+                        val adapter = moshi.adapter<List<SpeciesDiagnostics>>(listType)
+                        adapter.fromJson(jsonString)?.associateBy { it.id } ?: emptyMap()
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to load species diagnostics from assets", e)
+                    emptyMap()
+                }
+                diagnosticsCache = built
+                built
+            }
+        }
+        cache[speciesId]
     }
 
     suspend fun getSpeciesById(id: String): Species? = withContext(Dispatchers.IO) {
