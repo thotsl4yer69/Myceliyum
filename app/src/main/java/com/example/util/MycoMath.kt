@@ -716,6 +716,41 @@ object MycoMath {
     fun weightedFactorScore(factorScores: Map<String, Double>): Double =
         FACTOR_WEIGHTS.entries.sumOf { (k, w) -> w * (factorScores[k] ?: 0.0) }
 
+    // ─── Prediction confidence ───────────────────────────────────────
+
+    /**
+     * Prediction confidence (0.0–1.0) — how much to TRUST a cell's score, which is
+     * distinct from the score itself. Driven by how much *real* data backed the
+     * score rather than neutral fallbacks: a cell scored from nearby records plus
+     * full Earth-Engine + terrain layers is far more trustworthy than one resting
+     * on climate defaults alone. Lets the UI flag "model-based / low confidence"
+     * spots honestly instead of presenting every score as equally certain.
+     *
+     * @param nearbyRecords count of observations inside the evidence kernel
+     * @param weightedEvidence the kernel's quality·source·recency·spatial sum
+     * @param hasEnvLayers real Earth-Engine/OSM land data was available for the cell
+     * @param hasElevation real ground elevation resolved for the cell
+     */
+    fun predictionConfidence(
+        nearbyRecords: Int,
+        weightedEvidence: Double,
+        hasEnvLayers: Boolean,
+        hasElevation: Boolean
+    ): Double {
+        val dataQuality = listOf(hasEnvLayers, hasElevation).count { it } / 2.0   // 0 / 0.5 / 1
+        val evidenceStrength = minOf(1.0, weightedEvidence / 2.0)
+        val anyEvidence = if (nearbyRecords > 0) 1.0 else 0.0
+        return (0.45 * dataQuality + 0.35 * evidenceStrength + 0.20 * anyEvidence)
+            .coerceIn(0.0, 1.0)
+    }
+
+    /** Three-band label for a [predictionConfidence] value. */
+    fun confidenceLabel(confidence: Double): String = when {
+        confidence >= 0.66 -> "High"
+        confidence >= 0.33 -> "Medium"
+        else -> "Low"
+    }
+
     // ─── 5-tier classification ───────────────────────────────────────
 
     /**

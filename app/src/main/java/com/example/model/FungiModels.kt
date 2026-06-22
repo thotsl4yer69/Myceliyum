@@ -98,5 +98,8 @@ data class HotspotCell(
     // scored at. Lets the map draw each cell at its true size, so the broad
     // ~250 m overview grid and a fine Deep-Search sub-grid render correctly on
     // the same map. Defaults to the overview grid's nominal size.
-    val cellSizeMeters: Double = 250.0
+    val cellSizeMeters: Double = 250.0,
+    // How much to TRUST this score (0.0–1.0), based on how much real evidence +
+    // environmental data backed it vs neutral fallbacks. Distinct from the score.
+    val confidence: Double = 0.5
 )

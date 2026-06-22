@@ -465,4 +465,19 @@ class MycoMathTest {
         assertEquals("Excellent", MycoMath.classifyTier(0.80))
         assertEquals("Possible", MycoMath.classifyTier(0.20))
     }
+
+    @Test
+    fun `prediction confidence rises with evidence and real data`() {
+        val none = MycoMath.predictionConfidence(0, 0.0, hasEnvLayers = false, hasElevation = false)
+        val layersOnly = MycoMath.predictionConfidence(0, 0.0, hasEnvLayers = true, hasElevation = true)
+        val full = MycoMath.predictionConfidence(4, 3.0, hasEnvLayers = true, hasElevation = true)
+
+        assertTrue(none < 0.33)                                  // pure climate guess → Low
+        assertEquals("Low", MycoMath.confidenceLabel(none))
+        assertTrue(layersOnly in 0.33..0.66)                     // real layers, no records → Medium
+        assertEquals("Medium", MycoMath.confidenceLabel(layersOnly))
+        assertTrue(full >= 0.66)                                 // records + full layers → High
+        assertEquals("High", MycoMath.confidenceLabel(full))
+        assertTrue(full > layersOnly && layersOnly > none)       // monotonic with data richness
+    }
 }

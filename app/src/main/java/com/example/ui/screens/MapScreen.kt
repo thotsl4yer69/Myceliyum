@@ -1183,14 +1183,36 @@ fun MapScreen(
                             }
                         }
                         
-                        Text(
-                            text = "Likelihood score: ${String.format(Locale.getDefault(), "%.0f%%", cell.score * 100.0)}",
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.primary,
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.padding(vertical = 4.dp)
-                        )
+                        ) {
+                            Text(
+                                text = "Likelihood score: ${String.format(Locale.getDefault(), "%.0f%%", cell.score * 100.0)}",
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            // Confidence badge — how much to trust this score (evidence +
+                            // real environmental data behind it), distinct from the score.
+                            val confColor = confidenceColor(cell.confidence)
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(confColor.copy(alpha = 0.18f))
+                                    .border(1.dp, confColor.copy(alpha = 0.6f), RoundedCornerShape(6.dp))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = "${confidenceWord(cell.confidence)} confidence",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = confColor
+                                )
+                            }
+                        }
 
                         Text(
                             text = "Why this score",
@@ -1511,6 +1533,20 @@ private fun tierColor(tier: String): Color = when (tier) {
 /** A one-shot camera move request (Deep Search / "centre here"); [key] makes each
  *  request unique so the map animates once rather than on every recomposition. */
 data class MapFocus(val lat: Double, val lng: Double, val zoom: Double, val key: Long)
+
+/** Three-band word for a prediction-confidence value (0–1). */
+private fun confidenceWord(c: Double): String = when {
+    c >= 0.66 -> "High"
+    c >= 0.33 -> "Medium"
+    else -> "Low"
+}
+
+/** Colour for a prediction-confidence badge. */
+private fun confidenceColor(c: Double): Color = when {
+    c >= 0.66 -> Color(0xFF54E0A0)   // green
+    c >= 0.33 -> Color(0xFFE6B24C)   // amber
+    else -> Color(0xFF8B9D93)        // grey-sage
+}
 
 /**
  * Continuous probability→colour ramp for the heatmap: cool green (low) through
