@@ -1505,7 +1505,10 @@ class FungiRepository(
         val minCell = extentMeters / sqrt(maxSubCells.toDouble())
         val cell = maxOf(subResolutionMeters, minCell)
 
-        val key = "${gridKey(parentCell.lat, parentCell.lng)}@${cell.toInt()}"
+        // Key by species too: env/elevation are species-independent (shared fine
+        // caches), but the SCORED result is per-species, so two species drilled
+        // into the same square must not share a cached result.
+        val key = "${species.id}@${gridKey(parentCell.lat, parentCell.lng)}@${cell.toInt()}"
         deepCache[key]?.let { return it }
 
         val result = runSpeciesGrid(
