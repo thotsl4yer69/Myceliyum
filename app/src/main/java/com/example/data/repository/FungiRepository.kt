@@ -138,7 +138,7 @@ class FungiRepository(
 
     // All-fungi map layer: every fungal observation in an area, keyed by a
     // coarse grid + radius and cached briefly so panning is cheap.
-    private val areaObsCache = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, List<MapObservation>>>()
+    private val areaObsCache = android.util.LruCache<String, Pair<Long, List<MapObservation>>>(32)
     private val AREA_OBS_TTL_MS = 30 * 60 * 1000L
 
     /**
@@ -156,7 +156,7 @@ class FungiRepository(
         val key = "${"%.2f".format(lat)}_${"%.2f".format(lng)}_${radiusKm.toInt()}"
         val now = System.currentTimeMillis()
         if (!forceRefresh) {
-            areaObsCache[key]?.let { (ts, value) ->
+            areaObsCache.get(key)?.let { (ts, value) ->
                 if (now - ts < AREA_OBS_TTL_MS) return@withContext value
             }
         }
@@ -222,12 +222,12 @@ class FungiRepository(
             }
             (iNatDeferred.await() + gbifDeferred.await())
         }
-        areaObsCache[key] = now to result
+        areaObsCache.put(key, now to result)
         result
     }
 
     // Per-species global GBIF record count, cached.
-    private val recordCountCache = java.util.concurrent.ConcurrentHashMap<String, Int>()
+    private val recordCountCache = android.util.LruCache<String, Int>(256)
 
     /**
      * Total worldwide GBIF occurrence records for a species (museum, herbarium
@@ -235,18 +235,18 @@ class FungiRepository(
      * how widely the species has been recorded. Fails soft to null.
      */
     suspend fun getGlobalRecordCount(scientificName: String): Int? = withContext(Dispatchers.IO) {
-        recordCountCache[scientificName]?.let { return@withContext it }
+        recordCountCache.get(scientificName)?.let { return@withContext it }
         val count = try {
             retryIO { gbifApi.countOccurrences(scientificName) }.count
         } catch (e: Exception) {
             Log.w(TAG, "GBIF record count failed for $scientificName: ${e.message}"); null
         }
-        if (count != null) recordCountCache[scientificName] = count
+        if (count != null) recordCountCache.put(scientificName, count)
         count
     }
 
     // Global fungal taxonomy search results, cached per query.
-    private val globalSearchCache = java.util.concurrent.ConcurrentHashMap<String, List<Species>>()
+    private val globalSearchCache = android.util.LruCache<String, List<Species>>(64)
 
     /**
      * Search the ENTIRE described fungal kingdom via the GBIF species backbone
@@ -258,7 +258,7 @@ class FungiRepository(
     suspend fun searchGlobalFungi(query: String): List<Species> = withContext(Dispatchers.IO) {
         val q = query.trim()
         if (q.length < 3) return@withContext emptyList()
-        globalSearchCache[q.lowercase()]?.let { return@withContext it }
+        globalSearchCache.get(q.lowercase())?.let { return@withContext it }
         val result = try {
             val resp = retryIO { gbifApi.searchSpecies(query = q) }
             (resp.results ?: emptyList()).mapNotNull { g ->
@@ -302,14 +302,14 @@ class FungiRepository(
             Log.w(TAG, "global fungi search failed for '$q': ${e.message}")
             emptyList()
         }
-        globalSearchCache[q.lowercase()] = result
+        globalSearchCache.put(q.lowercase(), result)
         result
     }
 
     // Reference-photo gallery per species (scientific name → photos with
     // attribution), pulled from iNaturalist taxon photos. Cached for the
     // process lifetime so revisiting a species detail is instant and free.
-    private val speciesPhotoCache = java.util.concurrent.ConcurrentHashMap<String, List<com.example.model.SpeciesPhoto>>()
+    private val speciesPhotoCache = android.util.LruCache<String, List<com.example.model.SpeciesPhoto>>(128)
 
     /** Tidy iNaturalist's attribution string for compact on-image display. */
     private fun cleanAttribution(raw: String?): String? =
@@ -322,7 +322,7 @@ class FungiRepository(
      */
     suspend fun fetchSpeciesPhotos(scientificName: String): List<com.example.model.SpeciesPhoto> =
         withContext(Dispatchers.IO) {
-            speciesPhotoCache[scientificName]?.let { return@withContext it }
+            speciesPhotoCache.get(scientificName)?.let { return@withContext it }
             val photos = try {
                 val taxon = iNatApi.getTaxa(scientificName).results?.firstOrNull()
                 val gallery = taxon?.taxonPhotos.orEmpty().mapNotNull { wrap ->
@@ -341,7 +341,7 @@ class FungiRepository(
                 Log.w(TAG, "species photos fetch failed for $scientificName: ${e.message}")
                 emptyList()
             }
-            speciesPhotoCache[scientificName] = photos
+            speciesPhotoCache.put(scientificName, photos)
             photos
         }
 
@@ -613,18 +613,18 @@ class FungiRepository(
     // Elevation and land cover are static; canopy/NDVI drift slowly. Caching
     // makes re-scoring the same area (species/radius changes, revisits, small
     // pans) instant and avoids repeat network / Earth-Engine cost.
-    private val elevCache = java.util.concurrent.ConcurrentHashMap<Long, Double>()
+    private val elevCache = android.util.LruCache<Long, Double>(8000) // bounded == CACHE_MAX (disk cap)
     private data class EnvCell(
         val landcover: Int?, val canopyPct: Double?, val ndvi: Double?, val waterDistM: Double?,
         val soilPh: Double? = null, val soilSand: Double? = null,
         val soilMoisture: Double? = null, val twi: Double? = null, val forestType: Int? = null
     )
-    private val envCache = java.util.concurrent.ConcurrentHashMap<Long, EnvCell>()
+    private val envCache = android.util.LruCache<Long, EnvCell>(8000) // bounded == CACHE_MAX
     // Deep Search uses its OWN session caches at a ~12 m snap. The overview caches
     // snap at ~250 m, which would collapse every fine sub-cell onto one value, so
     // a finer key is essential for the drill-down to actually resolve detail.
-    private val deepElevCache = java.util.concurrent.ConcurrentHashMap<Long, Double>()
-    private val deepEnvCache = java.util.concurrent.ConcurrentHashMap<Long, EnvCell>()
+    private val deepElevCache = android.util.LruCache<Long, Double>(20_000)
+    private val deepEnvCache = android.util.LruCache<Long, EnvCell>(20_000)
 
     /** Snap a coordinate to a global grid index so the same place always keys the
      *  same. [fine] uses a ~12 m snap (Deep Search, in separate caches); the
@@ -657,7 +657,7 @@ class FungiRepository(
             try {
                 if (elevCacheFile.exists()) elevCacheFile.forEachLine { line ->
                     val p = line.split('\t')
-                    if (p.size == 2) p[0].toLongOrNull()?.let { k -> p[1].toDoubleOrNull()?.let { v -> elevCache[k] = v } }
+                    if (p.size == 2) p[0].toLongOrNull()?.let { k -> p[1].toDoubleOrNull()?.let { v -> elevCache.put(k, v) } }
                 }
             } catch (e: Exception) { Log.w(TAG, "elev cache load failed: ${e.message}") }
             try {
@@ -666,12 +666,12 @@ class FungiRepository(
                     // ≥5 fields: core layers; ≥9 adds soil/moisture/twi; ≥10 adds
                     // forest_type. Older shorter rows still load (extras stay null).
                     if (p.size >= 5) p[0].toLongOrNull()?.let { k ->
-                        envCache[k] = EnvCell(
+                        envCache.put(k, EnvCell(
                             p[1].toIntOrNull(), p[2].toDoubleOrNull(), p[3].toDoubleOrNull(), p[4].toDoubleOrNull(),
                             p.getOrNull(5)?.toDoubleOrNull(), p.getOrNull(6)?.toDoubleOrNull(),
                             p.getOrNull(7)?.toDoubleOrNull(), p.getOrNull(8)?.toDoubleOrNull(),
                             p.getOrNull(9)?.toIntOrNull()
-                        )
+                        ))
                     }
                 }
             } catch (e: Exception) { Log.w(TAG, "env cache load failed: ${e.message}") }
@@ -682,7 +682,7 @@ class FungiRepository(
     private fun persistElevCache() {
         try {
             elevCacheFile.bufferedWriter().use { w ->
-                elevCache.entries.asSequence().take(CACHE_MAX).forEach { w.write("${it.key}\t${it.value}\n") }
+                elevCache.snapshot().entries.asSequence().take(CACHE_MAX).forEach { w.write("${it.key}\t${it.value}\n") }
             }
         } catch (e: Exception) { Log.w(TAG, "elev cache save failed: ${e.message}") }
     }
@@ -690,7 +690,7 @@ class FungiRepository(
     private fun persistEnvCache() {
         try {
             envCacheFile.bufferedWriter().use { w ->
-                envCache.entries.asSequence().take(CACHE_MAX).forEach { (k, v) ->
+                envCache.snapshot().entries.asSequence().take(CACHE_MAX).forEach { (k, v) ->
                     w.write(
                         "$k\t${v.landcover ?: ""}\t${v.canopyPct ?: ""}\t${v.ndvi ?: ""}\t${v.waterDistM ?: ""}" +
                             "\t${v.soilPh ?: ""}\t${v.soilSand ?: ""}\t${v.soilMoisture ?: ""}\t${v.twi ?: ""}" +
@@ -699,6 +699,29 @@ class FungiRepository(
                 }
             }
         } catch (e: Exception) { Log.w(TAG, "env cache save failed: ${e.message}") }
+    }
+
+    // Hard cap on the number of grid cells per overview/aggregate build, so a
+    // very large radius can't enumerate an unbounded grid (memory + request fan-out).
+    private val MAX_GRID_CELLS = 5000
+
+    // Bounded concurrency for the chunked network fetches. Open-Meteo elevation is
+    // free/lenient (6 in flight); the Earth Engine backend is metered and 600-pt
+    // capped per call, so its fan-out is kept lower.
+    private val ELEV_INFLIGHT = 6
+    private val EE_INFLIGHT = 4
+
+    /**
+     * Adaptive overview/aggregate cell size in metres. Keeps the existing
+     * ~60-steps-per-axis floor, the 250 m minimum, and additionally coarsens
+     * enough that the total in-radius cell count stays under [MAX_GRID_CELLS]
+     * (πr² / cell² ≤ MAX_GRID_CELLS ⇒ cell ≥ r·√(π/MAX)).
+     */
+    private fun adaptiveCellMeters(radiusKm: Double): Double {
+        val radiusM = radiusKm * 1000.0
+        val byStepCap = radiusM / 60.0
+        val byCellCap = radiusM * Math.sqrt(Math.PI / MAX_GRID_CELLS)
+        return maxOf(250.0, byStepCap, byCellCap)
     }
 
     /**
@@ -719,30 +742,89 @@ class FungiRepository(
         val missIdx = ArrayList<Int>()
         val missCoords = ArrayList<Pair<Double, Double>>()
         for (i in coords.indices) {
-            val cached = cache[gridKey(coords[i].first, coords[i].second, fine)]
+            val cached = cache.get(gridKey(coords[i].first, coords[i].second, fine))
             if (cached != null) out[i] = cached else { missIdx.add(i); missCoords.add(coords[i]) }
         }
         if (missCoords.isNotEmpty()) {
-            try {
-                val fetched = ArrayList<Double?>(missCoords.size)
-                for (chunk in missCoords.chunked(100)) {
-                    val latCsv = chunk.joinToString(",") { String.format(Locale.US, "%.5f", it.first) }
-                    val lngCsv = chunk.joinToString(",") { String.format(Locale.US, "%.5f", it.second) }
-                    val resp = openMeteoApi.getElevation(latCsv, lngCsv)
-                    val elevs = resp.elevation ?: emptyList()
-                    for (k in chunk.indices) fetched.add(elevs.getOrNull(k))
+            // Each chunk owns a disjoint [start, end) window of the miss list, so its
+            // parallel writes to out[missIdx[…]] and the (synchronized) cache never
+            // collide and the output stays 1:1 aligned with [coords] — identical to
+            // the old sequential build, just faster. Open-Meteo caps a call at 100
+            // points; ELEV_INFLIGHT bounds concurrent requests so we stay polite.
+            val chunkBounds = ArrayList<Pair<Int, Int>>()
+            run {
+                var start = 0
+                while (start < missCoords.size) {
+                    val end = minOf(start + 100, missCoords.size)
+                    chunkBounds.add(start to end)
+                    start = end
                 }
-                for (k in missIdx.indices) {
-                    val v = fetched.getOrNull(k)
-                    out[missIdx[k]] = v
-                    if (v != null) cache[gridKey(missCoords[k].first, missCoords[k].second, fine)] = v
+            }
+            for (wave in chunkBounds.chunked(ELEV_INFLIGHT)) {
+                coroutineContext.ensureActive()
+                coroutineScope {
+                    wave.map { (start, end) ->
+                        async {
+                            // retry inside (transient flakiness), soft-fail outside
+                            // (one exhausted chunk degrades to null-fill, never aborts).
+                            try {
+                                val chunk = missCoords.subList(start, end)
+                                val latCsv = chunk.joinToString(",") { String.format(Locale.US, "%.5f", it.first) }
+                                val lngCsv = chunk.joinToString(",") { String.format(Locale.US, "%.5f", it.second) }
+                                val resp = retryIO { openMeteoApi.getElevation(latCsv, lngCsv) }
+                                val elevs = resp.elevation ?: emptyList()
+                                for (k in start until end) {
+                                    val v = elevs.getOrNull(k - start)
+                                    out[missIdx[k]] = v
+                                    if (v != null) cache.put(gridKey(missCoords[k].first, missCoords[k].second, fine), v)
+                                }
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Elevation chunk fetch failed, using neutral terrain: ${e.message}")
+                            }
+                        }
+                    }.awaitAll()
                 }
-            } catch (e: Exception) {
-                Log.w(TAG, "Elevation fetch failed, using neutral terrain: ${e.message}")
             }
             if (!fine) persistElevCache()
         }
         out
+    }
+
+    // ── Overpass caching (be polite to overpass-api.de) ─────────────────
+    // Overpass features (woods, mulch beds, land-use polygons) drift slowly, so we
+    // cache them per query kind keyed on an outward-quantized bbox. Panning within
+    // the same ~2 km tile reuses the cached result instead of re-hitting the API.
+    private val OVERPASS_TTL_MS = 6 * 60 * 60 * 1000L
+    private val OVERPASS_BBOX_QUANT = 0.02
+    private val overpassCanopyCache = android.util.LruCache<String, Pair<Long, List<Pair<Double, Double>>>>(16)
+    private val overpassMulchCache = android.util.LruCache<String, Pair<Long, List<Pair<Double, Double>>>>(16)
+    private val overpassLandUseCache = android.util.LruCache<String, Pair<Long, List<LandPolygon>>>(16)
+
+    /** A bbox snapped OUTWARD to the Overpass quant grid, with a stable cache key. */
+    private class SnappedBbox(
+        val minLat: Double, val minLng: Double, val maxLat: Double, val maxLng: Double,
+        val key: String
+    )
+
+    /**
+     * Snap [minLat,minLng,maxLat,maxLng] OUTWARD (floor mins, ceil maxs) to the
+     * [OVERPASS_BBOX_QUANT] grid so nearby pans collapse onto the same tile, and
+     * build a stable key prefixed by query kind. The snapped (slightly larger)
+     * bbox is used in the query itself so the cached features cover the snapped
+     * extent — no edge gaps on small pans.
+     */
+    private fun snapOverpassBbox(
+        prefix: String, minLat: Double, minLng: Double, maxLat: Double, maxLng: Double
+    ): SnappedBbox {
+        val q = OVERPASS_BBOX_QUANT
+        val sMinLat = Math.floor(minLat / q) * q
+        val sMinLng = Math.floor(minLng / q) * q
+        val sMaxLat = Math.ceil(maxLat / q) * q
+        val sMaxLng = Math.ceil(maxLng / q) * q
+        val key = "$prefix@" + String.format(
+            Locale.US, "%.2f,%.2f,%.2f,%.2f", sMinLat, sMinLng, sMaxLat, sMaxLng
+        )
+        return SnappedBbox(sMinLat, sMinLng, sMaxLat, sMaxLng, key)
     }
 
     /**
@@ -754,8 +836,16 @@ class FungiRepository(
     suspend fun fetchCanopyFeatures(
         minLat: Double, minLng: Double, maxLat: Double, maxLng: Double
     ): List<Pair<Double, Double>> = withContext(Dispatchers.IO) {
+        val snapped = snapOverpassBbox("canopy", minLat, minLng, maxLat, maxLng)
+        val now = System.currentTimeMillis()
+        overpassCanopyCache.get(snapped.key)?.let { (ts, value) ->
+            if (now - ts < OVERPASS_TTL_MS) return@withContext value
+        }
         try {
-            val bbox = String.format(Locale.US, "%.5f,%.5f,%.5f,%.5f", minLat, minLng, maxLat, maxLng)
+            val bbox = String.format(
+                Locale.US, "%.5f,%.5f,%.5f,%.5f",
+                snapped.minLat, snapped.minLng, snapped.maxLat, snapped.maxLng
+            )
             val ql = """
                 [out:json][timeout:25];
                 (
@@ -766,12 +856,14 @@ class FungiRepository(
                 );
                 out center;
             """.trimIndent()
-            val resp = overpassApi.query(ql)
-            resp.elements.orEmpty().mapNotNull { el ->
+            val resp = retryIO { overpassApi.query(ql) }
+            val result = resp.elements.orEmpty().mapNotNull { el ->
                 val la = el.resolvedLat()
                 val lo = el.resolvedLon()
                 if (la != null && lo != null) la to lo else null
             }
+            overpassCanopyCache.put(snapped.key, now to result)
+            result
         } catch (e: Exception) {
             Log.w(TAG, "Canopy (Overpass) fetch failed, neutral canopy: ${e.message}")
             emptyList()
@@ -791,8 +883,16 @@ class FungiRepository(
     suspend fun fetchMulchFeatures(
         minLat: Double, minLng: Double, maxLat: Double, maxLng: Double
     ): List<Pair<Double, Double>> = withContext(Dispatchers.IO) {
+        val snapped = snapOverpassBbox("mulch", minLat, minLng, maxLat, maxLng)
+        val now = System.currentTimeMillis()
+        overpassMulchCache.get(snapped.key)?.let { (ts, value) ->
+            if (now - ts < OVERPASS_TTL_MS) return@withContext value
+        }
         try {
-            val bbox = String.format(Locale.US, "%.5f,%.5f,%.5f,%.5f", minLat, minLng, maxLat, maxLng)
+            val bbox = String.format(
+                Locale.US, "%.5f,%.5f,%.5f,%.5f",
+                snapped.minLat, snapped.minLng, snapped.maxLat, snapped.maxLng
+            )
             val ql = """
                 [out:json][timeout:25];
                 (
@@ -806,12 +906,14 @@ class FungiRepository(
                 );
                 out center;
             """.trimIndent()
-            val resp = overpassApi.query(ql)
-            resp.elements.orEmpty().mapNotNull { el ->
+            val resp = retryIO { overpassApi.query(ql) }
+            val result = resp.elements.orEmpty().mapNotNull { el ->
                 val la = el.resolvedLat()
                 val lo = el.resolvedLon()
                 if (la != null && lo != null) la to lo else null
             }
+            overpassMulchCache.put(snapped.key, now to result)
+            result
         } catch (e: Exception) {
             Log.w(TAG, "Mulch (Overpass) fetch failed, no tanbark bonus: ${e.message}")
             emptyList()
@@ -867,8 +969,16 @@ class FungiRepository(
     private suspend fun fetchLandUsePolygons(
         minLat: Double, minLng: Double, maxLat: Double, maxLng: Double
     ): List<LandPolygon> = withContext(Dispatchers.IO) {
+        val snapped = snapOverpassBbox("landuse", minLat, minLng, maxLat, maxLng)
+        val now = System.currentTimeMillis()
+        overpassLandUseCache.get(snapped.key)?.let { (ts, value) ->
+            if (now - ts < OVERPASS_TTL_MS) return@withContext value
+        }
         try {
-            val bbox = String.format(Locale.US, "%.5f,%.5f,%.5f,%.5f", minLat, minLng, maxLat, maxLng)
+            val bbox = String.format(
+                Locale.US, "%.5f,%.5f,%.5f,%.5f",
+                snapped.minLat, snapped.minLng, snapped.maxLat, snapped.maxLng
+            )
             val ql = """
                 [out:json][timeout:40];
                 (
@@ -882,8 +992,8 @@ class FungiRepository(
                 );
                 out geom;
             """.trimIndent()
-            val resp = overpassApi.query(ql)
-            resp.elements.orEmpty().mapNotNull { el ->
+            val resp = retryIO { overpassApi.query(ql) }
+            val result = resp.elements.orEmpty().mapNotNull { el ->
                 val geom = el.geometry ?: return@mapNotNull null
                 val green = isGreenTags(el.tags)
                 val built = isBuiltTags(el.tags)
@@ -903,6 +1013,8 @@ class FungiRepository(
                     maxLat = pts.maxOf { it.first }, maxLng = pts.maxOf { it.second }
                 )
             }
+            overpassLandUseCache.put(snapped.key, now to result)
+            result
         } catch (e: Exception) {
             Log.w(TAG, "Land-use (Overpass) fetch failed, neutral habitat: ${e.message}")
             emptyList()
@@ -976,7 +1088,7 @@ class FungiRepository(
             val missIdx = ArrayList<Int>()
             val missPts = ArrayList<Pair<Double, Double>>()
             for (i in points.indices) {
-                val c = cache[gridKey(points[i].first, points[i].second, fine)]
+                val c = cache.get(gridKey(points[i].first, points[i].second, fine))
                 if (c != null) {
                     landcover[i] = c.landcover; canopyPct[i] = c.canopyPct; ndvi[i] = c.ndvi; waterDist[i] = c.waterDistM
                     soilPh[i] = c.soilPh; soilSand[i] = c.soilSand; soilMoisture[i] = c.soilMoisture; twi[i] = c.twi
@@ -988,36 +1100,61 @@ class FungiRepository(
             }
             // Fetch misses in chunks — the backend caps a request at 600 points,
             // so a large search radius must be split or EE is lost for the grid.
-            var k = 0
-            while (k < missPts.size) {
-                val end = minOf(k + 500, missPts.size)
-                try {
-                    val chunk = missPts.subList(k, end)
-                    val resp = api.envGrid(backendToken, EnvGridRequest(chunk.map { listOf(it.first, it.second) }))
-                    for (c in chunk.indices) {
-                        val lc = resp.landcover?.getOrNull(c)?.toInt()
-                        val cp = resp.canopy?.getOrNull(c)
-                        val nv = resp.ndvi?.getOrNull(c)
-                        val wd = resp.waterDist?.getOrNull(c)
-                        val sph = resp.soilPh?.getOrNull(c)
-                        val ssand = resp.soilSand?.getOrNull(c)
-                        val smoist = resp.soilMoisture?.getOrNull(c)
-                        val tw = resp.twi?.getOrNull(c)
-                        val ft = resp.forestType?.getOrNull(c)?.toInt()
-                        val orig = missIdx[k + c]
-                        landcover[orig] = lc; canopyPct[orig] = cp; ndvi[orig] = nv; waterDist[orig] = wd
-                        soilPh[orig] = sph; soilSand[orig] = ssand; soilMoisture[orig] = smoist; twi[orig] = tw
-                        forestType[orig] = ft
-                        cache[gridKey(missPts[k + c].first, missPts[k + c].second, fine)] =
-                            EnvCell(lc, cp, nv, wd, sph, ssand, smoist, tw, ft)
-                        haveAny = true
-                    }
-                } catch (e: Exception) {
-                    Log.w(TAG, "Earth Engine chunk fetch failed: ${e.message}")
+            // Each chunk owns a disjoint [start, end) miss window and writes only its
+            // own orig = missIdx[start+c] slots + cache entries, so the chunks run in
+            // bounded-parallel waves without colliding; output stays index-aligned.
+            val chunkBounds = ArrayList<Pair<Int, Int>>()
+            run {
+                var start = 0
+                while (start < missPts.size) {
+                    val end = minOf(start + 500, missPts.size)
+                    chunkBounds.add(start to end)
+                    start = end
                 }
-                k = end
+            }
+            for (wave in chunkBounds.chunked(EE_INFLIGHT)) {
+                coroutineContext.ensureActive()
+                coroutineScope {
+                    wave.map { (start, end) ->
+                        async {
+                            // retry inside (transient flakiness), soft-fail outside
+                            // (one exhausted chunk degrades to null-fill, never aborts).
+                            try {
+                                val chunk = missPts.subList(start, end)
+                                val resp = retryIO { api.envGrid(backendToken, EnvGridRequest(chunk.map { listOf(it.first, it.second) })) }
+                                for (c in chunk.indices) {
+                                    val lc = resp.landcover?.getOrNull(c)?.toInt()
+                                    val cp = resp.canopy?.getOrNull(c)
+                                    val nv = resp.ndvi?.getOrNull(c)
+                                    val wd = resp.waterDist?.getOrNull(c)
+                                    val sph = resp.soilPh?.getOrNull(c)
+                                    val ssand = resp.soilSand?.getOrNull(c)
+                                    val smoist = resp.soilMoisture?.getOrNull(c)
+                                    val tw = resp.twi?.getOrNull(c)
+                                    val ft = resp.forestType?.getOrNull(c)?.toInt()
+                                    val orig = missIdx[start + c]
+                                    landcover[orig] = lc; canopyPct[orig] = cp; ndvi[orig] = nv; waterDist[orig] = wd
+                                    soilPh[orig] = sph; soilSand[orig] = ssand; soilMoisture[orig] = smoist; twi[orig] = tw
+                                    forestType[orig] = ft
+                                    cache.put(
+                                        gridKey(missPts[start + c].first, missPts[start + c].second, fine),
+                                        EnvCell(lc, cp, nv, wd, sph, ssand, smoist, tw, ft)
+                                    )
+                                }
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Earth Engine chunk fetch failed: ${e.message}")
+                            }
+                        }
+                    }.awaitAll()
+                }
             }
             if (!fine && missPts.isNotEmpty()) persistEnvCache()
+            // Derive haveAny AFTER the joins (never mutate a shared flag inside async):
+            // true if any cell resolved from cache (set above) or from any fetched chunk.
+            haveAny = haveAny ||
+                landcover.any { it != null } || canopyPct.any { it != null } || ndvi.any { it != null } ||
+                waterDist.any { it != null } || soilPh.any { it != null } || soilSand.any { it != null } ||
+                soilMoisture.any { it != null } || twi.any { it != null } || forestType.any { it != null }
             // Fall back to OSM canopy only if we got nothing at all.
             if (!haveAny) return@withContext null
             EnvLayers(
@@ -1137,11 +1274,22 @@ class FungiRepository(
      */
     suspend fun clearCaches() = withContext(Dispatchers.IO) {
         dao.clearAllCachedObservations()
+        // Also empty every in-memory cache so a recompute actually re-fetches.
+        elevCache.evictAll()
+        envCache.evictAll()
+        deepElevCache.evictAll()
+        deepEnvCache.evictAll()
+        deepCache.evictAll()
+        areaObsCache.evictAll()
+        recordCountCache.evictAll()
+        globalSearchCache.evictAll()
+        speciesPhotoCache.evictAll()
     }
 
     /**
-     * Multi-factor Bayesian hotspot prediction engine (adaptive ~250m
-     * resolution; cell size grows for very large radii to bound cost).
+     * Multi-factor weighted habitat-suitability engine — weighted multi-criteria
+     * (Σ wᵢ·factorᵢ × moisture penalty × habitat gate) at adaptive ~250m
+     * resolution; cell size grows for very large radii to bound cost.
      *
      * Scoring factors and weights (sum to 1.0):
      *   1. Observation evidence (iNat + ALA + GBIF + user)          — 0.21
@@ -1183,7 +1331,7 @@ class FungiRepository(
         return runSpeciesGrid(
             species, centerLat, centerLng,
             halfExtentMeters = radiusKm * 1000.0,
-            cellMeters = maxOf(250.0, radiusKm * 1000.0 / 60.0),
+            cellMeters = adaptiveCellMeters(radiusKm),
             obsRadiusKm = radiusKm,
             terrainSpacingM = 500.0,   // preserve the overview grid's terrain calibration
             circularClip = true,
@@ -1565,7 +1713,7 @@ class FungiRepository(
                 if (habitatGate < 0.95) factors.add("⛔ Habitat gate ×${String.format(Locale.US, "%.2f", habitatGate)} — built-up/water/bare ground suppresses this cell")
                 val confidence = MycoMath.predictionConfidence(nearbyRecords, weightedEvidence, env != null, cellElev != null)
                 factors.add("📶 Confidence: ${MycoMath.confidenceLabel(confidence)} — $nearbyRecords nearby record(s), ${if (env != null) "full" else "limited"} map data")
-                factors.add("Multi-factor Bayesian estimate — not a guarantee of presence.")
+                factors.add("Multi-factor habitat-suitability estimate — not a guarantee of presence.")
 
                 cells.add(HotspotCell(cellLat, cellLng, finalScore, tier, factors, cellSizeMeters = cellMeters, confidence = confidence))
         }
@@ -1574,7 +1722,7 @@ class FungiRepository(
 
     // ── Deep Search (two-tier drill-down) ───────────────────────────────
     // In-memory cache of fine sub-grid results, keyed by parent cell + resolution.
-    private val deepCache = java.util.concurrent.ConcurrentHashMap<String, List<HotspotCell>>()
+    private val deepCache = android.util.LruCache<String, List<HotspotCell>>(24)
 
     /**
      * Refines a single promising overview cell into a fine (~[subResolutionMeters] m)
@@ -1608,7 +1756,7 @@ class FungiRepository(
         // caches), but the SCORED result is per-species, so two species drilled
         // into the same square must not share a cached result.
         val key = "${species.id}@${gridKey(parentCell.lat, parentCell.lng)}@${cell.toInt()}"
-        deepCache[key]?.let { return it }
+        deepCache.get(key)?.let { return it }
 
         val result = runSpeciesGrid(
             species, parentCell.lat, parentCell.lng,
@@ -1621,7 +1769,7 @@ class FungiRepository(
             fine = true,               // use the ~12 m elevation/Earth-Engine caches
             forceRefresh = false
         )
-        deepCache[key] = result
+        deepCache.put(key, result)
         return result
     }
 
@@ -1722,7 +1870,7 @@ class FungiRepository(
         // Adaptive cell size: ~250 m for typical searches (fine per-cell detail),
         // growing only for very large radii so the cell count — and Earth Engine
         // cost — stays bounded (~60 steps per axis max).
-        val cellMeters = maxOf(250.0, radiusKm * 1000.0 / 60.0)
+        val cellMeters = adaptiveCellMeters(radiusKm)
         val latStep = cellMeters / 111_000.0
         val lngStep = cellMeters / (111_000.0 * Math.cos(Math.toRadians(centerLat)))
         val latRangeSteps = ceil((radiusKm * 1000.0) / cellMeters).toInt()
