@@ -14,13 +14,17 @@ Acting on an external code review of the prediction stack:
   per-species, but its memo key was location + resolution only — so re-tapping
   the same square for a different species could return the wrong species'
   cached result. The species id is now part of the key.
-- **Poisoning safety banner on every species card.** A new, pure/testable
-  `FungiSafety` classifier flags deadly/toxic species (from the catalogue notes
-  plus dangerous-genus heuristics) and the detail screen leads with a red
-  warning when flagged. Every species — flagged or not — now also carries a
-  universal "identification aid only; never eat on app/AI ID alone; many
-  edibles have deadly look-alikes" disclaimer. The classifier only ever warns,
-  never reassures.
+- **Accurate per-species edibility banner.** A new, pure/testable `FungiSafety`
+  map gives each catalogue species its real edibility — `DEADLY`, `POISONOUS`,
+  `PSYCHOACTIVE`, `INEDIBLE`, `EDIBLE`, or `UNKNOWN` — curated from the project's
+  reference notes for scientific accuracy rather than coarse genus rules. It
+  fixes the two ways naive matching errs: look-alike mentions never flag the
+  species (e.g. *Psilocybe cyanescens* "confused with the DEADLY Galerina" is
+  PSYCHOACTIVE, *Agaricus campestris* is EDIBLE, not deadly), and a toxic species
+  is never reported edible because its note names an edible relative (the
+  yellow-stainer *A. xanthodermus* is POISONOUS). Only the two confirmed-lethal
+  species (*A. phalloides*, *G. marginata*) are DEADLY. The detail card leads
+  with a colour-coded edibility chip.
 - **Expanded unit tests.** Added JVM coverage for the previously-untested math
   helpers (temperature, habitat breadth, evidence quality/source/recency/
   spatial kernels, moon phase, tier thresholds, rainfall-lag edge cases), the
