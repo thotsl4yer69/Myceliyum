@@ -1961,7 +1961,7 @@ class FungiRepository(
                     "${sighting.lng}," +
                     "10," + // GPS uncertainty ~10m
                     "\"$dateStr\"," +
-                    "\"Mycilliyums User\"," +
+                    "\"Myceliyums User\"," +
                     "\"$notes\"," +
                     "\"unverified\""
         }

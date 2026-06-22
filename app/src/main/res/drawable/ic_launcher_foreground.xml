@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  MyceliYUMS brand v3 logomark — radar-contour mushroom with amber signal core.
+  Myceliyums brand v3 logomark — radar-contour mushroom with amber signal core.
   Ported from the site's 48x48 logomark SVG; the group maps it into the
   adaptive-icon safe zone (scale 1.35, centred in the 108dp viewport). The
   outer ring's SVG dash pattern isn't supported by VectorDrawable, so it

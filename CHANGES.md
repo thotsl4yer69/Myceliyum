@@ -1,5 +1,59 @@
 # Changes — completion & stabilization pass
 
+## Design-critique upgrade — unified tier colours, honest confidence, brand consistency
+
+A full design pass acting on a review of the latest map/engine work. The engine
+matured fast; the visual-semantic layer (tier colours, brand name, the design
+doc) had drifted behind it and carried contradictions. This pass closes them.
+
+- **One canonical tier-colour system.** The map used to keep *two* divergent
+  tier palettes: dead `TierPromising/Possible/Quiet` constants in `Color.kt`
+  (encoding the old "green = best" philosophy) and a separate hard-coded set in
+  `MapScreen` where **Excellent = alarming red** — the exact red the Round-5 copy
+  pass had deliberately removed ("Mint reads as good fungal habitat, not
+  danger"). There is now a single source of truth in `Color.kt`
+  (`TierExcellent … TierUnlikely`): a **monotonic, green-anchored** ramp
+  (signal-green = best → lime → gold → sage → dim), **no alarming red**.
+  `tierColor`, `tierColorInt`, the heatmap and the legend all read it, so the
+  surface, pins, chips and card can never tell different colour stories again.
+- **Heatmap recoloured to match.** The surface is now a single-hue green
+  **intensity** ramp (`HeatLow → HeatHigh`, opacity rising with score) instead of
+  green→red. "Greener/brighter = better" reads the same on the map as on the
+  chips, and the red/green colour-blindness trap is gone entirely.
+- **Hotspot card de-cluttered — one accent per concept.** Previously an
+  Excellent + High-confidence card stacked red (tier), green (score) and green
+  (confidence) within ~16dp. Now the **tier colour** is the only "how good"
+  accent (mark + title + border); the **score** is colour-neutral; and
+  **confidence** is a distinct neutral **3-pip meter** ("how much to trust it"),
+  so the two dimensions never compete.
+- **Confidence logic de-duplicated.** `MapScreen` had its own copy of the
+  High/Medium/Low thresholds (`confidenceWord`) that could drift from
+  `MycoMath.confidenceLabel`; it now calls the shared classifier (same fix in
+  spirit as the single-source factor weights).
+- **Heatmap honesty cue.** When nothing in view crosses the absolute "Promising"
+  line, the legend now says *"Best nearby is modest — shading is relative,"* so a
+  modest area's (necessarily relative) warm shading can't be misread as strong
+  absolute odds.
+- **Map polish.** The legend moved off a fragile hard-coded `top = 130.dp`
+  offset to a bottom-start anchor that's clear of the search card and FABs, and
+  hides while a hotspot card is open. The hotspot card is now height-capped
+  (~60% of screen) and scrolls, so a long "Why this score" breakdown can never
+  overflow or push the action buttons off a short screen.
+- **One brand name.** The product was spelled six ways (`Mycilliyums`,
+  `MyceliYUMS`, `Myceliyums`, …). Standardised to **Myceliyums** (matching the
+  domain `myceliyums.xyz` and the site wordmark) across the app launcher name,
+  the Home title, update dialogs/notifications, the GPX export author, README,
+  `metadata.json`, icon comments and the site `<title>`/OG/Twitter tags.
+- **Brand voice reconciled.** The app's plain, sentence-case voice and the site's
+  field-**instrument** visual identity aren't actually in conflict, so the
+  identity is preserved; only the genuinely militaristic word was softened
+  (site CTA `DEPLOY → INSTALL`) and the page title/meta moved off "Field Signal
+  Terminal" to the friendlier hero line ("Read the forest before it fruits").
+- **Design doc refreshed.** `docs/PREDICTION_ENGINE_V2.md` no longer claims
+  "nothing here is wired up yet" — it now records that P0/P1/P2 and Deep Search
+  are shipped, P3 is parked and P4 is future, with an honest note on which
+  covariates actually landed vs. the original plan.
+
 ## AI Identify — camera crash & "cannot read image" fixed
 
 Two hard bugs in the AI Identify screen:
