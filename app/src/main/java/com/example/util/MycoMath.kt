@@ -799,10 +799,10 @@ object MycoMath {
      * Maps a 0.0–1.0 score to one of five tiers.
      */
     fun classifyTier(score: Double): String = when {
-        score >= 0.80 -> "Excellent"
-        score >= 0.60 -> "VeryGood"
-        score >= 0.40 -> "Promising"
-        score >= 0.20 -> "Possible"
+        score >= 0.58 -> "Excellent"
+        score >= 0.46 -> "VeryGood"
+        score >= 0.34 -> "Promising"
+        score >= 0.22 -> "Possible"
         else -> "Unlikely"
     }
 }

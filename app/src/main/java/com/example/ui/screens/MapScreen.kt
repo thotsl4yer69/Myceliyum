@@ -154,7 +154,7 @@ fun MapScreen(
     val rankedPins = remember(overviewCells, deepCells) {
         val cells = deepCells.ifEmpty { overviewCells }
         val gridMax = cells.maxOfOrNull { it.score } ?: 0.0
-        val pinFloor = minOf(0.40, maxOf(0.12, gridMax * 0.6))
+        val pinFloor = minOf(0.34, maxOf(0.12, gridMax * 0.6))
         val above = cells.filter { it.score >= pinFloor }.sortedByDescending { it.score }
         // Never leave a populated grid pinless: if even the relative floor admits
         // nothing (a uniformly weak area), still surface the strongest few cells so
@@ -452,7 +452,7 @@ fun MapScreen(
                                 color = Color.White.copy(alpha = 0.6f),
                                 fontSize = 8.sp
                             )
-                            if (gridBest < 0.40) {
+                            if (gridBest < 0.34) {
                                 Text(
                                     "Best nearby is modest — shading is relative",
                                     color = Color(0xFFE6B24C).copy(alpha = 0.9f),
