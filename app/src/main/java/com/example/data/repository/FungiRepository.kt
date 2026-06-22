@@ -1466,9 +1466,11 @@ class FungiRepository(
                 if (env == null) weather.avgSoilMoisture?.let { factors.add("💧 Soil moisture: ${String.format(Locale.US, "%.2f", it)} m³/m³ → ${String.format(Locale.US, "%.0f", MycoMath.soilMoistureFitness(it) * 100)}%") }
                 if (moonScore > 0.7) factors.add("🌙 Moon phase favourable (traditional signal)")
                 if (habitatGate < 0.95) factors.add("⛔ Habitat gate ×${String.format(Locale.US, "%.2f", habitatGate)} — built-up/water/bare ground suppresses this cell")
+                val confidence = MycoMath.predictionConfidence(nearbyRecords, weightedEvidence, env != null, cellElev != null)
+                factors.add("📶 Confidence: ${MycoMath.confidenceLabel(confidence)} — $nearbyRecords nearby record(s), ${if (env != null) "full" else "limited"} map data")
                 factors.add("Multi-factor Bayesian estimate — not a guarantee of presence.")
 
-                cells.add(HotspotCell(cellLat, cellLng, finalScore, tier, factors, cellSizeMeters = cellMeters))
+                cells.add(HotspotCell(cellLat, cellLng, finalScore, tier, factors, cellSizeMeters = cellMeters, confidence = confidence))
         }
         return@withContext cells
     }
@@ -1802,9 +1804,11 @@ class FungiRepository(
                 }
                 if (habitatGate < 0.95) factors.add("⛔ Habitat gate ×${String.format(Locale.US, "%.2f", habitatGate)} — built-up/water/bare ground suppresses this cell")
                 if (nearbySpecies.size >= 3) factors.add("🌿 Diversity bonus: ${nearbySpecies.size} distinct species recorded nearby")
+                val confidence = MycoMath.predictionConfidence(nearbyRecords, weightedEvidence, env != null, cellElev != null)
+                factors.add("📶 Confidence: ${MycoMath.confidenceLabel(confidence)} — $nearbyRecords nearby record(s), ${if (env != null) "full" else "limited"} map data")
                 factors.add("Multi-factor aggregate estimate — not species-specific.")
 
-                cells.add(HotspotCell(cellLat, cellLng, finalScore, tier, factors, cellSizeMeters = cellMeters))
+                cells.add(HotspotCell(cellLat, cellLng, finalScore, tier, factors, cellSizeMeters = cellMeters, confidence = confidence))
         }
         return@withContext cells
     }
