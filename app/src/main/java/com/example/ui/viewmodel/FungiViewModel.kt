@@ -53,7 +53,16 @@ class FungiViewModel(
                 }
             }
         }
+        // The map opens on a neutral default coordinate; mark the location
+        // "resolved" the first time it's set from a real source (device GPS, a
+        // search, presets, manual coords) so the UI can show "Locating…" instead
+        // of a misleading default city.
+        viewModelScope.launch { mapCenter.drop(1).collect { _locationResolved.value = true } }
     }
+
+    // False until the map centre is set from a real source (GPS / user action).
+    private val _locationResolved = MutableStateFlow(false)
+    val locationResolved: StateFlow<Boolean> = _locationResolved.asStateFlow()
 
     // 1. Core Species Flows
     val speciesList: StateFlow<List<Species>> = repository.allSpeciesFlow
