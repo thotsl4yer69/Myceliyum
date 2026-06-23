@@ -214,6 +214,14 @@ class FungiViewModel(
     }
 
     private var computeJob: kotlinx.coroutines.Job? = null
+    // The exact request currently being computed, to dedupe rapid identical
+    // re-fires (which would otherwise keep cancelling the in-flight grid so it
+    // never completes — leaving it stuck in Loading).
+    private var inFlightComputeKey: String? = null
+    // How many times computeHotspots has actually started — surfaced in the
+    // on-map diagnostic so a runaway re-trigger loop is visible.
+    private val _computeRuns = MutableStateFlow(0)
+    val computeRuns: StateFlow<Int> = _computeRuns.asStateFlow()
 
     /**
      * Recomputes hotspot overlay + pins for the current map parameters.
@@ -255,6 +263,15 @@ class FungiViewModel(
         val multiSpecies = isAllSpeciesMode.value
         val species = selectedSpeciesForHotspot.value
         if (!multiSpecies && species == null) return
+
+        // Dedupe identical in-flight requests so map-center jitter / rapid
+        // recompositions can't keep cancelling and restarting the same grid
+        // (which leaves it perpetually Loading and never finishing). lat/lng are
+        // rounded so sub-~10 m jitter maps to the same key.
+        val key = "${String.format(java.util.Locale.US, "%.4f|%.4f", lat, lng)}|$radius|$multiSpecies|${species?.id}"
+        if (key == inFlightComputeKey && computeJob?.isActive == true) return
+        inFlightComputeKey = key
+        _computeRuns.value += 1
 
         computeJob?.cancel()
         clearDeepSearch()  // a new overview invalidates any open drill-down
