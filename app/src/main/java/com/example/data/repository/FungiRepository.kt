@@ -31,6 +31,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.InputStreamReader
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -831,6 +832,10 @@ class FungiRepository(
     // the same ~2 km tile reuses the cached result instead of re-hitting the API.
     private val OVERPASS_TTL_MS = 6 * 60 * 60 * 1000L
     private val OVERPASS_BBOX_QUANT = 0.02
+    // Hard per-call time box for the (best-effort) Overpass habitat fetches. OSM
+    // is only a fallback signal, so it must never block the grid: if a call
+    // doesn't return inside this window the cell falls back to neutral habitat.
+    private val OVERPASS_CALL_TIMEOUT_MS = 10_000L
     private val overpassCanopyCache = android.util.LruCache<String, Pair<Long, List<Pair<Double, Double>>>>(16)
     private val overpassMulchCache = android.util.LruCache<String, Pair<Long, List<Pair<Double, Double>>>>(16)
     private val overpassLandUseCache = android.util.LruCache<String, Pair<Long, List<LandPolygon>>>(16)
@@ -891,7 +896,7 @@ class FungiRepository(
                 );
                 out center;
             """.trimIndent()
-            val resp = retryIO { overpassApi.query(ql) }
+            val resp = overpassApi.query(ql)
             val result = resp.elements.orEmpty().mapNotNull { el ->
                 val la = el.resolvedLat()
                 val lo = el.resolvedLon()
@@ -941,7 +946,7 @@ class FungiRepository(
                 );
                 out center;
             """.trimIndent()
-            val resp = retryIO { overpassApi.query(ql) }
+            val resp = overpassApi.query(ql)
             val result = resp.elements.orEmpty().mapNotNull { el ->
                 val la = el.resolvedLat()
                 val lo = el.resolvedLon()
@@ -1027,7 +1032,7 @@ class FungiRepository(
                 );
                 out geom;
             """.trimIndent()
-            val resp = retryIO { overpassApi.query(ql) }
+            val resp = overpassApi.query(ql)
             val result = resp.elements.orEmpty().mapNotNull { el ->
                 val geom = el.geometry ?: return@mapNotNull null
                 val green = isGreenTags(el.tags)
@@ -1486,24 +1491,22 @@ class FungiRepository(
         // canopy %, NDVI) when the backend is configured; otherwise fall back
         // to free OSM forest proximity.
         val env = fetchEnvLayers(cellLL, fine)
-        val canopy = if (env == null && cellLL.isNotEmpty()) fetchCanopyFeatures(
-            cellLL.minOf { it.first }, cellLL.minOf { it.second },
-            cellLL.maxOf { it.first }, cellLL.maxOf { it.second }
-        ) else emptyList()
-        // Real land-use polygons drive habitat discrimination when EE is off.
-        val landPolys = if (env == null && cellLL.isNotEmpty()) fetchLandUsePolygons(
-            cellLL.minOf { it.first }, cellLL.minOf { it.second },
-            cellLL.maxOf { it.first }, cellLL.maxOf { it.second }
-        ) else emptyList()
-        // Tanbark / woodchip beds (OSM) — only for mulch-associated species
-        // (gold tops etc.), since neither EE land cover nor the green/built
-        // land-use layer resolves garden-bed mulch. A strong, specific substrate
-        // signal that lifts those species' score where they actually fruit.
         val speciesMulchAffinity = MycoMath.mulchAffinity(species.habitatTypes, species.substrates)
-        val mulchFeatures = if (speciesMulchAffinity > 0.0 && cellLL.isNotEmpty()) fetchMulchFeatures(
-            cellLL.minOf { it.first }, cellLL.minOf { it.second },
-            cellLL.maxOf { it.first }, cellLL.maxOf { it.second }
-        ) else emptyList()
+        // Habitat layers from OSM/Overpass (only when EE is off). Run CONCURRENTLY
+        // and time-box each call so a slow/unreachable overpass-api.de can never
+        // sink the grid — they degrade to neutral habitat instead of blocking past
+        // the grid timeout. (The old sequential, retried calls could exceed the
+        // 45 s budget and error the whole map to blank.) Canopy + land-use always;
+        // mulch only for mulch-associated species (gold tops etc.).
+        val needOsm = env == null && cellLL.isNotEmpty()
+        val (canopy, landPolys, mulchFeatures) = if (needOsm) coroutineScope {
+            val minLat = cellLL.minOf { it.first }; val minLng = cellLL.minOf { it.second }
+            val maxLat = cellLL.maxOf { it.first }; val maxLng = cellLL.maxOf { it.second }
+            val canopyD = async { withTimeoutOrNull(OVERPASS_CALL_TIMEOUT_MS) { fetchCanopyFeatures(minLat, minLng, maxLat, maxLng) } ?: emptyList() }
+            val landD = async { withTimeoutOrNull(OVERPASS_CALL_TIMEOUT_MS) { fetchLandUsePolygons(minLat, minLng, maxLat, maxLng) } ?: emptyList() }
+            val mulchD = async { if (speciesMulchAffinity > 0.0) (withTimeoutOrNull(OVERPASS_CALL_TIMEOUT_MS) { fetchMulchFeatures(minLat, minLng, maxLat, maxLng) } ?: emptyList()) else emptyList() }
+            Triple(canopyD.await(), landD.await(), mulchD.await())
+        } else Triple(emptyList<Pair<Double, Double>>(), emptyList<LandPolygon>(), emptyList<Pair<Double, Double>>())
 
         for (idx in cellIJ.indices) {
             coroutineContext.ensureActive()
@@ -1930,15 +1933,16 @@ class FungiRepository(
         cellIJ.forEachIndexed { idx, ij -> elevations[idx]?.let { elevByIJ[ij] = it } }
 
         val env = fetchEnvLayers(cellLL)
-        val canopy = if (env == null && cellLL.isNotEmpty()) fetchCanopyFeatures(
-            cellLL.minOf { it.first }, cellLL.minOf { it.second },
-            cellLL.maxOf { it.first }, cellLL.maxOf { it.second }
-        ) else emptyList()
-        // Real land-use polygons drive habitat discrimination when EE is off.
-        val landPolys = if (env == null && cellLL.isNotEmpty()) fetchLandUsePolygons(
-            cellLL.minOf { it.first }, cellLL.minOf { it.second },
-            cellLL.maxOf { it.first }, cellLL.maxOf { it.second }
-        ) else emptyList()
+        // Habitat layers from OSM/Overpass (only when EE is off) — concurrent +
+        // time-boxed so a slow overpass-api.de can't sink the aggregate grid.
+        val needOsm = env == null && cellLL.isNotEmpty()
+        val (canopy, landPolys) = if (needOsm) coroutineScope {
+            val minLat = cellLL.minOf { it.first }; val minLng = cellLL.minOf { it.second }
+            val maxLat = cellLL.maxOf { it.first }; val maxLng = cellLL.maxOf { it.second }
+            val canopyD = async { withTimeoutOrNull(OVERPASS_CALL_TIMEOUT_MS) { fetchCanopyFeatures(minLat, minLng, maxLat, maxLng) } ?: emptyList() }
+            val landD = async { withTimeoutOrNull(OVERPASS_CALL_TIMEOUT_MS) { fetchLandUsePolygons(minLat, minLng, maxLat, maxLng) } ?: emptyList() }
+            canopyD.await() to landD.await()
+        } else Pair(emptyList<Pair<Double, Double>>(), emptyList<LandPolygon>())
 
         for (idx in cellIJ.indices) {
             coroutineContext.ensureActive()

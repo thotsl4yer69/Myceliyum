@@ -130,9 +130,10 @@ fun MapScreen(
                 // off-season) — still surface the strongest cells relative to this
                 // grid so the list shows the best-available spots, honestly tiered,
                 // rather than an empty "nothing here".
-                val gridMax = cells.maxOfOrNull { it.score } ?: 0.0
-                val floor = maxOf(0.10, gridMax * 0.6)
-                cells.filter { it.score >= floor }.sortedByDescending { it.score }.take(12)
+                // Always surface the strongest cells (no absolute floor) so a
+                // populated grid never shows an empty "no hotspots" list — the
+                // relative best is honestly tiered below.
+                cells.sortedByDescending { it.score }.take(12)
             }
         } else {
             emptyList()
@@ -1131,24 +1132,52 @@ fun MapScreen(
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary,
                                 fontFamily = FontFamily.Monospace,
+                                modifier = Modifier.padding(bottom = 4.dp)
+                            )
+
+                            // Honest state readout — distinguishes "still computing"
+                            // / "failed" / "empty grid" / "weak grid" so the map can
+                            // never silently blank without a reason.
+                            val gridBest = overviewCells.maxOfOrNull { it.score } ?: 0.0
+                            val stateLabel = when {
+                                isRunning -> "computing…"
+                                hotspotState is HotspotState.Error -> "error"
+                                hotspotState is HotspotState.Success -> "ok"
+                                else -> "idle"
+                            }
+                            Text(
+                                text = "grid: $stateLabel · cells=${overviewCells.size} · best=${String.format(java.util.Locale.US, "%.2f", gridBest)}",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontFamily = FontFamily.Monospace,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                                 modifier = Modifier.padding(bottom = 8.dp)
                             )
 
                             if (hotspotsList.isEmpty()) {
-                                Box(
+                                val errMsg = (hotspotState as? HotspotState.Error)?.message
+                                Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(180.dp),
-                                    contentAlignment = Alignment.Center
+                                        .heightIn(min = 140.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
                                 ) {
                                     Text(
-                                        text = "No high probability hotspots in selection area.\n• Try increasing search radius.\n• Center near rivers or woodlands using Presets above!\n• Switch to alternative target species.",
+                                        text = when {
+                                            isRunning -> "Computing hotspots — combining records, weather & terrain…"
+                                            errMsg != null -> "Couldn't compute hotspots:\n$errMsg"
+                                            else -> "No grid produced for this spot.\n• Move the map onto woodland\n• Try a smaller radius\n• Tap Retry"
+                                        },
                                         style = MaterialTheme.typography.bodySmall,
                                         fontFamily = FontFamily.Monospace,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                         textAlign = TextAlign.Center,
                                         lineHeight = 18.sp
                                     )
+                                    if (!isRunning) {
+                                        Spacer(modifier = Modifier.height(10.dp))
+                                        Button(onClick = { viewModel.computeHotspots() }) { Text("Retry") }
+                                    }
                                 }
                             } else {
                                 LazyColumn(
@@ -1527,7 +1556,7 @@ fun OSMMapView(
             val gridMax = heatmapCells.maxOfOrNull { it.score } ?: 0.0
             // Normally hide weak/gated cells around ~0.18; when the whole area is
             // modest, drop the floor toward the grid so the relative surface paints.
-            val heatFloor = minOf(0.18, gridMax * 0.45).coerceIn(0.05, 0.18)
+            val heatFloor = minOf(0.18, gridMax * 0.45).coerceIn(0.02, 0.18)
             val heatTop = maxOf(gridMax, heatFloor + 0.05)
             for (cell in heatmapCells) {
                 if (cell.score < heatFloor) continue
