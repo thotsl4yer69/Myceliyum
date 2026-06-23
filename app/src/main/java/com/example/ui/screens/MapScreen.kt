@@ -231,9 +231,12 @@ fun MapScreen(
         }
     }
 
-    // Auto-calculate hotspots whenever parameters change
-    LaunchedEffect(activeHotspotSpecies, mapCenter, searchRadiusKm, speciesList) {
-        if (activeHotspotSpecies != null) {
+    // Auto-calculate hotspots whenever parameters change. In all-species
+    // (aggregate) mode there is no single target species, so compute on the mode
+    // itself — otherwise the grid would never run and the map stays blank
+    // ("grid: idle"). In single-species mode, pick a default species first.
+    LaunchedEffect(activeHotspotSpecies, mapCenter, searchRadiusKm, speciesList, allSpeciesMode) {
+        if (allSpeciesMode || activeHotspotSpecies != null) {
             viewModel.computeHotspots()
         } else if (speciesList.isNotEmpty()) {
             viewModel.selectedSpeciesForHotspot.value = speciesList.first()
