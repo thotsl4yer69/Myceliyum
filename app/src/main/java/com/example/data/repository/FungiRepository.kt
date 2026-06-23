@@ -1828,26 +1828,13 @@ class FungiRepository(
         val allSpecies = dao.getAllSpecies()
         if (allSpecies.isEmpty()) return@withContext emptyList()
 
-        // Pull observations for every catalogue species — in bounded-parallel
-        // batches (not one-at-a-time) so the aggregate map isn't gated on 40
-        // sequential round trips. Each failure is isolated and logged.
+        // Evidence for the aggregate map = EVERY nearby fungal sighting
+        // (kingdom-wide), fetched in ONE call below. We deliberately do NOT loop
+        // the whole catalogue here: ~74 per-species iNaturalist calls hammer the
+        // API rate limit and time the grid out regardless of radius (1 km failed
+        // too) — and they're redundant, since getAllFungiObservations already
+        // captures on-the-ground fungal activity across every species.
         val allObservations = mutableListOf<Observation>()
-        for (batch in allSpecies.chunked(6)) {
-            coroutineContext.ensureActive()
-            val fetched = coroutineScope {
-                batch.map { species ->
-                    async {
-                        try {
-                            getObservations(species, centerLat, centerLng, radiusKm, forceRefresh)
-                        } catch (e: Exception) {
-                            Log.w(TAG, "Skipping ${species.scientificName} in aggregate fetch: ${e.message}")
-                            emptyList()
-                        }
-                    }
-                }.awaitAll()
-            }
-            fetched.forEach { allObservations.addAll(it) }
-        }
 
         // Fold in EVERY nearby fungal sighting (kingdom-wide, incl. species not
         // in the catalogue) so the aggregate prediction reflects real fungal

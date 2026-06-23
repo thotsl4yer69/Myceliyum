@@ -454,7 +454,7 @@ class FungiViewModel(
     // Factory Class
     companion object {
         /** Upper bound on a hotspot-grid computation before it fails retryably. */
-        private const val GRID_TIMEOUT_MS = 45_000L
+        private const val GRID_TIMEOUT_MS = 60_000L
 
         fun provideFactory(application: Application): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
