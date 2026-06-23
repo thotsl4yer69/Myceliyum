@@ -1,9 +1,16 @@
 package com.example
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
+import com.google.android.gms.location.LocationServices
 import androidx.lifecycle.ViewModelProvider
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
@@ -78,6 +85,27 @@ fun MainWorkflowLayout(
 
     val splashNoticeAccepted by viewModel.splashNoticeAccepted.collectAsState()
     val updateState by updateViewModel.state.collectAsState()
+
+    // Centre the map on the user's REAL location at startup instead of a default
+    // city. Runs once after the disclaimer is accepted: use the device GPS if
+    // permission is already granted, otherwise request it. Until this resolves
+    // the UI shows "Locating…" rather than a misleading default location.
+    val context = LocalContext.current
+    val locationResolved by viewModel.locationResolved.collectAsState()
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { perms -> if (perms.values.any { it }) fetchDeviceLocation(context, viewModel) }
+    LaunchedEffect(splashNoticeAccepted, locationResolved) {
+        if (splashNoticeAccepted && !locationResolved) {
+            val granted =
+                ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            if (granted) fetchDeviceLocation(context, viewModel)
+            else locationPermissionLauncher.launch(
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+            )
+        }
+    }
 
     // 1. Mandatory Single-Launch Medical & Scientific Disclaimer Notice
     if (!splashNoticeAccepted) {
@@ -221,5 +249,18 @@ fun MainWorkflowLayout(
         // Update prompts / progress (rendered in their own dialog window, so
         // they float above whatever tab is active).
         UpdatePrompt(viewModel = updateViewModel, state = updateState)
+    }
+}
+
+/** Fetch the device's last-known location and promote it to the map centre.
+ *  Guarded against the SecurityException race if permission is revoked mid-call. */
+private fun fetchDeviceLocation(context: android.content.Context, viewModel: FungiViewModel) {
+    try {
+        LocationServices.getFusedLocationProviderClient(context).lastLocation
+            .addOnSuccessListener { loc ->
+                if (loc != null) viewModel.mapCenter.value = Pair(loc.latitude, loc.longitude)
+            }
+    } catch (se: SecurityException) {
+        // Permission revoked between check and use — leave the map on its default.
     }
 }

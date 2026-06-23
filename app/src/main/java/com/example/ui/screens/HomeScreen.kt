@@ -58,9 +58,16 @@ fun HomeScreen(
 
     var searchQuery by remember { mutableStateOf("") }
 
-    // Resolve a real locality name for the current map centre.
-    var currentLocalName by remember { mutableStateOf("Resolving site…") }
-    LaunchedEffect(mapCenter) {
+    // Resolve a real locality name for the current map centre — but only once the
+    // location has actually been set from GPS / a user action. Until then show
+    // "Locating…" rather than reverse-geocoding the neutral default coordinate.
+    val locationResolved by viewModel.locationResolved.collectAsState()
+    var currentLocalName by remember { mutableStateOf("Locating your area…") }
+    LaunchedEffect(mapCenter, locationResolved) {
+        if (!locationResolved) {
+            currentLocalName = "Locating your area…"
+            return@LaunchedEffect
+        }
         currentLocalName = withContext(Dispatchers.IO) {
             try {
                 val geocoder = Geocoder(context, Locale.getDefault())
