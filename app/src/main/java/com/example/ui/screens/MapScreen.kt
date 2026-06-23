@@ -119,13 +119,19 @@ fun MapScreen(
     var selectedHotspotCell by remember { mutableStateOf<HotspotCell?>(null) }
     var isFullscreen by remember { mutableStateOf(false) }
     var currentBottomTab by remember { mutableStateOf(0) } // 0 = Parameters, 1 = Hotspots Registry
+    // Where the map has been panned to but NOT yet searched. Panning only records
+    // this pending centre (so the heavy grid is not recomputed on every drag);
+    // tapping "Search this area" promotes it to the real search centre.
+    var pendingCenter by remember { mutableStateOf<Pair<Double, Double>?>(null) }
 
     val hotspotsList = remember(hotspotState) {
         if (hotspotState is HotspotState.Success) {
             val cells = (hotspotState as HotspotState.Success).cells
             val promising = cells.filter { it.tier != "Unlikely" }.sortedByDescending { it.score }
             if (promising.isNotEmpty()) {
-                promising
+                // Cap the displayed list to the strongest 20 so the "Hotspot list"
+                // tab is a usable shortlist, not thousands of rows.
+                promising.take(20)
             } else {
                 // Nothing crossed the absolute "Possible" line (sparse evidence /
                 // off-season) — still surface the strongest cells relative to this
@@ -134,7 +140,7 @@ fun MapScreen(
                 // Always surface the strongest cells (no absolute floor) so a
                 // populated grid never shows an empty "no hotspots" list — the
                 // relative best is honestly tiered below.
-                cells.sortedByDescending { it.score }.take(12)
+                cells.sortedByDescending { it.score }.take(20)
             }
         } else {
             emptyList()
@@ -244,6 +250,11 @@ fun MapScreen(
         }
     }
 
+    // When the search centre changes via an explicit action (search bar / GPS /
+    // preset / manual coords / "Search this area"), the pending pan is consumed —
+    // clear it so the "Search this area" button doesn't linger.
+    LaunchedEffect(mapCenter) { pendingCenter = null }
+
     Scaffold { paddingValues ->
         Box(
             modifier = Modifier
@@ -291,8 +302,11 @@ fun MapScreen(
                             if (deepSearchState !is DeepSearchState.Success) {
                                 val (curLat, curLng) = viewModel.mapCenter.value
                                 if (abs(curLat - newLat) > 1e-4 || abs(curLng - newLng) > 1e-4) {
-                                    viewModel.mapCenter.value = Pair(newLat, newLng)
-                                    selectedHotspotCell = null
+                                    // Panning alone must NOT recompute the heavy grid —
+                                    // only record where the viewport moved to. The user
+                                    // promotes it via the "Search this area" button, which
+                                    // sets mapCenter and triggers the compute LaunchedEffect.
+                                    pendingCenter = Pair(newLat, newLng)
                                 }
                             }
                         }
@@ -369,6 +383,51 @@ fun MapScreen(
                             )
                         }
                         DeepSearchState.Idle -> {}
+                    }
+
+                    // "Search this area" — appears after the user pans the map a
+                    // meaningful distance. Panning only records `pendingCenter`; this
+                    // button promotes it to the real search centre, which triggers the
+                    // compute LaunchedEffect. Anchored top-centre, below the search card.
+                    val pc = pendingCenter
+                    val showSearchHere = pc != null && calculateDistanceBetweenPoints(
+                        viewModel.mapCenter.value.first, viewModel.mapCenter.value.second,
+                        pc.first, pc.second
+                    ) > 1000.0  // metres
+                    if (showSearchHere && pc != null && !isFullscreen) {
+                        Button(
+                            onClick = {
+                                viewModel.mapCenter.value = pc
+                                pendingCenter = null
+                                selectedHotspotCell = null
+                            },
+                            shape = RoundedCornerShape(20.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            ),
+                            elevation = ButtonDefaults.buttonElevation(
+                                defaultElevation = 6.dp,
+                                pressedElevation = 2.dp
+                            ),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .padding(top = 150.dp)
+                                .testTag("search_this_area_btn")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                "Search this area",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
 
                     // Compass Indicator & Scale Overlay (hidden in fullscreen)
@@ -1551,36 +1610,43 @@ fun OSMMapView(
             }
             mapView.overlays.add(circlePolygon)
 
-            // 2. PROBABILITY HEATMAP — every scored cell drawn as an edge-to-edge,
-            // stroke-less tile on a continuous score→colour ramp (cool = low, warm
-            // = high) with opacity rising with score. The ramp is ADAPTIVE: it
-            // scales to the grid's own best score, so the strongest spots always
-            // read warm — even where evidence is sparse or the species is off
-            // season and absolute scores are modest. Gated cities/water still drop
-            // out (low floor), but the map never goes blank when a grid exists.
+            // 2. PROBABILITY HEAT SURFACE — only genuinely-strong cells render, each
+            // as a translucent warm CIRCLE blob slightly larger than its cell so
+            // neighbours overlap and build up into soft blobs with hot cores, instead
+            // of an opaque red checkerboard. The display floor is raised so ordinary
+            // ground stays clear (scores are now calibrated and reach ~0.76).
             val cosLngFactor = Math.cos(centerX * Math.PI / 180.0)
             val gridMax = heatmapCells.maxOfOrNull { it.score } ?: 0.0
-            // Normally hide weak/gated cells around ~0.18; when the whole area is
-            // modest, drop the floor toward the grid so the relative surface paints.
-            val heatFloor = minOf(0.18, gridMax * 0.45).coerceIn(0.02, 0.18)
-            val heatTop = maxOf(gridMax, heatFloor + 0.05)
+            val heatFloor = maxOf(0.40, gridMax * 0.55)
+            val heatTop = maxOf(gridMax, heatFloor + 0.12)
             for (cell in heatmapCells) {
                 if (cell.score < heatFloor) continue
-                val halfH = (cell.cellSizeMeters / 2.0) / 111_000.0
-                val halfW = (cell.cellSizeMeters / 2.0) / (111_000.0 * cosLngFactor)
-                val tile = Polygon(mapView).apply {
-                    points = listOf(
-                        GeoPoint(cell.lat + halfH, cell.lng - halfW),
-                        GeoPoint(cell.lat + halfH, cell.lng + halfW),
-                        GeoPoint(cell.lat - halfH, cell.lng + halfW),
-                        GeoPoint(cell.lat - halfH, cell.lng - halfW)
+                // Circle radius slightly larger than the cell so adjacent strong
+                // blobs overlap and blend. Convert metres → degrees: latitude is
+                // ~111 km/deg everywhere; longitude shrinks by cos(latitude).
+                val r = cell.cellSizeMeters * 0.85
+                val latRadius = r / 111_000.0
+                val lngRadius = r / (111_000.0 * cosLngFactor)
+                val circle = ArrayList<GeoPoint>(19)
+                val segments = 18
+                for (i in 0 until segments) {
+                    val angle = 2.0 * Math.PI * i.toDouble() / segments
+                    circle.add(
+                        GeoPoint(
+                            cell.lat + latRadius * Math.sin(angle),
+                            cell.lng + lngRadius * Math.cos(angle)
+                        )
                     )
+                }
+                circle.add(circle.first()) // close the ring
+                val blob = Polygon(mapView).apply {
+                    points = circle
                     fillColor = heatColor(cell.score, heatFloor, heatTop)
                     strokeColor = android.graphics.Color.TRANSPARENT
                     strokeWidth = 0f
                     infoWindow = null
                 }
-                mapView.overlays.add(tile)
+                mapView.overlays.add(blob)
             }
 
             // 3. RANKED SPOT PINS — the best spots as numbered discs (① = best).
@@ -1725,7 +1791,9 @@ private fun heatColor(score: Double, floor: Double, top: Double): Int {
     val span = (top - floor).coerceAtLeast(0.0001)
     val t = ((score - floor) / span).coerceIn(0.0, 1.0).toFloat()
     val base = lerp(HeatLow, HeatHigh, t)
-    val alpha = (95 + 150 * t).toInt().coerceIn(0, 255)
+    // Low base opacity so overlapping circle blobs accumulate softly instead of
+    // forming an opaque wall; only hot cores approach full strength.
+    val alpha = (35 + 120 * t).toInt().coerceIn(0, 255)
     return base.copy(alpha = alpha / 255f).toArgb()
 }
 
