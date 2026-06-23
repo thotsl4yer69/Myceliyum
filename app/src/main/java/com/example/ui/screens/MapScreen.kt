@@ -112,6 +112,7 @@ fun MapScreen(
     val showAllSightings by viewModel.showAllSightings.collectAsState()
     val weatherSummary by viewModel.weatherSummary.collectAsState()
     val isRunning by viewModel.isRecomputationsRunning.collectAsState()
+    val computeRuns by viewModel.computeRuns.collectAsState()
 
     var showSpeciesDropdown by remember { mutableStateOf(false) }
     var showPresets by remember { mutableStateOf(false) }
@@ -1142,14 +1143,16 @@ fun MapScreen(
                             // / "failed" / "empty grid" / "weak grid" so the map can
                             // never silently blank without a reason.
                             val gridBest = overviewCells.maxOfOrNull { it.score } ?: 0.0
-                            val stateLabel = when {
-                                isRunning -> "computing…"
-                                hotspotState is HotspotState.Error -> "error"
-                                hotspotState is HotspotState.Success -> "ok"
+                            // Label off the actual state (Loading was previously
+                            // mislabelled "idle"); runs= exposes re-trigger thrash.
+                            val stateLabel = when (hotspotState) {
+                                is HotspotState.Loading -> "computing…"
+                                is HotspotState.Error -> "error"
+                                is HotspotState.Success -> "ok"
                                 else -> "idle"
                             }
                             Text(
-                                text = "grid: $stateLabel · cells=${overviewCells.size} · best=${String.format(java.util.Locale.US, "%.2f", gridBest)}",
+                                text = "grid: $stateLabel · cells=${overviewCells.size} · best=${String.format(java.util.Locale.US, "%.2f", gridBest)} · runs=$computeRuns",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontFamily = FontFamily.Monospace,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
@@ -1167,7 +1170,7 @@ fun MapScreen(
                                 ) {
                                     Text(
                                         text = when {
-                                            isRunning -> "Computing hotspots — combining records, weather & terrain…"
+                                            isRunning || hotspotState is HotspotState.Loading -> "Computing hotspots — combining records, weather & terrain…"
                                             errMsg != null -> "Couldn't compute hotspots:\n$errMsg"
                                             else -> "No grid produced for this spot.\n• Move the map onto woodland\n• Try a smaller radius\n• Tap Retry"
                                         },
