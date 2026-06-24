@@ -289,4 +289,6 @@ private fun fetchDeviceLocation(context: android.content.Context, viewModel: Fun
     }
 }
 
+// Treat older fixes as stale so launch-centering prefers a current GPS reading
+// instead of silently reusing a minutes-old cached location from elsewhere.
 private const val FRESH_LOCATION_MAX_AGE_MS = 2 * 60 * 1000L

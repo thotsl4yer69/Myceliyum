@@ -63,9 +63,11 @@ class FungiRepository(
     // in-memory cache, keyed by species id. @Volatile + double-checked locking.
     @Volatile private var diagnosticsCache: Map<String, SpeciesDiagnostics>? = null
 
-    // Observation caches should stay fresh enough for map panning to feel live.
+    // Shorter than the previous 24h TTL so map panning refreshes stale areas
+    // within the same day while still avoiding excessive API churn.
     private val CACHE_TTL_MS = 6 * 60 * 60 * 1000L
     private val GEOCODER_TIMEOUT_MS = 5_000L
+    private val METERS_PER_KM = 1000.0
 
     val allSpeciesFlow: Flow<List<Species>> = dao.getAllSpeciesFlow()
     val allUserSightingsFlow: Flow<List<UserSighting>> = dao.getAllUserSightingsFlow()
@@ -1357,7 +1359,7 @@ class FungiRepository(
         targetRadiusKm: Double
     ): Boolean {
         val centerDistanceKm =
-            calculateDistanceMeters(centerLat, centerLng, targetLat, targetLng) / 1000.0
+            calculateDistanceMeters(centerLat, centerLng, targetLat, targetLng) / METERS_PER_KM
         // The requested search circle is reusable only when it fits entirely
         // inside the cached circle: distance between centres + requested radius
         // must not exceed the radius of the cached fetch.

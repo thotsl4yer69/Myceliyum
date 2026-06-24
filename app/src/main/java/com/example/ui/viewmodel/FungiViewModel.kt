@@ -511,6 +511,7 @@ class FungiViewModel(
     companion object {
         /** Upper bound on a hotspot-grid computation before it fails retryably. */
         private const val GRID_TIMEOUT_MS = 60_000L
+        /** Brief settle time so pans/sliders coalesce without feeling laggy. */
         private const val HOTSPOT_RECOMPUTE_DEBOUNCE_MS = 350L
 
         fun provideFactory(application: Application): ViewModelProvider.Factory =
