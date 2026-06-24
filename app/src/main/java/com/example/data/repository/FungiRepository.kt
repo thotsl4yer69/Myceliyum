@@ -1343,6 +1343,8 @@ class FungiRepository(
         deepCache.evictAll()
         areaObsCache.evictAll()
         recordCountCache.evictAll()
+        globalSearchCache.evictAll()
+        speciesPhotoCache.evictAll()
     }
 
     private fun ObservationCacheArea.covers(
@@ -1353,8 +1355,6 @@ class FungiRepository(
         val centerDistanceKm =
             calculateDistanceMeters(centerLat, centerLng, targetLat, targetLng) / 1000.0
         return centerDistanceKm + targetRadiusKm <= radiusKm
-        globalSearchCache.evictAll()
-        speciesPhotoCache.evictAll()
     }
 
     /**
