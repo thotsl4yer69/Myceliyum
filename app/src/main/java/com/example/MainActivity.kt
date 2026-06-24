@@ -3,6 +3,7 @@ package com.example
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -260,7 +261,11 @@ private fun fetchDeviceLocation(context: android.content.Context, viewModel: Fun
     try {
         val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
         fun updateMapCenter(loc: android.location.Location?) {
-            if (loc != null) viewModel.setMapCenter(loc.latitude, loc.longitude)
+            if (loc != null) {
+                viewModel.setMapCenter(loc.latitude, loc.longitude)
+            } else {
+                Log.w("MainActivity", "Location lookup completed without a device fix.")
+            }
         }
         fun requestFreshLocation(fallback: android.location.Location? = null) {
             val tokenSource = CancellationTokenSource()
@@ -268,14 +273,8 @@ private fun fetchDeviceLocation(context: android.content.Context, viewModel: Fun
                 Priority.PRIORITY_HIGH_ACCURACY,
                 tokenSource.token
             )
-                .addOnSuccessListener { fresh ->
-                    tokenSource.cancel()
-                    updateMapCenter(fresh ?: fallback)
-                }
-                .addOnFailureListener {
-                    tokenSource.cancel()
-                    updateMapCenter(fallback)
-                }
+                .addOnSuccessListener { fresh -> updateMapCenter(fresh ?: fallback) }
+                .addOnFailureListener { updateMapCenter(fallback) }
         }
         fusedLocationClient.lastLocation
             .addOnSuccessListener { loc ->

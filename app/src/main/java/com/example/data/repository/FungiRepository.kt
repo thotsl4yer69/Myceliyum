@@ -409,8 +409,8 @@ class FungiRepository(
             calculateDistanceMeters(lat, lng, it.lat, it.lng) <= radiusKm * 1000.0
         }
 
-        val isCacheFresh = cachedArea != null && (now - cachedArea.cachedAt) < CACHE_TTL_MS
-        val isCacheCoverageValid = cachedArea?.covers(lat, lng, radiusKm) == true
+        val isCacheFresh = cachedArea?.let { (now - it.cachedAt) < CACHE_TTL_MS } == true
+        val isCacheCoverageValid = cachedArea?.let { it.covers(lat, lng, radiusKm) } == true
 
         if (isCacheFresh && isCacheCoverageValid && !forceRefresh) {
             Log.d(TAG, "Returning ${inRadiusCached.size} cached observations from Room (cache fresh + covered)")
@@ -485,14 +485,12 @@ class FungiRepository(
 
             val allFresh = freshObservations + alaObs + gbifObs
 
+            // Intentionally clear first: an empty fetch for this area must replace
+            // any previous area's observations so panning can't surface stale
+            // records as if they belonged to the new search.
+            dao.clearObservationsForSpecies(species.id)
             if (allFresh.isNotEmpty()) {
-                dao.clearObservationsForSpecies(species.id)
                 dao.insertObservations(allFresh)
-            } else {
-                // Intentionally clear here too: an empty fetch for this area must
-                // replace any previous area's observations so panning can't surface
-                // stale records as if they belonged to the new search.
-                dao.clearObservationsForSpecies(species.id)
             }
             dao.upsertObservationCacheArea(
                 ObservationCacheArea(
