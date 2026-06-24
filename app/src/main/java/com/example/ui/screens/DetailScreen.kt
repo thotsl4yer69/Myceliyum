@@ -287,8 +287,7 @@ fun DetailScreen(
 
                     Button(
                         onClick = {
-                            viewModel.selectedSpeciesForHotspot.value = species
-                            viewModel.computeHotspots()
+                            viewModel.setSelectedSpeciesForHotspot(species)
                             onNavigateToMap()
                         },
                         colors = ButtonDefaults.buttonColors(

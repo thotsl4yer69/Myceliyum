@@ -36,6 +36,14 @@ sealed interface DeepSearchState {
     data class Error(val message: String) : DeepSearchState
 }
 
+private data class HotspotRequest(
+    val lat: Double,
+    val lng: Double,
+    val radiusKm: Double,
+    val speciesId: String?,
+    val allSpecies: Boolean
+)
+
 class FungiViewModel(
     application: Application,
     private val repository: FungiRepository,
@@ -49,7 +57,6 @@ class FungiViewModel(
             speciesList.first { it.isNotEmpty() }.let { list ->
                 if (selectedSpeciesForHotspot.value == null) {
                     selectedSpeciesForHotspot.value = list.first()
-                    computeHotspots()
                 }
             }
         }
@@ -58,6 +65,23 @@ class FungiViewModel(
         // search, presets, manual coords) so the UI can show "Locating…" instead
         // of a misleading default city.
         viewModelScope.launch { mapCenter.drop(1).collect { _locationResolved.value = true } }
+        viewModelScope.launch {
+            combine(
+                mapCenter,
+                searchRadiusKm,
+                selectedSpeciesForHotspot,
+                isAllSpeciesMode
+            ) { center, radius, species, allSpecies ->
+                HotspotRequest(center.first, center.second, radius, species?.id, allSpecies)
+            }
+                .debounce(HOTSPOT_RECOMPUTE_DEBOUNCE_MS)
+                .distinctUntilChanged()
+                .collect { request ->
+                    if (request.allSpecies || request.speciesId != null) {
+                        computeHotspots()
+                    }
+                }
+        }
     }
 
     // False until the map centre is set from a real source (GPS / user action).
@@ -249,8 +273,7 @@ class FungiViewModel(
         viewModelScope.launch {
             val place = repository.geocodePlace(query)
             if (place != null) {
-                mapCenter.value = Pair(place.lat, place.lng)
-                computeHotspots()
+                setMapCenter(place.lat, place.lng)
                 onResult(place.label)
             } else {
                 onResult(null)
@@ -264,6 +287,14 @@ class FungiViewModel(
             val name = repository.reverseGeocode(lat, lng)
             onResult(name ?: String.format(java.util.Locale.US, "GPS: %.3f, %.3f", lat, lng))
         }
+    }
+
+    fun setMapCenter(lat: Double, lng: Double) {
+        mapCenter.value = Pair(lat, lng)
+    }
+
+    fun setSelectedSpeciesForHotspot(species: Species?) {
+        selectedSpeciesForHotspot.value = species
     }
 
     fun computeHotspots() {
@@ -378,7 +409,6 @@ class FungiViewModel(
     /** Toggle between single-species and aggregate "all species" hotspot mode. */
     fun setAllSpeciesMode(enabled: Boolean) {
         isAllSpeciesMode.value = enabled
-        computeHotspots()
     }
 
     /** Toggle the "all fungi sightings" map layer. */
@@ -481,6 +511,7 @@ class FungiViewModel(
     companion object {
         /** Upper bound on a hotspot-grid computation before it fails retryably. */
         private const val GRID_TIMEOUT_MS = 60_000L
+        private const val HOTSPOT_RECOMPUTE_DEBOUNCE_MS = 350L
 
         fun provideFactory(application: Application): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {

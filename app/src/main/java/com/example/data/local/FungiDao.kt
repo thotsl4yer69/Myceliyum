@@ -2,6 +2,7 @@ package com.example.data.local
 
 import androidx.room.*
 import com.example.model.Observation
+import com.example.model.ObservationCacheArea
 import com.example.model.Species
 import com.example.model.UserSighting
 import kotlinx.coroutines.flow.Flow
@@ -33,6 +34,18 @@ interface FungiDao {
 
     @Query("DELETE FROM observations")
     suspend fun clearAllCachedObservations()
+
+    @Query("SELECT * FROM observation_cache_areas WHERE speciesId = :speciesId")
+    suspend fun getObservationCacheArea(speciesId: String): ObservationCacheArea?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertObservationCacheArea(area: ObservationCacheArea)
+
+    @Query("DELETE FROM observation_cache_areas WHERE speciesId = :speciesId")
+    suspend fun clearObservationCacheArea(speciesId: String)
+
+    @Query("DELETE FROM observation_cache_areas")
+    suspend fun clearAllObservationCacheAreas()
 
     // User Sightings
     @Query("SELECT * FROM user_sightings ORDER BY timestamp DESC")

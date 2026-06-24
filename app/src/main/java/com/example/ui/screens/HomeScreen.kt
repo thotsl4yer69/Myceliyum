@@ -1,6 +1,5 @@
 package com.example.ui.screens
 
-import android.location.Geocoder
 import android.text.format.DateUtils
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
@@ -35,8 +34,6 @@ import com.example.model.Observation
 import com.example.model.Species
 import com.example.model.UserSighting
 import com.example.ui.viewmodel.FungiViewModel
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -63,38 +60,23 @@ fun HomeScreen(
     // "Locating…" rather than reverse-geocoding the neutral default coordinate.
     val locationResolved by viewModel.locationResolved.collectAsState()
     var currentLocalName by remember { mutableStateOf("Locating your area…") }
+    val reverseGeocodeRequestId = remember { mutableIntStateOf(0) }
     LaunchedEffect(mapCenter, locationResolved) {
         if (!locationResolved) {
             currentLocalName = "Locating your area…"
             return@LaunchedEffect
         }
-        currentLocalName = withContext(Dispatchers.IO) {
-            try {
-                val geocoder = Geocoder(context, Locale.getDefault())
-                @Suppress("DEPRECATION")
-                val addresses = geocoder.getFromLocation(mapCenter.first, mapCenter.second, 1)
-                val address = addresses?.firstOrNull()
-                val locality = address?.locality ?: address?.subAdminArea ?: address?.adminArea
-                locality?.takeIf { it.isNotBlank() }
-                    ?: String.format(Locale.US, "%.3f, %.3f", mapCenter.first, mapCenter.second)
-            } catch (e: Exception) {
-                String.format(Locale.US, "%.3f, %.3f", mapCenter.first, mapCenter.second)
-            }
+        val requestCenter = mapCenter
+        reverseGeocodeRequestId.intValue += 1
+        val requestId = reverseGeocodeRequestId.intValue
+        currentLocalName = "Reading coordinates..."
+        viewModel.reverseGeocode(requestCenter.first, requestCenter.second) { label ->
+            if (reverseGeocodeRequestId.intValue == requestId) currentLocalName = label
         }
     }
 
     // Compute list of observations from cached pins across all species
     val recentObservations by viewModel.observationPins.collectAsState()
-
-    // Query nearby observations automatically on first launch or when mapCenter changes
-    LaunchedEffect(speciesList, mapCenter) {
-        if (speciesList.isNotEmpty()) {
-            // Automatically queue current active coordinates to populate observations on Home!
-            val mainFocusSpecies = speciesList.firstOrNull { it.id == "psilocybe_subaeruginosa" } ?: speciesList.first()
-            viewModel.selectedSpeciesForHotspot.value = mainFocusSpecies
-            viewModel.computeHotspots()
-        }
-    }
 
     val filteredList = remember(searchQuery, speciesList) {
         if (searchQuery.isEmpty()) emptyList()

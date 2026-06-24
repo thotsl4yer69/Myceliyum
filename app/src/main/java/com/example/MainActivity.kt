@@ -10,7 +10,9 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
+import com.google.android.gms.location.Priority
 import com.google.android.gms.location.LocationServices
+import com.google.android.gms.tasks.CancellationTokenSource
 import androidx.lifecycle.ViewModelProvider
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
@@ -256,11 +258,28 @@ fun MainWorkflowLayout(
  *  Guarded against the SecurityException race if permission is revoked mid-call. */
 private fun fetchDeviceLocation(context: android.content.Context, viewModel: FungiViewModel) {
     try {
-        LocationServices.getFusedLocationProviderClient(context).lastLocation
+        val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
+        fun publishLocation(loc: android.location.Location?) {
+            if (loc != null) viewModel.setMapCenter(loc.latitude, loc.longitude)
+        }
+        fun requestFreshLocation(fallback: android.location.Location? = null) {
+            fusedLocationClient.getCurrentLocation(
+                Priority.PRIORITY_HIGH_ACCURACY,
+                CancellationTokenSource().token
+            )
+                .addOnSuccessListener { fresh -> publishLocation(fresh ?: fallback) }
+                .addOnFailureListener { publishLocation(fallback) }
+        }
+        fusedLocationClient.lastLocation
             .addOnSuccessListener { loc ->
-                if (loc != null) viewModel.mapCenter.value = Pair(loc.latitude, loc.longitude)
+                val isFresh = loc != null &&
+                    (System.currentTimeMillis() - loc.time) <= FRESH_LOCATION_MAX_AGE_MS
+                if (isFresh) publishLocation(loc) else requestFreshLocation(loc)
             }
+            .addOnFailureListener { requestFreshLocation() }
     } catch (se: SecurityException) {
         // Permission revoked between check and use — leave the map on its default.
     }
 }
+
+private const val FRESH_LOCATION_MAX_AGE_MS = 2 * 60 * 1000L

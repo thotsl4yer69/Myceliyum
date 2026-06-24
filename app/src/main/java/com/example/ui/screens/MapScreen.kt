@@ -223,8 +223,7 @@ fun MapScreen(
                 val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
                 fusedLocationClient.lastLocation.addOnSuccessListener { location ->
                     if (location != null) {
-                        viewModel.mapCenter.value = Pair(location.latitude, location.longitude)
-                        viewModel.computeHotspots()
+                        viewModel.setMapCenter(location.latitude, location.longitude)
                         Toast.makeText(context, "GPS synchronized: Centered on your actual local area!", Toast.LENGTH_SHORT).show()
                     } else {
                         Toast.makeText(context, "Could not acquire GPS position. Ensure Location is enabled on device.", Toast.LENGTH_LONG).show()
@@ -242,11 +241,9 @@ fun MapScreen(
     // (aggregate) mode there is no single target species, so compute on the mode
     // itself — otherwise the grid would never run and the map stays blank
     // ("grid: idle"). In single-species mode, pick a default species first.
-    LaunchedEffect(activeHotspotSpecies, mapCenter, searchRadiusKm, speciesList, allSpeciesMode) {
-        if (allSpeciesMode || activeHotspotSpecies != null) {
-            viewModel.computeHotspots()
-        } else if (speciesList.isNotEmpty()) {
-            viewModel.selectedSpeciesForHotspot.value = speciesList.first()
+    LaunchedEffect(activeHotspotSpecies, speciesList, allSpeciesMode) {
+        if (!allSpeciesMode && activeHotspotSpecies == null && speciesList.isNotEmpty()) {
+            viewModel.setSelectedSpeciesForHotspot(speciesList.first())
         }
     }
 
@@ -397,7 +394,7 @@ fun MapScreen(
                     if (showSearchHere && pc != null && !isFullscreen) {
                         Button(
                             onClick = {
-                                viewModel.mapCenter.value = pc
+                                viewModel.setMapCenter(pc.first, pc.second)
                                 pendingCenter = null
                                 selectedHotspotCell = null
                             },
@@ -723,8 +720,7 @@ fun MapScreen(
                             items(presetSites) { preset ->
                                 AssistChip(
                                     onClick = {
-                                        viewModel.mapCenter.value = Pair(preset.lat, preset.lng)
-                                        viewModel.computeHotspots()
+                                        viewModel.setMapCenter(preset.lat, preset.lng)
                                         Toast.makeText(context, "Map centred on ${preset.name}", Toast.LENGTH_SHORT).show()
                                     },
                                     label = { Text(preset.name, fontSize = 10.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold) },
@@ -1020,7 +1016,7 @@ fun MapScreen(
                                             DropdownMenuItem(
                                                 text = { Text("${spec.scientificName} (${spec.commonNames.firstOrNull() ?: ""})") },
                                                 onClick = {
-                                                    viewModel.selectedSpeciesForHotspot.value = spec
+                                                    viewModel.setSelectedSpeciesForHotspot(spec)
                                                     showSpeciesDropdown = false
                                                     selectedHotspotCell = null
                                                 }
@@ -1162,8 +1158,7 @@ fun MapScreen(
                                             val customLat = manualLatText.toDoubleOrNull()
                                             val customLng = manualLngText.toDoubleOrNull()
                                             if (customLat != null && customLng != null) {
-                                                viewModel.mapCenter.value = Pair(customLat, customLng)
-                                                viewModel.computeHotspots()
+                                                viewModel.setMapCenter(customLat, customLng)
                                                 Toast.makeText(context, "Map centred on those coordinates.", Toast.LENGTH_SHORT).show()
                                             } else {
                                                 Toast.makeText(context, "Invalid coordinates formatting!", Toast.LENGTH_SHORT).show()
@@ -1301,8 +1296,7 @@ fun MapScreen(
 
                                                 Button(
                                                     onClick = {
-                                                        viewModel.mapCenter.value = Pair(cell.lat, cell.lng)
-                                                        viewModel.computeHotspots()
+                                                        viewModel.setMapCenter(cell.lat, cell.lng)
                                                         selectedHotspotCell = cell
                                                         Toast.makeText(context, "Centred on this hotspot.", Toast.LENGTH_SHORT).show()
                                                     },
@@ -1480,8 +1474,7 @@ fun MapScreen(
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                             Button(
                                 onClick = {
-                                    viewModel.mapCenter.value = Pair(cell.lat, cell.lng)
-                                    viewModel.computeHotspots()
+                                    viewModel.setMapCenter(cell.lat, cell.lng)
                                     selectedHotspotCell = null
                                     Toast.makeText(context, "Centred on this spot.", Toast.LENGTH_SHORT).show()
                                 },
