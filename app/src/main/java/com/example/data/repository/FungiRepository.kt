@@ -485,13 +485,9 @@ class FungiRepository(
 
             val allFresh = freshObservations + alaObs + gbifObs
 
-            // Intentionally clear first: an empty fetch for this area must replace
-            // any previous area's observations so panning can't surface stale
-            // records as if they belonged to the new search.
-            dao.clearObservationsForSpecies(species.id)
-            if (allFresh.isNotEmpty()) {
-                dao.insertObservations(allFresh)
-            }
+            // Replace atomically so this area's result (even an empty one) fully
+            // supersedes the previous area's cache without a partial state.
+            dao.replaceObservationsForSpecies(species.id, allFresh)
             dao.upsertObservationCacheArea(
                 ObservationCacheArea(
                     speciesId = species.id,
@@ -1358,9 +1354,9 @@ class FungiRepository(
     ): Boolean {
         val centerDistanceKm =
             calculateDistanceMeters(centerLat, centerLng, targetLat, targetLng) / METERS_PER_KM
-        // The requested search circle is reusable only when it fits entirely
-        // inside the cached circle: distance between centres + requested radius
-        // must not exceed the radius of the cached fetch.
+        // This checks full circle containment, not just centre proximity: the
+        // requested circle is reusable only when distance-between-centres plus
+        // requested radius stays within the radius of the cached fetch.
         return centerDistanceKm + targetRadiusKm <= radiusKm
     }
 

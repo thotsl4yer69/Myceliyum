@@ -60,18 +60,18 @@ fun HomeScreen(
     // "Locating…" rather than reverse-geocoding the neutral default coordinate.
     val locationResolved by viewModel.locationResolved.collectAsState()
     var currentLocalName by remember { mutableStateOf("Locating your area…") }
-    val geocodeRequestIdCounter = remember { mutableIntStateOf(0) }
+    val geocodeRequestId = remember { mutableIntStateOf(0) }
     LaunchedEffect(mapCenter, locationResolved) {
         if (!locationResolved) {
             currentLocalName = "Locating your area…"
             return@LaunchedEffect
         }
         val requestCenter = mapCenter
-        geocodeRequestIdCounter.intValue += 1
-        val requestId = geocodeRequestIdCounter.intValue
+        geocodeRequestId.intValue += 1
+        val requestId = geocodeRequestId.intValue
         currentLocalName = "Reading coordinates..."
         viewModel.reverseGeocode(requestCenter.first, requestCenter.second) { label ->
-            if (geocodeRequestIdCounter.intValue == requestId) currentLocalName = label
+            if (geocodeRequestId.intValue == requestId) currentLocalName = label
         }
     }
 

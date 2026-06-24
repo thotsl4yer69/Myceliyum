@@ -32,6 +32,14 @@ interface FungiDao {
     @Query("DELETE FROM observations WHERE speciesId = :speciesId")
     suspend fun clearObservationsForSpecies(speciesId: String)
 
+    @Transaction
+    suspend fun replaceObservationsForSpecies(speciesId: String, observations: List<Observation>) {
+        clearObservationsForSpecies(speciesId)
+        if (observations.isNotEmpty()) {
+            insertObservations(observations)
+        }
+    }
+
     @Query("DELETE FROM observations")
     suspend fun clearAllCachedObservations()
 
