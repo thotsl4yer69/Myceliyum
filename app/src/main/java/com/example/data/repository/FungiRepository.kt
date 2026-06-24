@@ -15,6 +15,7 @@ import com.example.data.remote.OverpassApi
 import com.example.model.HotspotCell
 import com.example.model.MapObservation
 import com.example.model.Observation
+import com.example.model.ObservationCacheArea
 import com.example.model.Species
 import com.example.model.SpeciesDiagnostics
 import com.example.model.UserSighting
@@ -62,8 +63,11 @@ class FungiRepository(
     // in-memory cache, keyed by species id. @Volatile + double-checked locking.
     @Volatile private var diagnosticsCache: Map<String, SpeciesDiagnostics>? = null
 
-    // TTL for iNaturalist observations cache (24 hours)
-    private val CACHE_TTL_MS = 24 * 60 * 60 * 1000L
+    // Shorter than the previous 24h TTL so map panning refreshes stale areas
+    // within the same day while still avoiding excessive API churn.
+    private val CACHE_TTL_MS = 6 * 60 * 60 * 1000L
+    private val GEOCODER_TIMEOUT_MS = 5_000L
+    private val METERS_PER_KM = 1000.0
 
     val allSpeciesFlow: Flow<List<Species>> = dao.getAllSpeciesFlow()
     val allUserSightingsFlow: Flow<List<UserSighting>> = dao.getAllUserSightingsFlow()
@@ -397,6 +401,7 @@ class FungiRepository(
     ): List<Observation> = withContext(Dispatchers.IO) {
         // 1. Check cached observations in Room
         val cached = dao.getCachedObservations(species.id)
+        val cachedArea = dao.getObservationCacheArea(species.id)
         val now = System.currentTimeMillis()
 
         // Filter those within radius distance from the center target (cached observations might be broader)
@@ -404,10 +409,11 @@ class FungiRepository(
             calculateDistanceMeters(lat, lng, it.lat, it.lng) <= radiusKm * 1000.0
         }
 
-        val isCacheValid = cached.isNotEmpty() && (now - cached.maxOf { it.cachedAt }) < CACHE_TTL_MS
+        val isCacheFresh = cachedArea?.let { (now - it.cachedAt) < CACHE_TTL_MS } == true
+        val isCacheCoverageValid = cachedArea?.let { it.covers(lat, lng, radiusKm) } == true
 
-        if (isCacheValid && !forceRefresh) {
-            Log.d(TAG, "Returning ${inRadiusCached.size} cached observations from Room (cache fresh)")
+        if (isCacheFresh && isCacheCoverageValid && !forceRefresh) {
+            Log.d(TAG, "Returning ${inRadiusCached.size} cached observations from Room (cache fresh + covered)")
             return@withContext inRadiusCached
         }
 
@@ -479,13 +485,19 @@ class FungiRepository(
 
             val allFresh = freshObservations + alaObs + gbifObs
 
-            // Save new network result to local Room Cache
-            if (allFresh.isNotEmpty()) {
-                // Clear and replace cache for this species to maintain fresh cache representation
-                dao.clearObservationsForSpecies(species.id)
-                dao.insertObservations(allFresh)
-                Log.d(TAG, "Fetched and cached ${allFresh.size} observations (iNat: ${freshObservations.size}, ALA: ${alaObs.size}, GBIF: ${gbifObs.size}) in Room.")
-            }
+            // Replace atomically so this area's result (even an empty one) fully
+            // supersedes the previous area's cache without a partial state.
+            dao.replaceObservationsForSpecies(species.id, allFresh)
+            dao.upsertObservationCacheArea(
+                ObservationCacheArea(
+                    speciesId = species.id,
+                    centerLat = lat,
+                    centerLng = lng,
+                    radiusKm = radiusKm,
+                    cachedAt = now
+                )
+            )
+            Log.d(TAG, "Fetched and cached ${allFresh.size} observations (iNat: ${freshObservations.size}, ALA: ${alaObs.size}, GBIF: ${gbifObs.size}) in Room.")
 
             // Return observations filtered by radius
             return@withContext allFresh.filter {
@@ -1216,21 +1228,25 @@ class FungiRepository(
         if (query.isBlank()) return@withContext null
         if (geocodingApi != null && googleApiKey.isNotBlank()) {
             try {
-                val resp = geocodingApi.geocode(query, googleApiKey)
-                val result = resp.results?.firstOrNull()
+                val resp = withTimeoutOrNull(GEOCODER_TIMEOUT_MS) {
+                    geocodingApi.geocode(query, googleApiKey)
+                }
+                val result = resp?.results?.firstOrNull()
                 val loc = result?.geometry?.location
-                if (resp.status == "OK" && loc?.lat != null && loc.lng != null) {
+                if (resp?.status == "OK" && loc?.lat != null && loc.lng != null) {
                     return@withContext GeoPlace(loc.lat, loc.lng, result.formattedAddress ?: query)
                 }
-                Log.w(TAG, "Google geocoding returned status=${resp.status}; falling back")
+                Log.w(TAG, "Google geocoding returned status=${resp?.status}; falling back")
             } catch (e: Exception) {
                 Log.w(TAG, "Google geocoding failed, trying device geocoder: ${e.message}")
             }
         }
         try {
-            val geocoder = android.location.Geocoder(context, Locale.getDefault())
-            @Suppress("DEPRECATION")
-            val res = geocoder.getFromLocationName(query, 1)
+            val res = withTimeoutOrNull(GEOCODER_TIMEOUT_MS) {
+                val geocoder = android.location.Geocoder(context, Locale.getDefault())
+                @Suppress("DEPRECATION")
+                geocoder.getFromLocationName(query, 1)
+            }
             val a = res?.firstOrNull()
             if (a != null) GeoPlace(a.latitude, a.longitude, a.locality ?: a.subAdminArea ?: a.adminArea ?: query) else null
         } catch (e: Exception) {
@@ -1247,9 +1263,11 @@ class FungiRepository(
     suspend fun reverseGeocode(lat: Double, lng: Double): String? = withContext(Dispatchers.IO) {
         if (geocodingApi != null && googleApiKey.isNotBlank()) {
             try {
-                val resp = geocodingApi.reverseGeocode(String.format(Locale.US, "%.6f,%.6f", lat, lng), googleApiKey)
-                val label = resp.results?.firstOrNull()?.formattedAddress
-                if (resp.status == "OK" && !label.isNullOrBlank()) {
+                val resp = withTimeoutOrNull(GEOCODER_TIMEOUT_MS) {
+                    geocodingApi.reverseGeocode(String.format(Locale.US, "%.6f,%.6f", lat, lng), googleApiKey)
+                }
+                val label = resp?.results?.firstOrNull()?.formattedAddress
+                if (resp?.status == "OK" && !label.isNullOrBlank()) {
                     // Trim a verbose address to its first two components.
                     return@withContext label.split(",").take(2).joinToString(",").trim()
                 }
@@ -1258,9 +1276,11 @@ class FungiRepository(
             }
         }
         try {
-            val geocoder = android.location.Geocoder(context, Locale.getDefault())
-            @Suppress("DEPRECATION")
-            val a = geocoder.getFromLocation(lat, lng, 1)?.firstOrNull()
+            val a = withTimeoutOrNull(GEOCODER_TIMEOUT_MS) {
+                val geocoder = android.location.Geocoder(context, Locale.getDefault())
+                @Suppress("DEPRECATION")
+                geocoder.getFromLocation(lat, lng, 1)?.firstOrNull()
+            }
             if (a != null) {
                 val city = a.locality ?: a.subAdminArea ?: a.adminArea ?: ""
                 val country = a.countryCode ?: a.countryName ?: ""
@@ -1314,6 +1334,7 @@ class FungiRepository(
      */
     suspend fun clearCaches() = withContext(Dispatchers.IO) {
         dao.clearAllCachedObservations()
+        dao.clearAllObservationCacheAreas()
         // Also empty every in-memory cache so a recompute actually re-fetches.
         elevCache.evictAll()
         envCache.evictAll()
@@ -1324,6 +1345,19 @@ class FungiRepository(
         recordCountCache.evictAll()
         globalSearchCache.evictAll()
         speciesPhotoCache.evictAll()
+    }
+
+    private fun ObservationCacheArea.covers(
+        targetLat: Double,
+        targetLng: Double,
+        targetRadiusKm: Double
+    ): Boolean {
+        val centerDistanceKm =
+            calculateDistanceMeters(centerLat, centerLng, targetLat, targetLng) / METERS_PER_KM
+        // This checks full circle containment, not just centre proximity: the
+        // requested circle is reusable only when distance-between-centres plus
+        // requested radius stays within the radius of the cached fetch.
+        return centerDistanceKm + targetRadiusKm <= radiusKm
     }
 
     /**

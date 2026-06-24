@@ -3,6 +3,7 @@ package com.example
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -10,7 +11,9 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
+import com.google.android.gms.location.Priority
 import com.google.android.gms.location.LocationServices
+import com.google.android.gms.tasks.CancellationTokenSource
 import androidx.lifecycle.ViewModelProvider
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
@@ -256,11 +259,35 @@ fun MainWorkflowLayout(
  *  Guarded against the SecurityException race if permission is revoked mid-call. */
 private fun fetchDeviceLocation(context: android.content.Context, viewModel: FungiViewModel) {
     try {
-        LocationServices.getFusedLocationProviderClient(context).lastLocation
-            .addOnSuccessListener { loc ->
-                if (loc != null) viewModel.mapCenter.value = Pair(loc.latitude, loc.longitude)
+        val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
+        fun updateMapCenter(loc: android.location.Location?) {
+            if (loc != null) {
+                viewModel.setMapCenter(loc.latitude, loc.longitude)
+            } else {
+                Log.w("MainActivity", "Location lookup completed without a device fix.")
             }
+        }
+        fun requestFreshLocation(fallback: android.location.Location? = null) {
+            val tokenSource = CancellationTokenSource()
+            fusedLocationClient.getCurrentLocation(
+                Priority.PRIORITY_HIGH_ACCURACY,
+                tokenSource.token
+            )
+                .addOnSuccessListener { fresh -> updateMapCenter(fresh ?: fallback) }
+                .addOnFailureListener { updateMapCenter(fallback) }
+        }
+        fusedLocationClient.lastLocation
+            .addOnSuccessListener { loc ->
+                val isFresh = loc != null &&
+                    (System.currentTimeMillis() - loc.time) <= FRESH_LOCATION_MAX_AGE_MS
+                if (isFresh) updateMapCenter(loc) else requestFreshLocation(loc)
+            }
+            .addOnFailureListener { requestFreshLocation() }
     } catch (se: SecurityException) {
         // Permission revoked between check and use — leave the map on its default.
     }
 }
+
+// Treat older fixes as stale so launch-centering prefers a current GPS reading
+// instead of silently reusing a minutes-old cached location from elsewhere.
+private const val FRESH_LOCATION_MAX_AGE_MS = 2 * 60 * 1000L

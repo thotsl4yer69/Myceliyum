@@ -37,6 +37,15 @@ data class Observation(
     val cachedAt: Long = System.currentTimeMillis() // for TTL check
 )
 
+@Entity(tableName = "observation_cache_areas")
+data class ObservationCacheArea(
+    @PrimaryKey val speciesId: String,
+    val centerLat: Double,
+    val centerLng: Double,
+    val radiusKm: Double,
+    val cachedAt: Long = System.currentTimeMillis()
+)
+
 /**
  * A reference photo with its attribution/credit line (iNaturalist taxon
  * photos are CC-licensed and require attribution). Bundled images have no
