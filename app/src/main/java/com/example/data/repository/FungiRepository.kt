@@ -483,12 +483,14 @@ class FungiRepository(
 
             val allFresh = freshObservations + alaObs + gbifObs
 
-            // Save the queried area even when the result is empty: that prevents a
-            // previous area's observations from masquerading as a fresh "no data"
-            // result after the user pans elsewhere.
-            dao.clearObservationsForSpecies(species.id)
             if (allFresh.isNotEmpty()) {
+                dao.clearObservationsForSpecies(species.id)
                 dao.insertObservations(allFresh)
+            } else {
+                // Intentionally clear here too: an empty fetch for this area must
+                // replace any previous area's observations so panning can't surface
+                // stale records as if they belonged to the new search.
+                dao.clearObservationsForSpecies(species.id)
             }
             dao.upsertObservationCacheArea(
                 ObservationCacheArea(

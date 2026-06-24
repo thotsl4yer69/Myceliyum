@@ -263,12 +263,19 @@ private fun fetchDeviceLocation(context: android.content.Context, viewModel: Fun
             if (loc != null) viewModel.setMapCenter(loc.latitude, loc.longitude)
         }
         fun requestFreshLocation(fallback: android.location.Location? = null) {
+            val tokenSource = CancellationTokenSource()
             fusedLocationClient.getCurrentLocation(
                 Priority.PRIORITY_HIGH_ACCURACY,
-                CancellationTokenSource().token
+                tokenSource.token
             )
-                .addOnSuccessListener { fresh -> updateMapCenter(fresh ?: fallback) }
-                .addOnFailureListener { updateMapCenter(fallback) }
+                .addOnSuccessListener { fresh ->
+                    tokenSource.cancel()
+                    updateMapCenter(fresh ?: fallback)
+                }
+                .addOnFailureListener {
+                    tokenSource.cancel()
+                    updateMapCenter(fallback)
+                }
         }
         fusedLocationClient.lastLocation
             .addOnSuccessListener { loc ->
