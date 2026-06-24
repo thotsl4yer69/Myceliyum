@@ -259,7 +259,7 @@ fun MainWorkflowLayout(
 private fun fetchDeviceLocation(context: android.content.Context, viewModel: FungiViewModel) {
     try {
         val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
-        fun publishLocation(loc: android.location.Location?) {
+        fun updateMapCenter(loc: android.location.Location?) {
             if (loc != null) viewModel.setMapCenter(loc.latitude, loc.longitude)
         }
         fun requestFreshLocation(fallback: android.location.Location? = null) {
@@ -267,14 +267,14 @@ private fun fetchDeviceLocation(context: android.content.Context, viewModel: Fun
                 Priority.PRIORITY_HIGH_ACCURACY,
                 CancellationTokenSource().token
             )
-                .addOnSuccessListener { fresh -> publishLocation(fresh ?: fallback) }
-                .addOnFailureListener { publishLocation(fallback) }
+                .addOnSuccessListener { fresh -> updateMapCenter(fresh ?: fallback) }
+                .addOnFailureListener { updateMapCenter(fallback) }
         }
         fusedLocationClient.lastLocation
             .addOnSuccessListener { loc ->
                 val isFresh = loc != null &&
                     (System.currentTimeMillis() - loc.time) <= FRESH_LOCATION_MAX_AGE_MS
-                if (isFresh) publishLocation(loc) else requestFreshLocation(loc)
+                if (isFresh) updateMapCenter(loc) else requestFreshLocation(loc)
             }
             .addOnFailureListener { requestFreshLocation() }
     } catch (se: SecurityException) {

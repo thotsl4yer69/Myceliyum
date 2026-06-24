@@ -483,7 +483,9 @@ class FungiRepository(
 
             val allFresh = freshObservations + alaObs + gbifObs
 
-            // Save new network result to local Room Cache
+            // Save the queried area even when the result is empty: that prevents a
+            // previous area's observations from masquerading as a fresh "no data"
+            // result after the user pans elsewhere.
             dao.clearObservationsForSpecies(species.id)
             if (allFresh.isNotEmpty()) {
                 dao.insertObservations(allFresh)
@@ -1354,6 +1356,9 @@ class FungiRepository(
     ): Boolean {
         val centerDistanceKm =
             calculateDistanceMeters(centerLat, centerLng, targetLat, targetLng) / 1000.0
+        // The requested search circle is reusable only when it fits entirely
+        // inside the cached circle: distance between centres + requested radius
+        // must not exceed the radius of the cached fetch.
         return centerDistanceKm + targetRadiusKm <= radiusKm
     }
 
