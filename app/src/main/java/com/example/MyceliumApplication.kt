@@ -15,6 +15,7 @@ import com.example.data.repository.FungiRepository
 import org.osmdroid.config.Configuration as OsmConfig
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.logging.HttpLoggingInterceptor
@@ -107,17 +108,7 @@ class MyceliumApplication : Application() {
             .trim()
             .takeIf { it.isNotBlank() }
             ?.let { rawBaseUrl ->
-                val parsedBaseUrl = rawBaseUrl.toHttpUrlOrNull() ?: if (!rawBaseUrl.endsWith("/")) {
-                    val retried = "$rawBaseUrl/".toHttpUrlOrNull()
-                    if (retried != null) {
-                        Log.i(TAG, "BACKEND_BASE_URL missing trailing slash; normalizing at runtime.")
-                    }
-                    retried
-                } else null
-                if (parsedBaseUrl == null) {
-                    Log.w(TAG, "Ignoring invalid BACKEND_BASE_URL configuration.")
-                    return@let null
-                }
+                val parsedBaseUrl = parseBackendBaseUrl(rawBaseUrl) ?: return@let null
                 runCatching {
                     Retrofit.Builder()
                         .baseUrl(parsedBaseUrl)
@@ -135,6 +126,22 @@ class MyceliumApplication : Application() {
             overpassApi, envLayersApi, BuildConfig.BACKEND_TOKEN,
             geocodingApi, BuildConfig.GOOGLE_API_KEY
         )
+    }
+
+    private fun parseBackendBaseUrl(rawBaseUrl: String): HttpUrl? {
+        rawBaseUrl.toHttpUrlOrNull()?.let { return it }
+        if (!rawBaseUrl.endsWith("/")) {
+            val normalizedBaseUrl = "$rawBaseUrl/"
+            val retried = normalizedBaseUrl.toHttpUrlOrNull()
+            if (retried != null) {
+                Log.i(TAG, "BACKEND_BASE_URL missing trailing slash; normalized host=${retried.host}")
+            } else {
+                Log.w(TAG, "Ignoring invalid BACKEND_BASE_URL configuration.")
+            }
+            return retried
+        }
+        Log.w(TAG, "Ignoring invalid BACKEND_BASE_URL configuration.")
+        return null
     }
 
     companion object {
