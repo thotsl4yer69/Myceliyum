@@ -108,15 +108,16 @@ class MyceliumApplication : Application() {
             .takeIf { it.isNotBlank() }
             ?.let { rawBaseUrl ->
                 val parsedBaseUrl = rawBaseUrl.toHttpUrlOrNull() ?: run {
-                    val baseUrlWithSlash = if (rawBaseUrl.endsWith("/")) rawBaseUrl else "$rawBaseUrl/"
+                    val hadMissingSlash = !rawBaseUrl.endsWith("/")
+                    val baseUrlWithSlash = if (hadMissingSlash) "$rawBaseUrl/" else rawBaseUrl
                     val retried = baseUrlWithSlash.toHttpUrlOrNull()
-                    if (retried != null && baseUrlWithSlash != rawBaseUrl) {
+                    if (retried != null && hadMissingSlash) {
                         Log.i(TAG, "BACKEND_BASE_URL missing trailing slash; normalizing at runtime.")
                     }
                     retried
                 }
                 if (parsedBaseUrl == null) {
-                    Log.w(TAG, "Ignoring invalid BACKEND_BASE_URL: $rawBaseUrl")
+                    Log.w(TAG, "Ignoring invalid BACKEND_BASE_URL configuration.")
                     return@let null
                 }
                 runCatching {
@@ -127,7 +128,7 @@ class MyceliumApplication : Application() {
                         .build()
                         .create(EnvLayersApi::class.java)
                 }.onFailure { err ->
-                    Log.w(TAG, "Ignoring invalid BACKEND_BASE_URL: $rawBaseUrl", err)
+                    Log.w(TAG, "Ignoring invalid BACKEND_BASE_URL configuration.", err)
                 }.getOrNull()
             }
 
