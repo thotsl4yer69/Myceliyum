@@ -107,12 +107,14 @@ class MyceliumApplication : Application() {
             .trim()
             .takeIf { it.isNotBlank() }
             ?.let { rawBaseUrl ->
-                val directBaseUrl = rawBaseUrl.toHttpUrlOrNull()
-                val slashRetriedBaseUrl = if (directBaseUrl == null) "$rawBaseUrl/".toHttpUrlOrNull() else null
-                if (directBaseUrl == null && slashRetriedBaseUrl != null) {
-                    Log.i(TAG, "BACKEND_BASE_URL missing trailing slash; normalizing at runtime.")
+                val parsedBaseUrl = rawBaseUrl.toHttpUrlOrNull() ?: run {
+                    val baseUrlWithSlash = if (rawBaseUrl.endsWith("/")) rawBaseUrl else "$rawBaseUrl/"
+                    val retried = baseUrlWithSlash.toHttpUrlOrNull()
+                    if (retried != null && baseUrlWithSlash != rawBaseUrl) {
+                        Log.i(TAG, "BACKEND_BASE_URL missing trailing slash; normalizing at runtime.")
+                    }
+                    retried
                 }
-                val parsedBaseUrl = directBaseUrl ?: slashRetriedBaseUrl
                 if (parsedBaseUrl == null) {
                     Log.w(TAG, "Ignoring invalid BACKEND_BASE_URL: $rawBaseUrl")
                     return@let null
