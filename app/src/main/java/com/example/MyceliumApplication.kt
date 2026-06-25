@@ -107,10 +107,14 @@ class MyceliumApplication : Application() {
             .trim()
             .takeIf { it.isNotBlank() }
             ?.let { rawBaseUrl ->
-                val parsedBaseUrl =
-                    rawBaseUrl.toHttpUrlOrNull() ?: "$rawBaseUrl/".toHttpUrlOrNull()
+                val directBaseUrl = rawBaseUrl.toHttpUrlOrNull()
+                val slashRetriedBaseUrl = if (directBaseUrl == null) "$rawBaseUrl/".toHttpUrlOrNull() else null
+                if (directBaseUrl == null && slashRetriedBaseUrl != null) {
+                    Log.i(TAG, "BACKEND_BASE_URL missing trailing slash; normalizing at runtime.")
+                }
+                val parsedBaseUrl = directBaseUrl ?: slashRetriedBaseUrl
                 if (parsedBaseUrl == null) {
-                    Log.w("MyceliumApplication", "Ignoring invalid BACKEND_BASE_URL: $rawBaseUrl")
+                    Log.w(TAG, "Ignoring invalid BACKEND_BASE_URL: $rawBaseUrl")
                     return@let null
                 }
                 runCatching {
@@ -121,7 +125,7 @@ class MyceliumApplication : Application() {
                         .build()
                         .create(EnvLayersApi::class.java)
                 }.onFailure { err ->
-                    Log.w("MyceliumApplication", "Ignoring invalid BACKEND_BASE_URL: $rawBaseUrl", err)
+                    Log.w(TAG, "Ignoring invalid BACKEND_BASE_URL: $rawBaseUrl", err)
                 }.getOrNull()
             }
 
@@ -130,5 +134,9 @@ class MyceliumApplication : Application() {
             overpassApi, envLayersApi, BuildConfig.BACKEND_TOKEN,
             geocodingApi, BuildConfig.GOOGLE_API_KEY
         )
+    }
+
+    companion object {
+        private const val TAG = "MyceliumApplication"
     }
 }
