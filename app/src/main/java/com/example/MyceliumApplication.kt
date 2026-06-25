@@ -99,16 +99,22 @@ class MyceliumApplication : Application() {
             .create(GeocodingApi::class.java)
 
         // Optional Earth Engine backend — only built when a base URL is set,
-        // so the app works keylessly out of the box.
+        // so the app works keylessly out of the box. Invalid/malformed values
+        // are ignored so startup never crashes because of backend config.
         val envLayersApi: EnvLayersApi? = BuildConfig.BACKEND_BASE_URL
+            .trim()
             .takeIf { it.isNotBlank() }
-            ?.let { baseUrl ->
-                Retrofit.Builder()
-                    .baseUrl(baseUrl)
-                    .client(okHttpClient)
-                    .addConverterFactory(MoshiConverterFactory.create(moshi))
-                    .build()
-                    .create(EnvLayersApi::class.java)
+            ?.let { rawBaseUrl ->
+                val normalizedBaseUrl =
+                    if (rawBaseUrl.endsWith("/")) rawBaseUrl else "$rawBaseUrl/"
+                runCatching {
+                    Retrofit.Builder()
+                        .baseUrl(normalizedBaseUrl)
+                        .client(okHttpClient)
+                        .addConverterFactory(MoshiConverterFactory.create(moshi))
+                        .build()
+                        .create(EnvLayersApi::class.java)
+                }.getOrNull()
             }
 
         repository = FungiRepository(
