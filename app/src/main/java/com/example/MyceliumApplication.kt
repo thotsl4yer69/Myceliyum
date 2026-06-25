@@ -1,6 +1,7 @@
 package com.example
 
 import android.app.Application
+import android.util.Log
 import com.example.data.local.AppDatabase
 import com.example.data.local.SettingsStore
 import com.example.data.remote.ALAApi
@@ -114,6 +115,8 @@ class MyceliumApplication : Application() {
                         .addConverterFactory(MoshiConverterFactory.create(moshi))
                         .build()
                         .create(EnvLayersApi::class.java)
+                }.onFailure { err ->
+                    Log.w("MyceliumApplication", "Ignoring invalid BACKEND_BASE_URL: $normalizedBaseUrl", err)
                 }.getOrNull()
             }
 
