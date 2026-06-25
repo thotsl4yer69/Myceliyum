@@ -16,6 +16,7 @@ import org.osmdroid.config.Configuration as OsmConfig
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import okhttp3.OkHttpClient
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
@@ -106,17 +107,21 @@ class MyceliumApplication : Application() {
             .trim()
             .takeIf { it.isNotBlank() }
             ?.let { rawBaseUrl ->
-                val normalizedBaseUrl =
-                    if (rawBaseUrl.endsWith("/")) rawBaseUrl else "$rawBaseUrl/"
+                val parsedBaseUrl =
+                    rawBaseUrl.toHttpUrlOrNull() ?: "$rawBaseUrl/".toHttpUrlOrNull()
+                if (parsedBaseUrl == null) {
+                    Log.w("MyceliumApplication", "Ignoring invalid BACKEND_BASE_URL: $rawBaseUrl")
+                    return@let null
+                }
                 runCatching {
                     Retrofit.Builder()
-                        .baseUrl(normalizedBaseUrl)
+                        .baseUrl(parsedBaseUrl)
                         .client(okHttpClient)
                         .addConverterFactory(MoshiConverterFactory.create(moshi))
                         .build()
                         .create(EnvLayersApi::class.java)
                 }.onFailure { err ->
-                    Log.w("MyceliumApplication", "Ignoring invalid BACKEND_BASE_URL: $normalizedBaseUrl", err)
+                    Log.w("MyceliumApplication", "Ignoring invalid BACKEND_BASE_URL: $rawBaseUrl", err)
                 }.getOrNull()
             }
 
