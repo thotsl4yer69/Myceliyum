@@ -117,7 +117,7 @@ class MyceliumApplication : Application() {
                         .build()
                         .create(EnvLayersApi::class.java)
                 }.onFailure { err ->
-                    Log.w(TAG, "Ignoring invalid BACKEND_BASE_URL configuration.", err)
+                    Log.w(TAG, INVALID_BACKEND_URL_MESSAGE, err)
                 }.getOrNull()
             }
 
@@ -129,22 +129,24 @@ class MyceliumApplication : Application() {
     }
 
     private fun parseBackendBaseUrl(rawBaseUrl: String): HttpUrl? {
-        rawBaseUrl.toHttpUrlOrNull()?.let { return it }
-        if (!rawBaseUrl.endsWith("/")) {
+        val direct = rawBaseUrl.toHttpUrlOrNull()
+        if (direct != null) return direct
+
+        val parsed = if (!rawBaseUrl.endsWith("/")) {
             val normalizedBaseUrl = "$rawBaseUrl/"
             val retried = normalizedBaseUrl.toHttpUrlOrNull()
             if (retried != null) {
-                Log.i(TAG, "BACKEND_BASE_URL missing trailing slash; normalized host=${retried.host}")
-            } else {
-                Log.w(TAG, "Ignoring invalid BACKEND_BASE_URL configuration.")
+                Log.i(TAG, "BACKEND_BASE_URL missing trailing slash; auto-normalized successfully.")
             }
-            return retried
-        }
-        Log.w(TAG, "Ignoring invalid BACKEND_BASE_URL configuration.")
-        return null
+            retried
+        } else null
+
+        if (parsed == null) Log.w(TAG, INVALID_BACKEND_URL_MESSAGE)
+        return parsed
     }
 
     companion object {
         private const val TAG = "MyceliumApplication"
+        private const val INVALID_BACKEND_URL_MESSAGE = "Ignoring invalid BACKEND_BASE_URL configuration."
     }
 }
