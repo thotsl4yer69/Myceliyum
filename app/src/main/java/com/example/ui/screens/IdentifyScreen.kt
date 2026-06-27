@@ -766,7 +766,9 @@ private fun imageUriToBase64(context: Context, uri: Uri): String {
     // Fine-tune to exactly maxSize on the longest side
     val scale = minOf(maxSize.toFloat() / bitmap.width, maxSize.toFloat() / bitmap.height, 1f)
     val scaledBitmap = if (scale < 1f) {
-        Bitmap.createScaledBitmap(bitmap, (bitmap.width * scale).toInt(), (bitmap.height * scale).toInt(), true)
+        val scaledWidth = (bitmap.width * scale).toInt().coerceAtLeast(1)
+        val scaledHeight = (bitmap.height * scale).toInt().coerceAtLeast(1)
+        Bitmap.createScaledBitmap(bitmap, scaledWidth, scaledHeight, true)
     } else bitmap
 
     val outputStream = ByteArrayOutputStream()

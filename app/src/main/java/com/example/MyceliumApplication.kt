@@ -1,6 +1,7 @@
 package com.example
 
 import android.app.Application
+import android.util.Log
 import com.example.data.local.AppDatabase
 import com.example.data.local.SettingsStore
 import com.example.data.remote.ALAApi
@@ -14,7 +15,9 @@ import com.example.data.repository.FungiRepository
 import org.osmdroid.config.Configuration as OsmConfig
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
@@ -99,16 +102,23 @@ class MyceliumApplication : Application() {
             .create(GeocodingApi::class.java)
 
         // Optional Earth Engine backend — only built when a base URL is set,
-        // so the app works keylessly out of the box.
+        // so the app works keylessly out of the box. Invalid/malformed values
+        // are ignored so startup never crashes because of backend config.
         val envLayersApi: EnvLayersApi? = BuildConfig.BACKEND_BASE_URL
+            .trim()
             .takeIf { it.isNotBlank() }
-            ?.let { baseUrl ->
-                Retrofit.Builder()
-                    .baseUrl(baseUrl)
-                    .client(okHttpClient)
-                    .addConverterFactory(MoshiConverterFactory.create(moshi))
-                    .build()
-                    .create(EnvLayersApi::class.java)
+            ?.let { rawBaseUrl ->
+                val parsedBaseUrl = parseBackendBaseUrl(rawBaseUrl) ?: return@let null
+                runCatching {
+                    Retrofit.Builder()
+                        .baseUrl(parsedBaseUrl)
+                        .client(okHttpClient)
+                        .addConverterFactory(MoshiConverterFactory.create(moshi))
+                        .build()
+                        .create(EnvLayersApi::class.java)
+                }.onFailure { err ->
+                    Log.w(TAG, INVALID_BACKEND_URL_MESSAGE, err)
+                }.getOrNull()
             }
 
         repository = FungiRepository(
@@ -116,5 +126,27 @@ class MyceliumApplication : Application() {
             overpassApi, envLayersApi, BuildConfig.BACKEND_TOKEN,
             geocodingApi, BuildConfig.GOOGLE_API_KEY
         )
+    }
+
+    private fun parseBackendBaseUrl(rawBaseUrl: String): HttpUrl? {
+        val direct = rawBaseUrl.toHttpUrlOrNull()
+        if (direct != null) return direct
+
+        val parsed = if (!rawBaseUrl.endsWith("/")) {
+            val normalizedBaseUrl = "$rawBaseUrl/"
+            val retried = normalizedBaseUrl.toHttpUrlOrNull()
+            if (retried != null) {
+                Log.i(TAG, "BACKEND_BASE_URL missing trailing slash; auto-normalized successfully.")
+            }
+            retried
+        } else null
+
+        if (parsed == null) Log.w(TAG, INVALID_BACKEND_URL_MESSAGE)
+        return parsed
+    }
+
+    companion object {
+        private const val TAG = "MyceliumApplication"
+        private const val INVALID_BACKEND_URL_MESSAGE = "Ignoring invalid BACKEND_BASE_URL configuration."
     }
 }
