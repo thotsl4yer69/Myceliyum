@@ -4,12 +4,8 @@ on:
   pull_request:
   push:
     branches: [main]
-  # Allow running the unit tests + debug build on demand (any branch) from the
-  # Actions tab or the API — handy when an automated PR's pushes don't spawn a
-  # pull_request run (GitHub suppresses workflow runs for app-token events).
   workflow_dispatch:
 
-# Cancel in-progress runs for the same ref to save CI minutes.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -38,27 +34,49 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      # The debug build type signs with ${rootDir}/debug.keystore, which is
-      # git-ignored. Restore it from the committed base64 copy so the build
-      # can run in CI.
-      - name: Restore debug keystore
-        run: base64 --decode debug.keystore.base64 > debug.keystore
+      - name: Restore private stable debug keystore when configured
+        env:
+          DEBUG_KEYSTORE_BASE64: ${{ secrets.DEBUG_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$DEBUG_KEYSTORE_BASE64" ]; then
+            printf '%s' "$DEBUG_KEYSTORE_BASE64" | base64 --decode > debug.keystore
+            chmod 600 debug.keystore
+            echo "Stable debug signing identity restored from Actions secrets."
+          else
+            echo "No stable debug keystore secret available; Gradle will use the runner-local debug identity."
+          fi
+
+      - name: Require stable signing for rolling main builds
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          DEBUG_KEYSTORE_BASE64: ${{ secrets.DEBUG_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$DEBUG_KEYSTORE_BASE64" ]; then
+            echo "ERROR: DEBUG_KEYSTORE_BASE64 is required before publishing rolling APKs from main."
+            echo "Generate a NEW signing identity; do not reuse the previously committed debug key."
+            exit 1
+          fi
 
       - name: Make gradlew executable
         run: chmod +x gradlew
 
       - name: Run unit tests
+        env:
+          DEBUG_KEYSTORE_PASSWORD: ${{ secrets.DEBUG_KEYSTORE_PASSWORD }}
+          DEBUG_KEY_ALIAS: ${{ secrets.DEBUG_KEY_ALIAS }}
+          DEBUG_KEY_PASSWORD: ${{ secrets.DEBUG_KEY_PASSWORD }}
         run: ./gradlew testDebugUnitTest --stacktrace
 
       - name: Assemble debug APK
         env:
           BUILD_NUMBER: ${{ github.run_number }}
-          # Earth Engine env-layers backend. When these repo secrets are set
-          # (after deploying backend/ to Cloud Run), the rolling APK ships with
-          # real satellite canopy/NDVI/land-cover. Blank → free OSM land-use
-          # fallback. Safe to leave unset.
-          BACKEND_BASE_URL: ${{ secrets.BACKEND_BASE_URL }}
-          BACKEND_TOKEN: ${{ secrets.BACKEND_TOKEN }}
+          DEBUG_KEYSTORE_PASSWORD: ${{ secrets.DEBUG_KEYSTORE_PASSWORD }}
+          DEBUG_KEY_ALIAS: ${{ secrets.DEBUG_KEY_ALIAS }}
+          DEBUG_KEY_PASSWORD: ${{ secrets.DEBUG_KEY_PASSWORD }}
+          # Deliberately do NOT inject BACKEND_TOKEN into a public APK. A static
+          # token compiled into an Android application is extractable and cannot
+          # protect a billable backend as a true secret. Public builds use the
+          # app's keyless/free fallback unless a safer auth design is added.
         run: ./gradlew assembleDebug --stacktrace
 
       - name: Upload debug APK
@@ -77,13 +95,8 @@ jobs:
           path: app/build/reports/tests/
           if-no-files-found: ignore
 
-  # Keep the website's "Download APK" button working: every push to main
-  # refreshes a rolling "latest" GitHub release with the freshly built APK
-  # (the site links to /releases/latest). The same release also carries a
-  # machine-readable version.json that the app's in-app update check reads to
-  # decide whether a newer build is available.
   publish-latest:
-    name: Publish rolling "latest" release
+    name: Publish rolling latest release
     needs: build
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -91,8 +104,6 @@ jobs:
       contents: write
 
     steps:
-      # Checkout is needed only to read versionName from the Gradle config for
-      # the published version.json.
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -112,20 +123,19 @@ jobs:
           {
             "versionCode": ${BUILD_NUMBER},
             "versionName": "${VERSION_NAME}",
-            "notes": "Rolling release — newest debug APK from main. Built from ${GITHUB_SHA::7} (run #${BUILD_NUMBER}).",
+            "notes": "Rolling development release from ${GITHUB_SHA::7} (run #${BUILD_NUMBER}).",
             "apkUrl": "https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/${APK_NAME}"
           }
           EOF
-          echo "Generated version.json:" && cat version.json
 
-      - name: Create or refresh the "latest" release
+      - name: Create or refresh latest release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release view latest -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
             gh release create latest -R "$GITHUB_REPOSITORY" \
               --title "Latest field build" \
-              --notes "Rolling release — newest debug APK from main."
+              --notes "Rolling development release from main."
           gh release upload latest *.apk version.json -R "$GITHUB_REPOSITORY" --clobber
           gh release edit latest -R "$GITHUB_REPOSITORY" \
-            --notes "Rolling release — newest debug APK from main. Built from ${GITHUB_SHA::7} (run #${{ github.run_number }})."
+            --notes "Rolling development release from ${GITHUB_SHA::7} (run #${{ github.run_number }})."
