@@ -15,6 +15,8 @@
 .cxx
 local.properties
 .env
+.env.local
+.env.*.local
 debug.keystore
 
 # APK / build artifacts
@@ -29,17 +31,29 @@ build.log
 __pycache__/
 *.pyc
 
-# wrangler files
+# Wrangler files
 .wrangler
 .dev.vars*
 !.dev.vars.example
 !.env.example
 
-# Release signing keystore + passwords are kept OUTSIDE the repo and must
-# never be committed (release keystore lives in ~/.secrets/myceliyum/).
+# Signing keys / encoded signing material — always external to the repository
 *.jks
 *.keystore
-keystore*.base64*
+*.p12
+*.pfx
+*.pem
+*.key
+*.jks.base64
+*.keystore.base64
+*.jks.b64
+*.keystore.b64
+*keystore*.base64*
+*keystore*.b64*
+
+# Local backups / archives
+*.bak
+*.zip
 
 # OMC orchestration state
 .omc/
