@@ -23,18 +23,18 @@ android {
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
     // Optional build-time values are read from local.properties / environment
-    // only. Never place a real API key or backend token in source code: Android
-    // buildConfig values are recoverable from the APK.
+    // only. Never place a real credential in source code. Also remember that
+    // BuildConfig values are recoverable from a distributed APK: they are
+    // configuration, not a secure secret store.
     val localProps = Properties()
     val localPropsFile = rootProject.file("local.properties")
     if (localPropsFile.exists()) {
       localPropsFile.inputStream().use { localProps.load(it) }
     }
 
-    // Google API key — optional. Blank falls back to the device/local path where
-    // supported. CI can supply GOOGLE_API_KEY as a GitHub Actions secret.
-    // Any key used in an Android app should also be restricted in Google Cloud to
-    // the required API(s) and the intended Android package/signing certificate.
+    // Optional Google API key. Any key distributed in an Android APK is
+    // extractable and must be protected with provider-supported restrictions,
+    // quotas and API scoping. Blank keeps the Google geocoding path disabled.
     val googleApiKey =
       localProps.getProperty("GOOGLE_API_KEY")
         ?: System.getenv("GOOGLE_API_KEY")
@@ -45,8 +45,11 @@ android {
       "\"${googleApiKey}\""
     )
 
-    // Earth Engine/backend values are also injected at build time. Blank values
-    // keep the optional backend disabled.
+    // Optional private-development environmental backend. BACKEND_TOKEN is a
+    // lightweight abuse-deterrence value only: if compiled into an APK it is
+    // extractable and MUST NOT be treated as production authentication. Public
+    // CI/release workflows intentionally leave these blank and use the app's
+    // free/keyless fallback until a client-safe auth design exists.
     val backendBaseUrl =
       localProps.getProperty("BACKEND_BASE_URL")
         ?: System.getenv("BACKEND_BASE_URL")
@@ -73,12 +76,12 @@ android {
       val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
       storeFile = file(keystorePath)
       storePassword = System.getenv("STORE_PASSWORD")
-      keyAlias = "upload"
+      keyAlias = System.getenv("KEY_ALIAS") ?: "upload"
       keyPassword = System.getenv("KEY_PASSWORD")
     }
 
     // A stable debug signing key may be restored locally/within CI when needed.
-    // The key itself must not be committed to this public repository.
+    // The key itself must never be committed to this public repository.
     getByName("debug") {
       val stableDebugKeystore = file("${rootDir}/debug.keystore")
       if (stableDebugKeystore.exists()) {
@@ -94,7 +97,8 @@ android {
     release {
       isMinifyEnabled = false
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-      // Release signing only kicks in when the keystore + env vars are provided.
+      // Release signing is configured only when CI/local environment supplies the
+      // required private credentials. The release workflow validates them first.
       if (System.getenv("STORE_PASSWORD") != null) {
         signingConfig = signingConfigs.getByName("release")
       }
