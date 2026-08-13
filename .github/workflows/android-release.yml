@@ -1,9 +1,9 @@
 name: Android Release Build
 
-# Manually triggered build that produces an installable release APK.
-# If signing secrets are configured (see below) the APK is release-signed and
-# upload-ready; otherwise it falls back to a debug-signed APK that still
-# installs on a real device for testing.
+# Manually triggered build for an installable RELEASE-SIGNED APK.
+# Release signing is mandatory: this workflow fails closed if the required
+# signing secrets are not configured. It never falls back to a public/committed
+# debug signing identity.
 on:
   workflow_dispatch:
 
@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   release-apk:
-    name: Build release APK
+    name: Build signed release APK
     runs-on: ubuntu-latest
 
     steps:
@@ -31,47 +31,55 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Make gradlew executable
-        run: chmod +x gradlew
+      - name: Validate release signing secrets
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+        run: |
+          missing=0
+          for name in RELEASE_KEYSTORE_BASE64 RELEASE_STORE_PASSWORD RELEASE_KEY_PASSWORD RELEASE_KEY_ALIAS; do
+            if [ -z "${!name}" ]; then
+              echo "ERROR: required secret $name is not configured."
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
 
-      # Optional release signing. Configure these repository secrets to get a
-      # release-signed APK:
-      #   RELEASE_KEYSTORE_BASE64  - base64 of your .jks keystore
-      #   RELEASE_STORE_PASSWORD, RELEASE_KEY_PASSWORD, RELEASE_KEY_ALIAS
-      - name: Decode release keystore (if configured)
+      - name: Decode release keystore
         id: keystore
         env:
           RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
         run: |
-          if [ -n "$RELEASE_KEYSTORE_BASE64" ]; then
-            echo "$RELEASE_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
-            echo "path=$RUNNER_TEMP/release.jks" >> "$GITHUB_OUTPUT"
-            echo "Release keystore configured."
-          else
-            echo "No RELEASE_KEYSTORE_BASE64 secret set; falling back to debug signing."
-          fi
+          KEYSTORE_PATH="$RUNNER_TEMP/myceliyum-release.jks"
+          printf '%s' "$RELEASE_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+          chmod 600 "$KEYSTORE_PATH"
+          echo "path=$KEYSTORE_PATH" >> "$GITHUB_OUTPUT"
 
-      # The release build falls back to the debug key when no release signing is
-      # present, so we always need the debug keystore available too.
-      - name: Restore debug keystore
-        run: base64 --decode debug.keystore.base64 > debug.keystore
+      - name: Make gradlew executable
+        run: chmod +x gradlew
 
-      - name: Assemble release APK
+      - name: Run unit tests before release
+        run: ./gradlew testDebugUnitTest --stacktrace
+
+      - name: Assemble signed release APK
         env:
           KEYSTORE_PATH: ${{ steps.keystore.outputs.path }}
           STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
           KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           BUILD_NUMBER: ${{ github.run_number }}
-          # Earth Engine env-layers backend (see android-ci.yml). Blank → OSM
-          # land-use fallback.
-          BACKEND_BASE_URL: ${{ secrets.BACKEND_BASE_URL }}
-          BACKEND_TOKEN: ${{ secrets.BACKEND_TOKEN }}
+          # A client-distributed APK cannot safely carry a backend bearer secret.
+          # BACKEND_TOKEN is intentionally not injected here. Public releases use
+          # the keyless/free fallback until the backend has client-safe auth.
         run: ./gradlew assembleRelease --stacktrace
 
-      - name: Upload release APK
+      - name: Upload signed release APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-release
+          name: app-release-signed
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
