@@ -1,8 +1,8 @@
-# Mycilliyums — one-shot build / install / launch script.
+# Myceliyum — one-shot build / install / launch script.
 #
 # Usage (from the project folder):
 #   powershell -ExecutionPolicy Bypass -File .\build.ps1            # build + install + launch
-#   powershell -ExecutionPolicy Bypass -File .\build.ps1 -Clean     # also nuke caches first
+#   powershell -ExecutionPolicy Bypass -File .\build.ps1 -Clean     # also clear caches first
 #   powershell -ExecutionPolicy Bypass -File .\build.ps1 -BuildOnly # just make the APK
 
 param(
@@ -39,7 +39,7 @@ if (-not (Test-Path $env:ANDROID_HOME)) {
 }
 Ok "ANDROID_HOME = $env:ANDROID_HOME"
 
-# 3. Optional cache wipe — equivalent to 'Invalidate caches and restart'.
+# 3. Optional cache wipe.
 if ($Clean) {
   Step "Clearing caches"
   .\gradlew.bat --stop | Out-Null
@@ -47,17 +47,26 @@ if ($Clean) {
   Ok "Caches cleared"
 }
 
-# 3b. Restore the stable debug keystore so locally-built APKs are signed with
-# the same key as the published rolling builds — lets you update between them
-# without "couldn't be installed due to a conflict". (debug.keystore is
-# git-ignored; debug.keystore.base64 is the committed source of truth.)
-if ((Test-Path .\debug.keystore.base64) -and (-not (Test-Path .\debug.keystore))) {
-  Step "Restoring debug keystore"
-  [IO.File]::WriteAllBytes(
-    "$projectDir\debug.keystore",
-    [Convert]::FromBase64String((Get-Content .\debug.keystore.base64 -Raw))
-  )
-  Ok "debug.keystore restored from debug.keystore.base64"
+# 3b. Optional stable debug signing identity.
+#
+# NEVER restore a signing key from a committed repository file. If you need a
+# stable local debug identity (for update-compatible development APKs), either:
+#   - place a private, git-ignored debug.keystore in the project root, or
+#   - provide DEBUG_KEYSTORE_BASE64 in the current environment.
+#
+# If neither exists, Gradle/Android uses the normal local debug identity. That is
+# fine for local development but should not be used as a public release identity.
+if ((-not (Test-Path .\debug.keystore)) -and $env:DEBUG_KEYSTORE_BASE64) {
+  Step "Restoring private debug keystore from environment"
+  try {
+    [IO.File]::WriteAllBytes(
+      "$projectDir\debug.keystore",
+      [Convert]::FromBase64String($env:DEBUG_KEYSTORE_BASE64)
+    )
+    Ok "Private debug.keystore restored from DEBUG_KEYSTORE_BASE64"
+  } catch {
+    Fail "DEBUG_KEYSTORE_BASE64 could not be decoded."
+  }
 }
 
 # 4. Build the debug APK.
@@ -80,7 +89,7 @@ $adb = Join-Path $env:ANDROID_HOME "platform-tools\adb.exe"
 $devices = & $adb devices | Select-Object -Skip 1 | Where-Object { $_ -match "\bdevice$" }
 if (-not $devices) {
   Write-Host "    No device or emulator detected." -ForegroundColor Yellow
-  Write-Host "    Start an emulator from Android Studio (Tools > Device Manager) or plug in a phone with USB debugging on, then re-run." -ForegroundColor Yellow
+  Write-Host "    Start an emulator from Android Studio or plug in a phone with USB debugging enabled, then re-run." -ForegroundColor Yellow
   return
 }
 Ok "Found: $($devices -join ', ')"
