@@ -43,18 +43,7 @@ jobs:
             chmod 600 debug.keystore
             echo "Stable debug signing identity restored from Actions secrets."
           else
-            echo "No stable debug keystore secret available; Gradle will use the runner-local debug identity."
-          fi
-
-      - name: Require stable signing for rolling main builds
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        env:
-          DEBUG_KEYSTORE_BASE64: ${{ secrets.DEBUG_KEYSTORE_BASE64 }}
-        run: |
-          if [ -z "$DEBUG_KEYSTORE_BASE64" ]; then
-            echo "ERROR: DEBUG_KEYSTORE_BASE64 is required before publishing rolling APKs from main."
-            echo "Generate a NEW signing identity; do not reuse the previously committed debug key."
-            exit 1
+            echo "No stable debug keystore secret available; verification will use the runner-local debug identity."
           fi
 
       - name: Make gradlew executable
@@ -78,6 +67,18 @@ jobs:
           # protect a billable backend as a true secret. Public builds use the
           # app's keyless/free fallback unless a safer auth design is added.
         run: ./gradlew assembleDebug --stacktrace
+
+      - name: Require stable signing before publishing a rolling main APK
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          DEBUG_KEYSTORE_BASE64: ${{ secrets.DEBUG_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$DEBUG_KEYSTORE_BASE64" ]; then
+            echo "ERROR: verification completed, but rolling publication is blocked."
+            echo "Configure DEBUG_KEYSTORE_BASE64 with a NEW private signing identity before publishing from main."
+            echo "Do not reuse the debug key that previously existed in public Git history."
+            exit 1
+          fi
 
       - name: Upload debug APK
         if: success()
