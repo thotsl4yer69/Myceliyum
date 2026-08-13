@@ -44,6 +44,7 @@ jobs:
             echo "Stable debug signing identity restored from Actions secrets."
           else
             echo "No stable debug keystore secret available; verification will use the runner-local debug identity."
+            echo "Rolling release publication will remain disabled."
           fi
 
       - name: Make gradlew executable
@@ -68,25 +69,12 @@ jobs:
           # app's keyless/free fallback unless a safer auth design is added.
         run: ./gradlew assembleDebug --stacktrace
 
-      - name: Require stable signing before publishing a rolling main APK
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        env:
-          DEBUG_KEYSTORE_BASE64: ${{ secrets.DEBUG_KEYSTORE_BASE64 }}
-        run: |
-          if [ -z "$DEBUG_KEYSTORE_BASE64" ]; then
-            echo "ERROR: verification completed, but rolling publication is blocked."
-            echo "Configure DEBUG_KEYSTORE_BASE64 with a NEW private signing identity before publishing from main."
-            echo "Do not reuse the debug key that previously existed in public Git history."
-            exit 1
-          fi
-
-      - name: Upload debug APK
-        if: success()
+      - name: Upload verification APK
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
           path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: warn
+          if-no-files-found: error
 
       - name: Upload test reports
         if: always()
@@ -97,7 +85,7 @@ jobs:
           if-no-files-found: ignore
 
   publish-latest:
-    name: Publish rolling latest release
+    name: Rolling release gate
     needs: build
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -105,15 +93,32 @@ jobs:
       contents: write
 
     steps:
+      - name: Check whether private stable signing is configured
+        id: signing
+        env:
+          DEBUG_KEYSTORE_BASE64: ${{ secrets.DEBUG_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$DEBUG_KEYSTORE_BASE64" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+            echo "Private stable signing is configured; rolling publication may proceed."
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "Rolling publication skipped: configure a NEW DEBUG_KEYSTORE_BASE64 secret first."
+            echo "Do not reuse the debug key that previously existed in public Git history."
+          fi
+
       - name: Checkout
+        if: steps.signing.outputs.configured == 'true'
         uses: actions/checkout@v4
 
-      - name: Download debug APK
+      - name: Download signed debug APK
+        if: steps.signing.outputs.configured == 'true'
         uses: actions/download-artifact@v4
         with:
           name: app-debug
 
       - name: Generate version.json for in-app update check
+        if: steps.signing.outputs.configured == 'true'
         env:
           BUILD_NUMBER: ${{ github.run_number }}
         run: |
@@ -130,6 +135,7 @@ jobs:
           EOF
 
       - name: Create or refresh latest release
+        if: steps.signing.outputs.configured == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
