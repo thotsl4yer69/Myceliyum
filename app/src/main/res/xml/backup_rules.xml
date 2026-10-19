@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-  Auto-backup rules (used on API < 31). Default: back up everything the app
-  stores — sightings, prefs, cached responses — all of which can be restored
-  on a new device without harm.
--->
-<full-backup-content />
+<!-- Preserve normal app data, but never transfer the preferences DataStore
+     containing the user-supplied Anthropic key. Applies to API 30 and older. -->
+<full-backup-content>
+    <exclude domain="file" path="datastore/mycelium_settings.preferences_pb" />
+</full-backup-content>
