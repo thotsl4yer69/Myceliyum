@@ -4,6 +4,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Rule
@@ -22,7 +23,7 @@ class FieldJourneyTest {
         capture("catalogue")
         compose.onNodeWithTag("nav_sightings").performClick()
         compose.onNodeWithTag("add_sighting_fab").performClick()
-        compose.onNodeWithTag("submit_sighting_button").assertIsDisplayed()
+        compose.onNodeWithTag("submit_sighting_button").performScrollTo().assertIsDisplayed()
         capture("sighting")
     }
     private fun capture(name: String) {

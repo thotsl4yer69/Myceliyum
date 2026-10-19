@@ -9,6 +9,9 @@ import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
@@ -31,7 +34,9 @@ class SightingBackup(private val context: Context, private val dao: FungiDao) {
             val manifest = JSONObject().put("format", "myceliyums-sightings").put("version", 1)
                 .put("records", org.json.JSONArray(adapter.toJson(portable)))
             zip.write(manifest.toString().toByteArray()); zip.closeEntry()
-            records.forEachIndexed { i, s -> s.photoLocalPath?.let { path ->
+            records.forEachIndexed { i, s ->
+                currentCoroutineContext().ensureActive()
+                s.photoLocalPath?.let { path ->
                 val photo = if (path.startsWith("/")) File(path).inputStream()
                     else requireNotNull(context.contentResolver.openInputStream(Uri.parse(path))) { "A sighting photo is missing; backup was not completed" }
                 zip.putNextEntry(ZipEntry("photos/$i.jpg"))
@@ -50,6 +55,7 @@ class SightingBackup(private val context: Context, private val dao: FungiDao) {
             val names = mutableSetOf<String>()
             ZipInputStream(requireNotNull(context.contentResolver.openInputStream(uri))).use { zip ->
                 while (true) {
+                    currentCoroutineContext().ensureActive()
                     val entry = zip.nextEntry ?: break
                     require(entry.name == "manifest.json" || entry.name.matches(Regex("photos/[0-9]+\\.jpg"))) { "Invalid backup entry" }
                     require(names.add(entry.name) && names.size <= 5001) { "Duplicate or oversized backup" }
@@ -57,6 +63,7 @@ class SightingBackup(private val context: Context, private val dao: FungiDao) {
                     target.outputStream().use { out ->
                         val bytes = ByteArray(8192); var entrySize = 0L
                         while (true) {
+                            currentCoroutineContext().ensureActive()
                             val n = zip.read(bytes); if (n < 0) break
                             total += n; entrySize += n
                             require(total <= 200L * 1024 * 1024 && entrySize <= (if (entry.name == "manifest.json") 2L else 20L) * 1024 * 1024) { "Backup exceeds size limit" }
@@ -82,8 +89,13 @@ class SightingBackup(private val context: Context, private val dao: FungiDao) {
                 }
                 s.copy(id = 0, photoLocalPath = photoUri)
             }
-            dao.importUserSightings(additions)
-            committed = true
+            currentCoroutineContext().ensureActive()
+            // A committed transaction must keep its photos even if cancellation arrives
+            // between the database commit and delivery of its result.
+            withContext(NonCancellable) {
+                dao.importUserSightings(additions)
+                committed = true
+            }
             additions.size
         } finally {
             staging.deleteRecursively()
