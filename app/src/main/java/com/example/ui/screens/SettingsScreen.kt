@@ -45,6 +45,9 @@ fun SettingsScreen(
     val appTheme by viewModel.appTheme.collectAsState()
     val userSightings by viewModel.userSightings.collectAsState()
     val anthropicApiKey by viewModel.anthropicApiKey.collectAsState()
+    val credentialError by viewModel.credentialError.collectAsState()
+    val clearingCache by viewModel.isClearingCache.collectAsState()
+    val preparingArea by viewModel.isPreparingArea.collectAsState()
 
     // Local editable copy of the stored API key; re-seeds if the stored value changes.
     var apiKeyInput by remember(anthropicApiKey) { mutableStateOf(anthropicApiKey) }
@@ -83,6 +86,7 @@ fun SettingsScreen(
         Column(modifier = Modifier.padding(16.dp)) {
 
             BackupControls()
+            OfflineAreaControls(viewModel)
 
             // 0. App theme setting
             Card(
@@ -179,6 +183,7 @@ fun SettingsScreen(
                             .fillMaxWidth()
                             .testTag("anthropic_api_key_field")
                     )
+                    credentialError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                     Spacer(modifier = Modifier.height(8.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -186,21 +191,20 @@ fun SettingsScreen(
                     ) {
                         Button(
                             onClick = {
-                                viewModel.setAnthropicApiKey(apiKeyInput)
-                                Toast.makeText(
-                                    context,
-                                    if (apiKeyInput.isBlank()) "API key cleared" else "API key saved",
-                                    Toast.LENGTH_SHORT
-                                ).show()
+                                val value = apiKeyInput
+                                viewModel.setAnthropicApiKey(value) { error ->
+                                    Toast.makeText(context, error ?: if (value.isBlank()) "API key cleared" else "API key saved securely", Toast.LENGTH_LONG).show()
+                                }
                             },
                             modifier = Modifier.testTag("save_anthropic_api_key")
                         ) { Text("Save") }
-                        if (anthropicApiKey.isNotBlank()) {
+                        if (anthropicApiKey.isNotBlank() || credentialError != null) {
                             OutlinedButton(
                                 onClick = {
                                     apiKeyInput = ""
-                                    viewModel.setAnthropicApiKey("")
-                                    Toast.makeText(context, "API key cleared", Toast.LENGTH_SHORT).show()
+                                    viewModel.setAnthropicApiKey("") { error ->
+                                        Toast.makeText(context, error ?: "API key cleared", Toast.LENGTH_LONG).show()
+                                    }
                                 }
                             ) { Text("Clear") }
                         }
@@ -321,16 +325,18 @@ fun SettingsScreen(
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Recent iNaturalist observations are stored locally for 24 hours so the app works offline.",
+                        text = "Network data is cached with freshness limits. Clearing it preserves personal sightings, their photos and explicitly prepared offline areas.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 16.sp
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Button(
+                        enabled = !clearingCache && !preparingArea,
                         onClick = {
-                            viewModel.clearCache()
-                            Toast.makeText(context, "Cache cleared.", Toast.LENGTH_SHORT).show()
+                            viewModel.clearCache { success ->
+                                Toast.makeText(context, if (success) "Cache cleared." else "Cache could not be cleared yet. Try again after current work completes.", Toast.LENGTH_LONG).show()
+                            }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer, contentColor = MaterialTheme.colorScheme.onErrorContainer),
                         modifier = Modifier
@@ -486,7 +492,7 @@ fun SettingsScreen(
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = exportedCsvFilePath,
+                        text = "CSV ready to share. Private records are excluded.",
                         style = MaterialTheme.typography.bodySmall,
                         fontFamily = FontFamily.Monospace,
                         color = MaterialTheme.colorScheme.onSurfaceVariant

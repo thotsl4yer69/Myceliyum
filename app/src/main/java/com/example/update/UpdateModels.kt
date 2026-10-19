@@ -7,17 +7,17 @@ import com.squareup.moshi.JsonClass
  * Machine-readable description of the newest published build, fetched from the
  * rolling GitHub "latest" release as the `version.json` asset.
  *
- * `versionCode` mirrors the app's [com.example.BuildConfig.VERSION_CODE], which
- * CI sets to the GitHub Actions run number, so a strictly greater value means a
- * newer build is available. `apkUrl` is the stable redirecting download URL for
- * the freshly built APK attached to the same release.
+ * `versionCode` matches the committed Android build configuration. The manifest
+ * also carries the APK hash and source commit, verified before installation.
  */
 @JsonClass(generateAdapter = true)
 data class ReleaseVersion(
     @Json(name = "versionCode") val versionCode: Int,
     @Json(name = "versionName") val versionName: String = "",
     @Json(name = "notes") val notes: String = "",
-    @Json(name = "apkUrl") val apkUrl: String = ""
+    @Json(name = "apkUrl") val apkUrl: String = "",
+    @Json(name = "sha256") val sha256: String = "",
+    @Json(name = "sourceCommit") val sourceCommit: String = ""
 )
 
 /** UI-facing state for the update check + download flow. */
@@ -58,4 +58,15 @@ object VersionCompare {
         if (remote == null) return false
         return remote.versionCode > currentVersionCode
     }
+}
+
+/** Legacy and incomplete release metadata must never enable an automatic install. */
+object ReleasePolicy {
+    fun validMetadata(release: ReleaseVersion): Boolean =
+        release.versionCode >= 7201 &&
+        release.versionName.isNotBlank() &&
+        release.sha256.matches(Regex("[a-fA-F0-9]{64}")) &&
+        release.sourceCommit.matches(Regex("[a-fA-F0-9]{40}")) &&
+        release.apkUrl.startsWith("https://github.com/thotsl4yer69/Myceliyum/releases/download/") &&
+        release.apkUrl.endsWith(".apk")
 }

@@ -77,6 +77,7 @@ fun MainWorkflowLayout(
     viewModel: FungiViewModel,
     updateViewModel: UpdateViewModel
 ) {
+    val tabState = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
     // Nav Navigation tabs states
     var activeTab by rememberSaveable { mutableStateOf<SelectedTab>(SelectedTab.Home) }
     var activeDetailSpecies by rememberSaveable { mutableStateOf<Species?>(null) }
@@ -188,7 +189,8 @@ fun MainWorkflowLayout(
                     .padding(innerPadding)
                     .background(MaterialTheme.colorScheme.background)
             ) {
-                // Render selected workflow tab
+                // Keep drafts and scroll positions when switching tabs.
+                tabState.SaveableStateProvider(activeTab.name) {
                 when (activeTab) {
                     SelectedTab.Home -> HomeScreen(
                         viewModel = viewModel,
@@ -217,6 +219,8 @@ fun MainWorkflowLayout(
                         viewModel = viewModel,
                         updateViewModel = updateViewModel
                     )
+                }
+
                 }
 
                 // 2. High-fidelity slide-over Species Detail Screen when a details request is focal!
@@ -258,26 +262,28 @@ private fun fetchDeviceLocation(context: android.content.Context, viewModel: Fun
     try {
         val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
         fun updateMapCenter(loc: android.location.Location?) {
-            if (loc != null) {
+            if (loc != null && loc.hasAccuracy() && loc.accuracy <= 100f &&
+                (android.os.SystemClock.elapsedRealtimeNanos() - loc.elapsedRealtimeNanos) in 0..120_000_000_000L) {
                 viewModel.setMapCenter(loc.latitude, loc.longitude)
             } else {
                 Log.w("MainActivity", "Location lookup completed without a device fix.")
             }
         }
-        fun requestFreshLocation(fallback: android.location.Location? = null) {
+        fun requestFreshLocation() {
             val tokenSource = CancellationTokenSource()
             fusedLocationClient.getCurrentLocation(
                 Priority.PRIORITY_HIGH_ACCURACY,
                 tokenSource.token
             )
-                .addOnSuccessListener { fresh -> updateMapCenter(fresh ?: fallback) }
-                .addOnFailureListener { updateMapCenter(fallback) }
+                .addOnSuccessListener { fresh -> updateMapCenter(fresh) }
+                .addOnFailureListener { updateMapCenter(null) }
         }
         fusedLocationClient.lastLocation
             .addOnSuccessListener { loc ->
                 val isFresh = loc != null &&
-                    (System.currentTimeMillis() - loc.time) <= FRESH_LOCATION_MAX_AGE_MS
-                if (isFresh) updateMapCenter(loc) else requestFreshLocation(loc)
+                    loc.hasAccuracy() && loc.accuracy <= 100f &&
+                    (System.currentTimeMillis() - loc.time) in 0..FRESH_LOCATION_MAX_AGE_MS
+                if (isFresh) updateMapCenter(loc) else requestFreshLocation()
             }
             .addOnFailureListener { requestFreshLocation() }
     } catch (se: SecurityException) {

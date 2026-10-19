@@ -19,6 +19,8 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 
 sealed interface HotspotState {
@@ -187,8 +189,7 @@ class FungiViewModel(
     // User-supplied Anthropic API key for AI identification (stored on-device only).
     val anthropicApiKey: StateFlow<String> = settingsStore.anthropicApiKey
         .stateIn(viewModelScope, SharingStarted.Eagerly, "")
-    // Initial value true so the returning-user case doesn't flash the disclaimer
-    // before DataStore has loaded; a brand-new user sees it once it emits false.
+    // Safe default until persisted consent has been loaded.
     val splashNoticeAccepted: StateFlow<Boolean> = settingsStore.splashAccepted
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
@@ -204,8 +205,16 @@ class FungiViewModel(
         viewModelScope.launch { settingsStore.setAppTheme(value) }
     }
 
-    fun setAnthropicApiKey(value: String) {
-        viewModelScope.launch { settingsStore.setAnthropicApiKey(value) }
+    val credentialError = settingsStore.credentialError
+
+    fun setAnthropicApiKey(value: String, onResult: (String?) -> Unit = {}) {
+        viewModelScope.launch {
+            try { settingsStore.setAnthropicApiKey(value); onResult(null) }
+            catch (error: Exception) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                onResult("The API key could not be saved securely. Try again on an unlocked device.")
+            }
+        }
     }
 
     fun acceptSplashNotice() {
@@ -213,6 +222,9 @@ class FungiViewModel(
     }
 
     private var computeJob: kotlinx.coroutines.Job? = null
+    private var allPinsJob: kotlinx.coroutines.Job? = null
+    private val _isClearingCache = MutableStateFlow(false)
+    val isClearingCache: StateFlow<Boolean> = _isClearingCache.asStateFlow()
     // The exact request currently being computed, to dedupe rapid identical
     // re-fires (which would otherwise keep cancelling the in-flight grid so it
     // never completes — leaving it stuck in Loading).
@@ -257,6 +269,8 @@ class FungiViewModel(
 
     fun setMapCenter(lat: Double, lng: Double) {
         require(com.example.util.SightingPolicy.validCoordinates(lat, lng))
+        if (_locationResolved.value && mapCenter.value == Pair(lat, lng)) return
+        usingSavedArea = false
         _locationResolved.value = true
         mapCenter.value = Pair(lat, lng)
     }
@@ -266,12 +280,18 @@ class FungiViewModel(
     }
 
     fun computeHotspots() {
-        if (!_locationResolved.value) return
+        if (!_locationResolved.value || _isClearingCache.value) return
+        usingSavedArea = false
         val (lat, lng) = mapCenter.value
         val radius = searchRadiusKm.value
         val multiSpecies = isAllSpeciesMode.value
         val species = selectedSpeciesForHotspot.value
         if (!multiSpecies && species == null) return
+        if (lat !in -39.3..-33.9 || lng !in 140.8..150.1 || (!multiSpecies && species?.id?.startsWith("gbif_") == true)) {
+            _hotspotState.value = HotspotState.Error("Suitability scoring is currently tuned for Victoria and its bundled catalogue. Worldwide taxonomy search remains available.")
+            _weatherSummary.value = null
+            return
+        }
 
         // Dedupe identical in-flight requests so map-center jitter / rapid
         // recompositions can't keep cancelling and restarting the same grid
@@ -286,6 +306,8 @@ class FungiViewModel(
         clearDeepSearch()  // a new overview invalidates any open drill-down
         computeJob = viewModelScope.launch {
             _hotspotState.value = HotspotState.Loading
+            completedRequest = null
+            _weatherSummary.value = null
             _isRecomputationsRunning.value = true
 
             // Refresh the all-fungi sightings layer in parallel — independent of
@@ -313,6 +335,7 @@ class FungiViewModel(
                 // species pins below are non-essential extras for other tabs — they
                 // must NEVER discard a perfectly good grid if they fail, so they run
                 // best-effort AFTER Success is set.
+                completedRequest = HotspotRequest(lat, lng, radius, species?.id, multiSpecies)
                 _hotspotState.value = HotspotState.Success(cells)
 
                 try {
@@ -323,7 +346,7 @@ class FungiViewModel(
                     } ?: emptyList()
                 } catch (e: Exception) {
                     if (e is kotlinx.coroutines.CancellationException) throw e
-                    Log.w("FungiViewModel", "Hotspot extras (weather/pins) failed: ${e.message}")
+                    Log.w("FungiViewModel", "Optional weather or observation refresh failed")
                 }
             } catch (e: TimeoutCancellationException) {
                 // A timeout IS a CancellationException, so it must be caught before
@@ -343,7 +366,7 @@ class FungiViewModel(
 
     /** Whether a cell can be drilled into: single-species mode, VeryGood+ tier. */
     fun canDeepSearch(cell: HotspotCell): Boolean =
-        !isAllSpeciesMode.value &&
+        !usingSavedArea && !isAllSpeciesMode.value &&
             selectedSpeciesForHotspot.value != null &&
             (cell.tier == "Excellent" || cell.tier == "VeryGood")
 
@@ -382,12 +405,14 @@ class FungiViewModel(
 
     /** Toggle the "all fungi sightings" map layer. */
     fun setShowAllSightings(enabled: Boolean) {
+        allPinsJob?.cancel()
         showAllSightings.value = enabled
         if (!enabled) {
             _allFungiPins.value = emptyList()
-        } else {
+        } else if (_locationResolved.value && !_isClearingCache.value) {
+            if (usingSavedArea) return
             val (lat, lng) = mapCenter.value
-            viewModelScope.launch {
+            allPinsJob = viewModelScope.launch {
                 _allFungiPins.value = repository.getAllFungiObservations(lat, lng, searchRadiusKm.value)
             }
         }
@@ -445,8 +470,14 @@ class FungiViewModel(
         }
     }
 
-    fun restoreSighting(sighting: UserSighting) {
-        viewModelScope.launch { repository.insertUserSighting(sighting) }
+    fun restoreSighting(sighting: UserSighting, onResult: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            try { repository.insertUserSighting(sighting); onResult(true) }
+            catch (error: Exception) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                onResult(false)
+            }
+        }
     }
 
     /**
@@ -470,12 +501,28 @@ class FungiViewModel(
     /**
      * Clear local observation query cache (TTL management)
      */
-    fun clearCache() {
+    fun clearCache(onResult: (Boolean) -> Unit = {}) {
+        if (_isClearingCache.value || _isPreparingArea.value) { onResult(false); return }
+        _isClearingCache.value = true
+        val jobs = listOfNotNull(computeJob, deepJob, allPinsJob)
+        jobs.forEach { it.cancel() }
         viewModelScope.launch {
-            repository.clearCaches()
-            _observationPins.value = emptyList()
-            if (selectedSpeciesForHotspot.value != null) {
-                computeHotspots()
+            try {
+                jobs.forEach { it.join() }
+                repository.clearCaches()
+                _observationPins.value = emptyList()
+                _allFungiPins.value = emptyList()
+                _weatherSummary.value = null
+                _hotspotState.value = HotspotState.Idle
+                _deepSearchState.value = DeepSearchState.Idle
+                completedRequest = null
+                usingSavedArea = false
+                onResult(true)
+            } catch (error: Exception) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                onResult(false)
+            } finally {
+                _isClearingCache.value = false
             }
         }
     }
@@ -485,6 +532,87 @@ class FungiViewModel(
             month in start..end
         } else {
             month >= start || month <= end
+        }
+    }
+
+    private val fieldPackStore = com.example.data.local.FieldPackStore(getApplication())
+    private var usingSavedArea = false
+    private var savedAreaRequest: HotspotRequest? = null
+    private var completedRequest: HotspotRequest? = null
+    private val _offlineAreaStatus = MutableStateFlow("Prepare the current grid or load a previously saved area.")
+    val offlineAreaStatus: StateFlow<String> = _offlineAreaStatus.asStateFlow()
+    private val _isPreparingArea = MutableStateFlow(false)
+    val isPreparingArea: StateFlow<Boolean> = _isPreparingArea.asStateFlow()
+
+    fun prepareArea() {
+        if (_isPreparingArea.value || _isClearingCache.value) return
+        val request = completedRequest
+        val cells = (_hotspotState.value as? HotspotState.Success)?.cells
+        val current = HotspotRequest(mapCenter.value.first, mapCenter.value.second, searchRadiusKm.value, selectedSpeciesForHotspot.value?.id, isAllSpeciesMode.value)
+        if (request == null || request != current || cells.isNullOrEmpty() || usingSavedArea) {
+            _offlineAreaStatus.value = "Finish a current area calculation before saving an offline snapshot."
+            return
+        }
+        val photoSpecies = if (request.allSpecies) speciesList.value.take(8) else listOfNotNull(selectedSpeciesForHotspot.value)
+        _isPreparingArea.value = true
+        viewModelScope.launch {
+            try {
+                _offlineAreaStatus.value = "Saving observations and reusable reference photos…"
+                val records = repository.getAllFungiObservations(request.lat, request.lng, request.radiusKm)
+                val photos = repository.prepareReferencePhotos(photoSpecies)
+                val pack = com.example.data.local.FieldPack(
+                    System.currentTimeMillis(), request.lat, request.lng, request.radiusKm,
+                    request.speciesId, request.allSpecies, cells, records, photos
+                )
+                withContext(Dispatchers.IO) { fieldPackStore.write(pack) }
+                _offlineAreaStatus.value = "Saved ${cells.size} cells, ${records.size} observations and ${photos.values.sumOf { it.size }} photos for ${photos.size} species. Basemap tiles are not included."
+            } catch (error: Exception) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                _offlineAreaStatus.value = "Could not prepare this area. The previous saved area is intact."
+            } finally {
+                _isPreparingArea.value = false
+            }
+        }
+    }
+
+    fun openPreparedArea() {
+        if (_isPreparingArea.value) return
+        _isPreparingArea.value = true
+        viewModelScope.launch {
+            try {
+                val pack = withContext(Dispatchers.IO) { fieldPackStore.read() }
+                if (pack == null) {
+                    _offlineAreaStatus.value = "No saved area was found. Calculate an area while connected, then prepare it."
+                    return@launch
+                }
+                val catalogue = withTimeout(5_000L) { speciesList.first { it.isNotEmpty() } }
+                computeJob?.cancel()
+                computeJob?.join()
+                clearDeepSearch()
+                usingSavedArea = true
+                savedAreaRequest = HotspotRequest(pack.lat, pack.lng, pack.radiusKm, pack.speciesId, pack.allSpecies)
+                _locationResolved.value = true
+                mapCenter.value = pack.lat to pack.lng
+                searchRadiusKm.value = pack.radiusKm
+                isAllSpeciesMode.value = pack.allSpecies
+                selectedSpeciesForHotspot.value = catalogue.firstOrNull { it.id == pack.speciesId }
+                // Match the selected object if the catalogue is still loading.
+                savedAreaRequest = savedAreaRequest?.copy(speciesId = selectedSpeciesForHotspot.value?.id)
+                val savedAt = java.text.DateFormat.getDateTimeInstance().format(java.util.Date(pack.savedAt))
+                _hotspotState.value = HotspotState.Success(pack.cells.map {
+                    it.copy(confidence = minOf(it.confidence, 0.32), contributingFactors = listOf("SAVED SNAPSHOT — $savedAt. Conditions may have changed.") + it.contributingFactors)
+                })
+                _allFungiPins.value = pack.observations
+                showAllSightings.value = true
+                _observationPins.value = emptyList()
+                _weatherSummary.value = null
+                _offlineAreaStatus.value = "Loaded snapshot from $savedAt. Open Hotspots to view it. ${pack.photos.values.sumOf { it.size }} reference photos available; basemap tiles are not included."
+            } catch (error: Exception) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                _offlineAreaStatus.value = "The saved area could not be opened. Your sightings are unchanged."
+            } finally {
+                _isPreparingArea.value = false
+            }
         }
     }
 
@@ -515,6 +643,8 @@ class FungiViewModel(
                 .debounce(HOTSPOT_RECOMPUTE_DEBOUNCE_MS)
                 .distinctUntilChanged()
                 .collect { request ->
+                    if (usingSavedArea && request == savedAreaRequest) return@collect
+                    usingSavedArea = false
                     if (_locationResolved.value && (request.allSpecies || request.speciesId != null)) {
                         computeHotspots()
                     }

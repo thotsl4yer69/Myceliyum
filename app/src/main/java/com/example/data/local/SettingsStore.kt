@@ -5,7 +5,11 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 
@@ -49,16 +53,34 @@ class SettingsStore(private val context: Context) {
     val appTheme: Flow<String> =
         context.dataStore.data.map { it[Keys.APP_THEME] ?: DEFAULT_APP_THEME }
 
+    private val _credentialError = MutableStateFlow<String?>(null)
+    val credentialError: StateFlow<String?> = _credentialError.asStateFlow()
+
     /** User-supplied Anthropic API key; blank until the user enters one. */
     val anthropicApiKey: Flow<String> =
         context.dataStore.data.onStart {
-            context.dataStore.edit { prefs ->
-                prefs[Keys.ANTHROPIC_API_KEY]?.let { old ->
-                    if (prefs[Keys.ENCRYPTED_API_KEY] == null) prefs[Keys.ENCRYPTED_API_KEY] = DeviceSecret.encrypt(old)
-                    prefs.remove(Keys.ANTHROPIC_API_KEY)
+            try {
+                context.dataStore.edit { prefs ->
+                    prefs[Keys.ANTHROPIC_API_KEY]?.let { old ->
+                        if (old.isNotBlank() && prefs[Keys.ENCRYPTED_API_KEY] == null) {
+                            prefs[Keys.ENCRYPTED_API_KEY] = DeviceSecret.encrypt(old)
+                        }
+                        prefs.remove(Keys.ANTHROPIC_API_KEY)
+                    }
                 }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                _credentialError.value = "The stored API key could not be unlocked. Re-enter or clear it in Settings."
             }
-        }.map { DeviceSecret.decrypt(it[Keys.ENCRYPTED_API_KEY] ?: "") }
+        }.map { preferences ->
+            val encrypted = preferences[Keys.ENCRYPTED_API_KEY].orEmpty()
+            val key = DeviceSecret.decrypt(encrypted)
+            if (encrypted.isNotBlank() && key.isBlank()) {
+                _credentialError.value = "The stored API key is unavailable on this device. Re-enter or clear it in Settings."
+            }
+            key
+        }
 
     suspend fun setMeasureUnits(value: String) {
         context.dataStore.edit { it[Keys.UNITS] = value }
@@ -77,7 +99,12 @@ class SettingsStore(private val context: Context) {
     }
 
     suspend fun setAnthropicApiKey(value: String) {
-        val ciphertext = DeviceSecret.encrypt(value.trim())
-        context.dataStore.edit { it[Keys.ENCRYPTED_API_KEY] = ciphertext; it.remove(Keys.ANTHROPIC_API_KEY) }
+        val trimmed = value.trim()
+        val ciphertext = if (trimmed.isEmpty()) null else DeviceSecret.encrypt(trimmed)
+        context.dataStore.edit {
+            if (ciphertext == null) it.remove(Keys.ENCRYPTED_API_KEY) else it[Keys.ENCRYPTED_API_KEY] = ciphertext
+            it.remove(Keys.ANTHROPIC_API_KEY)
+        }
+        _credentialError.value = null
     }
 }

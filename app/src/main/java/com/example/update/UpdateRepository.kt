@@ -1,6 +1,7 @@
 package com.example.update
 
 import com.squareup.moshi.Moshi
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -36,8 +37,10 @@ class UpdateRepository(
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) return@withContext null
                 val body = response.body?.string() ?: return@withContext null
-                moshi.adapter(ReleaseVersion::class.java).fromJson(body)
+                moshi.adapter(ReleaseVersion::class.java).fromJson(body)?.takeIf(ReleasePolicy::validMetadata)
             }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (_: Exception) {
             null
         }

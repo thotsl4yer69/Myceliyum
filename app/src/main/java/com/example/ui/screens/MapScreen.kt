@@ -1529,6 +1529,7 @@ fun OSMMapView(
     val currentSelection by rememberUpdatedState(onCellSelected)
     val map = remember { MapView(context) }
     val lastOverlayInputs = remember { arrayOfNulls<Any>(1) }
+    val lastMapTheme = remember { arrayOf<String?>(null) }
     DisposableEffect(map, lifecycleOwner) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) map.onResume()
@@ -1574,7 +1575,10 @@ fun OSMMapView(
         },
         update = { mapView ->
             // Apply the selected map style (and a real dark mode via colour inversion).
-            mapView.setTileSource(tileSourceForTheme(mapTheme))
+            if (lastMapTheme[0] != mapTheme) {
+                mapView.setTileSource(tileSourceForTheme(mapTheme))
+                lastMapTheme[0] = mapTheme
+            }
             mapView.overlayManager.tilesOverlay.setColorFilter(
                 if (mapTheme == "Dark") TilesOverlay.INVERT_COLORS else null
             )

@@ -152,3 +152,21 @@ The implementation currently aligns result arrays with the submitted point order
 ## Portfolio boundary
 
 The meaningful engineering work here is **keeping privileged cloud credentials server-side and integrating an optional environmental data service with a graceful client fallback**. The repository does not claim the current token mode is a production-grade public API security design.
+
+
+## Required production safeguards
+The service now fails closed with HTTP 503 when BACKEND_TOKEN is missing. The
+health endpoint is only a liveness probe; it does not certify Earth Engine readiness.
+Inputs are validated before Earth Engine initialization, with a 64 KiB body
+limit, at most 600 finite coordinate pairs, and geographic bounds.
+
+Keep the server token in the deployment secret manager. Do not embed it in an
+Android APK or website. Public clients must use their keyless fallback until a
+separate authenticated gateway supplies short-lived authorization and per-user
+quotas. Put authenticated ingress, request-rate limits, a maximum instance count,
+and an Earth Engine budget alert in place before enabling public traffic.
+Provider errors are redacted from client responses.
+
+Run the boundary tests without Earth Engine credentials:
+`python -m pip install -r backend/requirements-test.txt`
+then `python -m unittest discover -s backend -v`.

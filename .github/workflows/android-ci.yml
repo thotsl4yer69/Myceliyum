@@ -5,6 +5,7 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  workflow_call:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -15,149 +16,49 @@ permissions:
 
 jobs:
   build:
-    name: Unit tests & debug build
-    runs-on: ubuntu-latest
-    outputs:
-      version_code: ${{ steps.version.outputs.code }}
-
+    name: App, backend and website checks
+    runs-on: ubuntu-24.04
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
-
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Restore private stable debug keystore when configured
-        env:
-          DEBUG_KEYSTORE_BASE64: ${{ secrets.DEBUG_KEYSTORE_BASE64 }}
-        run: |
-          if [ -n "$DEBUG_KEYSTORE_BASE64" ]; then
-            printf '%s' "$DEBUG_KEYSTORE_BASE64" | base64 --decode > debug.keystore
-            chmod 600 debug.keystore
-            echo "Stable debug signing identity restored from Actions secrets."
-          else
-            echo "No stable debug keystore secret available; verification will use the runner-local debug identity."
-            echo "Rolling release publication will remain disabled."
-          fi
-
-      - name: Make gradlew executable
-        run: chmod +x gradlew
-
-      - name: Set monotonic build version
-        id: version
-        run: |
-          CODE=$(( $(date +%s) / 60 ))
-          echo "BUILD_NUMBER=$CODE" >> "$GITHUB_ENV"
-          echo "code=$CODE" >> "$GITHUB_OUTPUT"
-
-      - name: Run unit tests
-        env:
-          DEBUG_KEYSTORE_PASSWORD: ${{ secrets.DEBUG_KEYSTORE_PASSWORD }}
-          DEBUG_KEY_ALIAS: ${{ secrets.DEBUG_KEY_ALIAS }}
-          DEBUG_KEY_PASSWORD: ${{ secrets.DEBUG_KEY_PASSWORD }}
-        run: ./gradlew testDebugUnitTest lintDebug --stacktrace
-
-      - name: Assemble debug APK
-        env:
-          DEBUG_KEYSTORE_PASSWORD: ${{ secrets.DEBUG_KEYSTORE_PASSWORD }}
-          DEBUG_KEY_ALIAS: ${{ secrets.DEBUG_KEY_ALIAS }}
-          DEBUG_KEY_PASSWORD: ${{ secrets.DEBUG_KEY_PASSWORD }}
-          # Deliberately do NOT inject BACKEND_TOKEN into a public APK. A static
-          # token compiled into an Android application is extractable and cannot
-          # protect a billable backend as a true secret. Public builds use the
-          # app's keyless/free fallback unless a safer auth design is added.
-        run: ./gradlew assembleDebug --stacktrace
-
-      - name: Upload verification APK
-        uses: actions/upload-artifact@v4
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: actions/setup-node@v4
         with:
-          name: app-debug
+          node-version: '22'
+      - name: Check backend and website
+        run: |
+          python -m pip install -r backend/requirements-test.txt
+          python -m unittest discover -s backend -v
+          python -m unittest discover -s scripts -p 'test_*.py' -v
+          node scripts/sync_catalogue.cjs --check
+          node --check docs/app.js
+          node --check docs/release.js
+          node --test tests/site.test.cjs
+      - name: Test and build Android
+        run: |
+          chmod +x gradlew
+          ./gradlew testDebugUnitTest lintDebug assembleDebug --stacktrace
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-verification-only
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
-
-      - name: Upload test reports
+      - uses: actions/upload-artifact@v4
         if: always()
-        uses: actions/upload-artifact@v4
         with:
-          name: unit-test-reports
-          path: app/build/reports/tests/
+          name: verification-reports
+          path: |
+            app/build/reports/tests/
+            app/build/reports/lint-results*
           if-no-files-found: ignore
-
-  publish-latest:
-    name: Rolling release gate
-    needs: [build, device-smoke]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
-    steps:
-      - name: Check whether private stable signing is configured
-        id: signing
-        env:
-          DEBUG_KEYSTORE_BASE64: ${{ secrets.DEBUG_KEYSTORE_BASE64 }}
-        run: |
-          if [ -n "$DEBUG_KEYSTORE_BASE64" ]; then
-            echo "configured=true" >> "$GITHUB_OUTPUT"
-            echo "Private stable signing is configured; rolling publication may proceed."
-          else
-            echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "Rolling publication skipped: configure a NEW DEBUG_KEYSTORE_BASE64 secret first."
-            echo "Do not reuse the debug key that previously existed in public Git history."
-          fi
-
-      - name: Checkout
-        if: steps.signing.outputs.configured == 'true'
-        uses: actions/checkout@v4
-
-      - name: Download signed debug APK
-        if: steps.signing.outputs.configured == 'true'
-        uses: actions/download-artifact@v4
-        with:
-          name: app-debug
-
-      - name: Generate version.json for in-app update check
-        if: steps.signing.outputs.configured == 'true'
-        env:
-          BUILD_NUMBER: ${{ needs.build.outputs.version_code }}
-        run: |
-          APK_NAME="$(basename "$(ls *.apk | head -n1)")"
-          VERSION_NAME="$(grep -oE 'versionName = "[^"]+"' app/build.gradle.kts | head -n1 | sed -E 's/versionName = "([^"]+)"/\1/')"
-          VERSION_NAME="${VERSION_NAME:-unknown}"
-          cat > version.json <<EOF
-          {
-            "versionCode": ${BUILD_NUMBER},
-            "versionName": "${VERSION_NAME}",
-            "notes": "Rolling development release from ${GITHUB_SHA::7} (run #${BUILD_NUMBER}).",
-            "apkUrl": "https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/${APK_NAME}"
-          }
-          EOF
-
-      - name: Create or refresh latest release
-        if: steps.signing.outputs.configured == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release view latest -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
-            gh release create latest -R "$GITHUB_REPOSITORY" \
-              --title "Latest field build" \
-              --notes "Rolling development release from main."
-          gh release upload latest *.apk version.json -R "$GITHUB_REPOSITORY" --clobber
-          gh release edit latest -R "$GITHUB_REPOSITORY" \
-            --notes "Rolling development release from ${GITHUB_SHA::7} (run #${{ github.run_number }})."
 
   device-smoke:
     name: Android device smoke test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -178,6 +79,7 @@ jobs:
           profile: pixel_2
           disable-animations: true
           script: |
+            chmod +x gradlew
             ./gradlew connectedDebugAndroidTest --stacktrace
             adb pull /sdcard/Android/data/com.aistudio.myceliummapper.vcfqka/files/screenshots device-screenshots
       - uses: actions/upload-artifact@v4
@@ -187,3 +89,60 @@ jobs:
           path: |
             device-screenshots/
             app/build/reports/androidTests/
+          if-no-files-found: warn
+
+  publish-latest:
+    name: Verify and publish signed release
+    needs: [build, device-smoke]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+      STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+      KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+    steps:
+      - name: Require private production signing
+        run: |
+          for name in RELEASE_KEYSTORE_BASE64 STORE_PASSWORD KEY_PASSWORD KEY_ALIAS; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Publication blocked: configure a new private release signing identity ($name is missing)."
+              echo "No APK was published. Do not reuse the key exposed in public Git history." >> "$GITHUB_STEP_SUMMARY"
+              exit 1
+            fi
+          done
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build and verify production APK
+        run: |
+          KEYSTORE_PATH="$RUNNER_TEMP/myceliyum-release.jks"
+          export KEYSTORE_PATH
+          printf '%s' "$RELEASE_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+          chmod 600 "$KEYSTORE_PATH"
+          trap 'rm -f "$KEYSTORE_PATH"' EXIT
+          chmod +x gradlew
+          ./gradlew testReleaseUnitTest lintRelease assembleRelease --stacktrace
+          sdkmanager "build-tools;35.0.0"
+          export PATH="$ANDROID_HOME/build-tools/35.0.0:$PATH"
+          cp app/build/outputs/apk/release/app-release.apk .
+          python scripts/release_manifest.py app-release.apk --commit "$GITHUB_SHA"
+      - name: Publish verified release and matching metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view latest -R "$GITHUB_REPOSITORY" --json body > previous-release.json; then
+            python scripts/check_release_progression.py previous-release.json version.json
+          else
+            gh release create latest -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Latest verified field build" --notes-file release-notes.md
+          fi
+          gh release upload latest app-release.apk version.json -R "$GITHUB_REPOSITORY" --clobber
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/latest" -f sha="$GITHUB_SHA" -F force=true
+          gh release edit latest -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --notes-file release-notes.md
+          echo "Published Android APK, version manifest, SHA-256 and source commit together." >> "$GITHUB_STEP_SUMMARY"

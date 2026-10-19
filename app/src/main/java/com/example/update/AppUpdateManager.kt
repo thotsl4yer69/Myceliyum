@@ -3,12 +3,16 @@ package com.example.update
 import android.app.DownloadManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.Settings
 import androidx.core.content.FileProvider
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
+import java.security.MessageDigest
 import java.io.File
 
 /**
@@ -68,22 +72,22 @@ class AppUpdateManager(private val context: Context) {
 
         val downloadId = dm.enqueue(request)
 
-        // Poll for completion — avoids fragile context-registered receivers and
-        // the Android 13+ exported-receiver requirements.
-        val deadline = MAX_POLLS
-        repeat(deadline) {
-            when (queryStatus(dm, downloadId)) {
-                DownloadManager.STATUS_SUCCESSFUL -> return if (target.exists()) target else null
-                DownloadManager.STATUS_FAILED -> {
-                    dm.remove(downloadId)
-                    return null
+        var finished = false
+        try {
+            repeat(MAX_POLLS) {
+                when (queryStatus(dm, downloadId)) {
+                    DownloadManager.STATUS_SUCCESSFUL -> {
+                        finished = true
+                        return if (target.exists()) target else null
+                    }
+                    DownloadManager.STATUS_FAILED -> return null
+                    else -> delay(POLL_INTERVAL_MS)
                 }
-                else -> delay(POLL_INTERVAL_MS)
             }
+            return null
+        } finally {
+            if (!finished) dm.remove(downloadId)
         }
-        // Timed out.
-        dm.remove(downloadId)
-        return null
     }
 
     private fun queryStatus(dm: DownloadManager, id: Long): Int {
@@ -94,6 +98,37 @@ class AppUpdateManager(private val context: Context) {
             }
         }
         return DownloadManager.STATUS_RUNNING
+    }
+
+    /** Verify integrity, package identity, version and signing compatibility before installing. */
+    @Suppress("DEPRECATION")
+    suspend fun verifyApk(apk: File, release: ReleaseVersion) = withContext(Dispatchers.IO) {
+        require(ReleasePolicy.validMetadata(release)) { "Release metadata is incomplete or untrusted." }
+        val digest = MessageDigest.getInstance("SHA-256")
+        apk.inputStream().use { input ->
+            val buffer = ByteArray(8192)
+            while (true) { val size = input.read(buffer); if (size < 0) break; digest.update(buffer, 0, size) }
+        }
+        val actual = digest.digest().joinToString("") { "%02x".format(it) }
+        require(actual.equals(release.sha256, ignoreCase = true)) { "APK integrity check failed. Download rejected." }
+        val flags = if (Build.VERSION.SDK_INT >= 28) PackageManager.GET_SIGNING_CERTIFICATES else PackageManager.GET_SIGNATURES
+        val pm = context.packageManager
+        val archive = requireNotNull(pm.getPackageArchiveInfo(apk.absolutePath, flags)) { "Downloaded file is not a valid APK." }
+        require(archive.packageName == context.packageName) { "APK package does not match this app." }
+        val code = if (Build.VERSION.SDK_INT >= 28) archive.longVersionCode else archive.versionCode.toLong()
+        require(code == release.versionCode.toLong()) { "APK version does not match its release manifest." }
+        val installed = pm.getPackageInfo(context.packageName, flags)
+        fun signers(info: android.content.pm.PackageInfo): Set<String> {
+            val values = if (Build.VERSION.SDK_INT >= 28) info.signingInfo?.apkContentsSigners else info.signatures
+            return values.orEmpty().map { signature ->
+                MessageDigest.getInstance("SHA-256").digest(signature.toByteArray())
+                    .joinToString("") { "%02x".format(it) }
+            }.toSet()
+        }
+        val currentSigners = signers(installed)
+        require(currentSigners.isNotEmpty() && currentSigners == signers(archive)) {
+            "Signing identity changed. Keep your current installation and back up your records before following the release migration instructions."
+        }
     }
 
     /** Launches the system package installer for a previously downloaded APK. */

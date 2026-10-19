@@ -22,6 +22,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import kotlinx.coroutines.launch
+import androidx.lifecycle.viewModelScope
 import com.example.util.SightingPolicy
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,19 +60,20 @@ fun SightingsScreen(
     val context = LocalContext.current
     val speciesList by viewModel.speciesList.collectAsState()
     val userSightings by viewModel.userSightings.collectAsState()
-    var showAddSightingDialog by rememberSaveable { mutableStateOf(false) }
-    var selectedSightingForDetail by remember { mutableStateOf<UserSighting?>(null) }
+    val session: SightingSession = androidx.lifecycle.viewmodel.compose.viewModel()
+    var showAddSightingDialog by session.showAdd
+    var selectedSightingForDetail by session.selectedDetail
 
     // Android Location helper
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
-    var detectedLocation by remember { mutableStateOf<Pair<Double, Double>?>(null) }
+    var detectedLocation by session.location
 
-    var editingId by rememberSaveable { mutableStateOf<Long?>(null) }
-    var isSaving by remember { mutableStateOf(false) }
-    var saveError by remember { mutableStateOf<String?>(null) }
-    var confirmDelete by remember { mutableStateOf<UserSighting?>(null) }
-    val snackbar = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
+    var editingId by session.editingId
+    var isSaving by session.saving
+    var saveError by session.error
+    var confirmDelete by session.confirmDelete
+    val snackbar = session.snackbar
+    val scope = session.viewModelScope
     fun acceptFix(loc: Location?) {
         if (loc != null && loc.hasAccuracy() && loc.accuracy <= 100f &&
             (android.os.SystemClock.elapsedRealtimeNanos() - loc.elapsedRealtimeNanos) in 0..120_000_000_000L) {
@@ -318,6 +320,16 @@ fun SightingsScreen(
             existing = userSightings.find { it.id == editingId },
             saving = isSaving,
             error = saveError,
+            onRequestLocation = {
+                detectedLocation = null
+                if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                    fusedLocationClient.getCurrentLocation(com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY, com.google.android.gms.tasks.CancellationTokenSource().token)
+                        .addOnSuccessListener { loc: Location? -> acceptFix(loc) }
+                        .addOnFailureListener { Toast.makeText(context, "GPS unavailable. Enter coordinates manually.", Toast.LENGTH_LONG).show() }
+                } else {
+                    locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                }
+            },
             onDismiss = { if (!isSaving) showAddSightingDialog = false },
             onSave = { speciesId, lat, lng, notes, photoPath, isPrivate ->
                 isSaving = true
@@ -360,7 +372,9 @@ fun SightingsScreen(
                         selectedSightingForDetail = null
                         scope.launch {
                             if (snackbar.showSnackbar("Sighting deleted", "Undo", duration = SnackbarDuration.Long) == SnackbarResult.ActionPerformed)
-                                viewModel.restoreSighting(sighting)
+                                viewModel.restoreSighting(sighting) { restored ->
+                                    if (!restored) Toast.makeText(context, "Undo could not complete. Restore from your personal backup if needed.", Toast.LENGTH_LONG).show()
+                                }
                         }
                     } else Toast.makeText(context, "Could not delete sighting.", Toast.LENGTH_LONG).show()
                 }
@@ -638,6 +652,7 @@ fun AddSightingDialog(
     existing: UserSighting? = null,
     saving: Boolean = false,
     error: String? = null,
+    onRequestLocation: () -> Unit,
     onDismiss: () -> Unit,
     onSave: (speciesId: String, lat: Double, lng: Double, notes: String, photoPath: String?, isPrivate: Boolean) -> Unit
 ) {
@@ -649,6 +664,14 @@ fun AddSightingDialog(
 
     var manualLat by rememberSaveable(existing?.id) { mutableStateOf(existing?.lat?.toString() ?: initialLocation?.first?.toString() ?: "") }
     var manualLng by rememberSaveable(existing?.id) { mutableStateOf(existing?.lng?.toString() ?: initialLocation?.second?.toString() ?: "") }
+    var requestedGps by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(initialLocation) {
+        if (initialLocation != null && (requestedGps || (existing == null && manualLat.isBlank() && manualLng.isBlank()))) {
+            manualLat = initialLocation.first.toString()
+            manualLng = initialLocation.second.toString()
+            requestedGps = false
+        }
+    }
     var userNotes by rememberSaveable(existing?.id) { mutableStateOf(existing?.notes ?: "") }
     var isPrivateEntry by rememberSaveable(existing?.id) { mutableStateOf(existing?.isPrivate ?: true) }
 
@@ -667,18 +690,22 @@ fun AddSightingDialog(
         }
     }
 
-    fun launchVoucherCamera() {
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            Toast.makeText(context, "Camera permission is required to capture a voucher photo.", Toast.LENGTH_LONG).show()
-            return
-        }
+    fun captureVoucher() {
         try {
             val uri = createVoucherImageUri(context)
             pendingPhotoUri = uri
             takePictureLauncher.launch(uri)
-        } catch (e: Exception) {
-            Toast.makeText(context, "Unable to start the camera: ${e.message}", Toast.LENGTH_LONG).show()
+        } catch (_: Exception) {
+            Toast.makeText(context, "Unable to open the camera. You can save without a photo.", Toast.LENGTH_LONG).show()
         }
+    }
+    val voucherPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) captureVoucher()
+        else Toast.makeText(context, "Camera access was declined. You can save without a photo.", Toast.LENGTH_LONG).show()
+    }
+    fun launchVoucherCamera() {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) captureVoucher()
+        else voucherPermission.launch(Manifest.permission.CAMERA)
     }
 
     Dialog(
@@ -766,6 +793,10 @@ fun AddSightingDialog(
                 if (!SightingPolicy.validCoordinates(manualLat.toDoubleOrNull(), manualLng.toDoubleOrNull()))
                     Text("Enter a latitude (−90 to 90) and longitude (−180 to 180). No location has been assumed.", style = MaterialTheme.typography.bodySmall)
                 Text("Species is an unverified field label. Leave unidentified when unsure.", style = MaterialTheme.typography.bodySmall)
+                OutlinedButton(enabled = !saving, onClick = {
+                    requestedGps = true
+                    onRequestLocation()
+                }) { Text("Use device GPS") }
                 // 2. Latitude & Longitude inputs
                 Text(
                     text = "Location",

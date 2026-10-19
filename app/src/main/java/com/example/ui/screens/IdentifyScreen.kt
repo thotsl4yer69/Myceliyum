@@ -38,6 +38,10 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
 import com.example.data.local.SettingsStore
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -70,36 +74,54 @@ data class IdentificationResult(
     val fullResponse: String
 )
 
+class IdentifySession : ViewModel() {
+    val selectedImageUri = mutableStateOf<Uri?>(null)
+    val photoUris = mutableStateOf<List<Uri>>(emptyList())
+    val isAnalyzing = mutableStateOf(false)
+    val identificationResult = mutableStateOf<IdentificationResult?>(null)
+    val errorMessage = mutableStateOf<String?>(null)
+    val chatMessages = mutableStateOf<List<ChatMessage>>(emptyList())
+    val chatInput = mutableStateOf("")
+    val isChatLoading = mutableStateOf(false)
+    val showChat = mutableStateOf(false)
+    val pendingPhotoUri = mutableStateOf<Uri?>(null)
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun IdentifyScreen() {
+fun IdentifyScreen(session: IdentifySession = viewModel()) {
     val context = LocalContext.current
     // The Anthropic API key is supplied by the user in Settings and stored only
     // on-device — it is never embedded in the published app. Identification is
     // disabled until the user provides their own key.
-    val settingsStore = remember { SettingsStore(context) }
+    val settingsStore = remember { SettingsStore(context.applicationContext) }
     val anthropicApiKey by settingsStore.anthropicApiKey.collectAsState(initial = "")
-    val coroutineScope = rememberCoroutineScope()
+    val coroutineScope = session.viewModelScope
+    var photoUris by session.photoUris
 
-    var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
-    var isAnalyzing by remember { mutableStateOf(false) }
-    var identificationResult by remember { mutableStateOf<IdentificationResult?>(null) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var selectedImageUri by session.selectedImageUri
+    var isAnalyzing by session.isAnalyzing
+    var identificationResult by session.identificationResult
+    var errorMessage by session.errorMessage
 
     // Chat state
-    var chatMessages by remember { mutableStateOf(listOf<ChatMessage>()) }
-    var chatInput by remember { mutableStateOf("") }
-    var isChatLoading by remember { mutableStateOf(false) }
-    var showChat by remember { mutableStateOf(false) }
+    var chatMessages by session.chatMessages
+    var chatInput by session.chatInput
+    var isChatLoading by session.isChatLoading
+    var showChat by session.showChat
     val listState = rememberLazyListState()
+    LaunchedEffect(chatMessages.size, showChat) {
+        if (showChat && chatMessages.isNotEmpty()) listState.animateScrollToItem(chatMessages.size - 1)
+    }
 
     // Camera setup
-    var pendingPhotoUri by remember { mutableStateOf<Uri?>(null) }
+    var pendingPhotoUri by session.pendingPhotoUri
 
     val takePictureLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
     ) { success ->
         if (success && pendingPhotoUri != null) {
+            photoUris = (photoUris + listOfNotNull(pendingPhotoUri)).distinct().takeLast(4)
             selectedImageUri = pendingPhotoUri
             identificationResult = null
             chatMessages = emptyList()
@@ -112,6 +134,7 @@ fun IdentifyScreen() {
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
         if (uri != null) {
+            photoUris = (photoUris + uri).distinct().takeLast(4)
             selectedImageUri = uri
             identificationResult = null
             chatMessages = emptyList()
@@ -143,19 +166,21 @@ fun IdentifyScreen() {
     }
 
     fun analyzeImage() {
-        val uri = selectedImageUri ?: return
+        if (photoUris.isEmpty() || isAnalyzing) return
+        val images = photoUris.toList()
         isAnalyzing = true
         errorMessage = null
         coroutineScope.launch {
             try {
                 val result = withContext(Dispatchers.IO) {
-                    callClaudeVisionAPI(context, uri, anthropicApiKey)
+                    callClaudeVisionAPI(context.applicationContext, images, anthropicApiKey)
                 }
                 identificationResult = result
                 chatMessages = listOf(
                     ChatMessage("assistant", result.fullResponse)
                 )
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 errorMessage = e.message ?: "Analysis failed"
             } finally {
                 isAnalyzing = false
@@ -177,14 +202,12 @@ fun IdentifyScreen() {
                 }
                 chatMessages = chatMessages + ChatMessage("assistant", response)
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 chatMessages = chatMessages + ChatMessage("assistant", "Sorry, I couldn't process that. ${e.message}")
             } finally {
                 isChatLoading = false
             }
-            // Scroll to bottom
-            if (chatMessages.isNotEmpty()) {
-                listState.animateScrollToItem(chatMessages.size - 1)
-            }
+
         }
     }
 
@@ -231,15 +254,17 @@ fun IdentifyScreen() {
                         if (selectedImageUri != null) {
                             AsyncImage(
                                 model = selectedImageUri,
-                                contentDescription = "Selected mushroom photo",
+                                contentDescription = "Selected reference photo; identity unverified",
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Crop
                             )
 
                             // Retake button overlay
                             IconButton(
+                                enabled = !isAnalyzing,
                                 onClick = {
-                                    selectedImageUri = null
+                                    photoUris = photoUris.filterNot { it == selectedImageUri }
+                                    selectedImageUri = photoUris.lastOrNull()
                                     identificationResult = null
                                     errorMessage = null
                                 },
@@ -271,6 +296,18 @@ fun IdentifyScreen() {
                         }
                     }
 
+                    Text(
+                        "Add up to four views: cap, underside, stem/base and habitat. Analysis sends these photos to Anthropic using your API key. Results are tentative and cannot establish edibility.",
+                        modifier = Modifier.padding(16.dp),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        photoUris.forEachIndexed { index, uri ->
+                            TextButton(onClick = { selectedImageUri = uri }) {
+                                Text(if (uri == selectedImageUri) "View ${index + 1} ✓" else "View ${index + 1}")
+                            }
+                        }
+                    }
                     // Action buttons
                     Row(
                         modifier = Modifier
@@ -280,6 +317,7 @@ fun IdentifyScreen() {
                     ) {
                         OutlinedButton(
                             onClick = { launchCamera() },
+                            enabled = !isAnalyzing && photoUris.size < 4,
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(12.dp)
                         ) {
@@ -289,6 +327,7 @@ fun IdentifyScreen() {
                         }
                         OutlinedButton(
                             onClick = { galleryLauncher.launch("image/*") },
+                            enabled = !isAnalyzing,
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(12.dp)
                         ) {
@@ -298,6 +337,7 @@ fun IdentifyScreen() {
                         }
                     }
 
+                    if (anthropicApiKey.isBlank()) Text("Add your Anthropic API key in Settings to enable analysis.", modifier = Modifier.padding(horizontal = 16.dp))
                     // Analyze button
                     if (selectedImageUri != null && identificationResult == null) {
                         Button(
@@ -306,7 +346,7 @@ fun IdentifyScreen() {
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp)
                                 .height(52.dp),
-                            enabled = !isAnalyzing,
+                            enabled = !isAnalyzing && anthropicApiKey.isNotBlank(),
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             if (isAnalyzing) {
@@ -320,7 +360,7 @@ fun IdentifyScreen() {
                             } else {
                                 Icon(Icons.Default.AutoAwesome, null, modifier = Modifier.size(20.dp))
                                 Spacer(Modifier.width(8.dp))
-                                Text("Identify Mushroom", fontWeight = FontWeight.Bold)
+                                Text("Assess evidence", fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -364,28 +404,8 @@ fun IdentifyScreen() {
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp),
                             shape = RoundedCornerShape(12.dp),
-                            color = when {
-                                result.safetyRating.contains("DEADLY", ignoreCase = true) ||
-                                result.safetyRating.contains("DANGER", ignoreCase = true) ||
-                                result.safetyRating.contains("TOXIC", ignoreCase = true) ->
-                                    Color(0xFFFFCDD2)
-                                result.safetyRating.contains("CAUTION", ignoreCase = true) ||
-                                result.safetyRating.contains("UNKNOWN", ignoreCase = true) ->
-                                    Color(0xFFFFF9C4)
-                                else -> Color(0xFFC8E6C9)
-                            },
-                            border = BorderStroke(
-                                1.dp,
-                                when {
-                                    result.safetyRating.contains("DEADLY", ignoreCase = true) ||
-                                    result.safetyRating.contains("DANGER", ignoreCase = true) ||
-                                    result.safetyRating.contains("TOXIC", ignoreCase = true) ->
-                                        Color(0xFFD32F2F)
-                                    result.safetyRating.contains("CAUTION", ignoreCase = true) ->
-                                        Color(0xFFF9A825)
-                                    else -> Color(0xFF388E3C)
-                                }
-                            )
+                            color = Color(0xFFFFF9C4),
+                            border = BorderStroke(1.dp, Color(0xFFF9A825))
                         ) {
                             Row(
                                 modifier = Modifier.padding(16.dp),
@@ -400,7 +420,7 @@ fun IdentifyScreen() {
                                 Spacer(Modifier.width(12.dp))
                                 Column {
                                     Text(
-                                        "Safety: ${result.safetyRating}",
+                                        "Unverified identification — do not consume",
                                         fontWeight = FontWeight.Bold,
                                         color = Color(0xFF1B1B1B)
                                     )
@@ -447,7 +467,7 @@ fun IdentifyScreen() {
                                     )
                                     Spacer(Modifier.width(6.dp))
                                     Text(
-                                        "Confidence: ${result.confidence}",
+                                        "Evidence: ${result.confidence}",
                                         style = MaterialTheme.typography.bodyMedium,
                                         fontWeight = FontWeight.Bold
                                     )
@@ -550,7 +570,7 @@ fun IdentifyScreen() {
                                 listOf(
                                     "1. Take a clear photo of the mushroom (cap, gills, stem)",
                                     "2. AI analyzes morphological features",
-                                    "3. Get species ID, safety rating, and look-alikes",
+                                    "3. Review tentative candidates, missing evidence and look-alikes",
                                     "4. Ask follow-up questions in chat"
                                 ).forEach { step ->
                                     Text(
@@ -756,7 +776,7 @@ private fun imageUriToBase64(context: Context, uri: Uri): String {
     if (bounds.outWidth <= 0 || bounds.outHeight <= 0) throw Exception("Cannot decode image")
 
     var sampleSize = 1
-    while (bounds.outWidth / (sampleSize * 2) >= maxSize && bounds.outHeight / (sampleSize * 2) >= maxSize) {
+    while (maxOf(bounds.outWidth, bounds.outHeight) / (sampleSize * 2) >= maxSize) {
         sampleSize *= 2
     }
     val opts = BitmapFactory.Options().apply { inSampleSize = sampleSize }
@@ -774,48 +794,45 @@ private fun imageUriToBase64(context: Context, uri: Uri): String {
     val outputStream = ByteArrayOutputStream()
     scaledBitmap.compress(Bitmap.CompressFormat.JPEG, 85, outputStream)
     if (scaledBitmap !== bitmap) bitmap.recycle()
+    scaledBitmap.recycle()
     return Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
 }
 
-private fun callClaudeVisionAPI(context: Context, imageUri: Uri, apiKey: String): IdentificationResult {
+private fun callClaudeVisionAPI(context: Context, imageUris: List<Uri>, apiKey: String): IdentificationResult {
     if (apiKey.isBlank()) throw Exception("Add your Anthropic API key in Settings to enable AI identification.")
 
-    val base64Image = imageUriToBase64(context, imageUri)
+    require(imageUris.isNotEmpty() && imageUris.size <= 4) { "Choose one to four photos." }
 
-    val systemPrompt = """You are an expert Victorian mycologist specializing in fungi found in southeastern Australia.
-Analyze the provided mushroom photograph and provide:
-1. Species identification (scientific name)
-2. Common name(s)
-3. Confidence level (Low/Medium/High/Very High)
-4. Safety rating (EDIBLE, CAUTION, TOXIC, or DEADLY POISONOUS)
-5. Key identifying features visible in the photo
-6. Dangerous look-alikes to watch for
-7. Typical habitat
-
-Format your response as follows:
-SPECIES: [Scientific name]
-COMMON_NAME: [Common name]
-CONFIDENCE: [Level]
-SAFETY: [Rating]
-FEATURES: [feature1] | [feature2] | [feature3]
-LOOK_ALIKES: [species1] | [species2]
-HABITAT: [description]
-DISCUSSION: [Your detailed analysis paragraph]
-
-IMPORTANT: Always emphasize that AI identification should NEVER be used as the sole basis for consuming wild mushrooms. Always recommend expert consultation."""
+    val systemPrompt = """You are an educational fungi observation assistant.
+Photographs cannot verify species identity or whether a mushroom is safe to eat.
+Assess the supplied views together. Suggest at most three tentative candidates only
+when evidence supports them. Otherwise state INSUFFICIENT_EVIDENCE and ask for
+missing views (cap, underside, complete stem/base, habitat) or expert examination.
+Never give an edibility verdict, a consumption recommendation, or numeric certainty.
+A single feature such as colour, bruising, gills or spines cannot establish safety.
+Use this format:
+SPECIES: [tentative candidate names, or Insufficient evidence]
+COMMON_NAME: [reference common names, or Unknown]
+STATUS: [TENTATIVE or INSUFFICIENT_EVIDENCE]
+FEATURES: [visible feature1] | [visible feature2]
+LOOK_ALIKES: [dangerous candidate1] | [candidate2]
+HABITAT: [observed habitat or Not shown]
+DISCUSSION: [Explain uncertainty, missing evidence and the need for expert verification.]"""
 
     val contentArray = JSONArray().apply {
+        imageUris.forEach { imageUri ->
         put(JSONObject().apply {
             put("type", "image")
             put("source", JSONObject().apply {
                 put("type", "base64")
                 put("media_type", "image/jpeg")
-                put("data", base64Image)
+                put("data", imageUriToBase64(context, imageUri))
             })
         })
+        }
         put(JSONObject().apply {
             put("type", "text")
-            put("text", "Please identify this mushroom. Provide a detailed analysis following the structured format.")
+            put("text", "Assess these views together using the required format. State insufficient evidence when identification is unsupported.")
         })
     }
 
@@ -845,7 +862,7 @@ IMPORTANT: Always emphasize that AI identification should NEVER be used as the s
     val responseBody = response.body?.string() ?: throw Exception("Empty response")
 
     if (!response.isSuccessful) {
-        throw Exception("API error ${response.code}: $responseBody")
+        throw Exception("AI service returned ${response.code}. Please check your key or try again later.")
     }
 
     val json = JSONObject(responseBody)
@@ -868,10 +885,12 @@ private fun parseIdentificationResponse(text: String): IdentificationResult {
         return regex.find(text)?.groupValues?.get(1)?.trim() ?: ""
     }
 
-    val species = extractField("SPECIES").ifBlank { "Unknown species" }
+    val status = extractField("STATUS").uppercase(Locale.ROOT)
+    val tentative = status == "TENTATIVE"
+    val species = if (tentative) extractField("SPECIES").ifBlank { "Insufficient evidence" } else "Insufficient evidence"
     val common = extractField("COMMON_NAME").ifBlank { "Unknown" }
-    val confidence = extractField("CONFIDENCE").ifBlank { "Low" }
-    val safety = extractField("SAFETY").ifBlank { "CAUTION - Unknown" }
+    val confidence = if (tentative) "Tentative — expert verification required" else "Insufficient evidence"
+    val safety = "UNKNOWN — photographs do not establish edibility"
     val featuresRaw = extractField("FEATURES")
     val lookAlikesRaw = extractField("LOOK_ALIKES")
     val habitat = extractField("HABITAT")
@@ -899,9 +918,7 @@ private fun parseIdentificationResponse(text: String): IdentificationResult {
 private fun callClaudeChatAPI(messages: List<ChatMessage>, apiKey: String): String {
     if (apiKey.isBlank()) throw Exception("Add your Anthropic API key in Settings to chat with the mycologist assistant.")
 
-    val systemPrompt = """You are an expert mycologist assistant specializing in Victorian (Australian) fungi.
-Answer questions about mushroom identification, safety, ecology, and foraging.
-Be concise but thorough. Always emphasize safety — never encourage eating unidentified wild mushrooms."""
+    val systemPrompt = """You are an educational fungi observation assistant. Discuss visible features, ecology and uncertain candidates. Do not confirm an identification or edibility from photographs, provide consumption guidance, or turn a tentative candidate into a verified species. Ask for missing evidence and expert examination. Treat prior AI text as unverified."""
 
     val messagesArray = JSONArray()
     for (msg in messages) {

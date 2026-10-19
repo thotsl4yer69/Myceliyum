@@ -11,19 +11,22 @@ permissions:
   contents: read
 
 jobs:
+  verify:
+    uses: ./.github/workflows/android-ci.yml
   release-apk:
+    needs: verify
     name: Build signed release APK
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
@@ -63,7 +66,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Run unit tests before release
-        run: ./gradlew testDebugUnitTest --stacktrace
+        run: ./gradlew testDebugUnitTest lintDebug --stacktrace
 
       - name: Assemble signed release APK
         env:
@@ -71,7 +74,6 @@ jobs:
           STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
           KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
-          BUILD_NUMBER: ${{ github.run_number }}
           # A client-distributed APK cannot safely carry a backend bearer secret.
           # BACKEND_TOKEN is intentionally not injected here. Public releases use
           # the keyless/free fallback until the backend has client-safe auth.

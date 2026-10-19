@@ -673,3 +673,11 @@ footer { padding: 52px 0 36px; background: var(--bg); }
   .block { padding: 60px 0; }
   .statusbar { font-size: 9px; }
 }
+
+/* Review: explicit states and keyboard access. */
+:focus-visible { outline: 3px solid var(--amber, #ffc04d); outline-offset: 4px; }
+.photo-unavailable { display: grid; place-items: center; min-height: 190px; padding: 36px 20px; color: var(--ink-dim); text-align: center; }
+.photo-credit, .catalogue-source, .map-status { font-size: 12px; line-height: 1.6; color: var(--ink-dim); }
+.photo-credit { display: block; overflow-wrap: anywhere; }
+[aria-disabled="true"] { opacity: .55; cursor: not-allowed; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }
