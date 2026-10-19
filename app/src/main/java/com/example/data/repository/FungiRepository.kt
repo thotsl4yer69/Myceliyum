@@ -859,7 +859,7 @@ class FungiRepository(
                                     if (v != null) cache.put(gridKey(missCoords[k].first, missCoords[k].second, fine), v)
                                 }
                             } catch (e: Exception) {
-            if (e is kotlinx.coroutines.CancellationException) throw e
+                                if (e is kotlinx.coroutines.CancellationException) throw e
                                 Log.w(TAG, "Repository operation failed; details omitted")
                             }
                         }
@@ -1230,7 +1230,7 @@ class FungiRepository(
                                     )
                                 }
                             } catch (e: Exception) {
-            if (e is kotlinx.coroutines.CancellationException) throw e
+                                if (e is kotlinx.coroutines.CancellationException) throw e
                                 Log.w(TAG, "Repository operation failed; details omitted")
                             }
                         }
@@ -1275,7 +1275,7 @@ class FungiRepository(
                 }
                 Log.w(TAG, "Repository operation failed; details omitted")
             } catch (e: Exception) {
-            if (e is kotlinx.coroutines.CancellationException) throw e
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 Log.w(TAG, "Repository operation failed; details omitted")
             }
         }
@@ -1311,7 +1311,7 @@ class FungiRepository(
                     return@withContext label.split(",").take(2).joinToString(",").trim()
                 }
             } catch (e: Exception) {
-            if (e is kotlinx.coroutines.CancellationException) throw e
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 Log.w(TAG, "Repository operation failed; details omitted")
             }
         }
