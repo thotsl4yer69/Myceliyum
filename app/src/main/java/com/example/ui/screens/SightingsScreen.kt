@@ -20,6 +20,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import kotlinx.coroutines.launch
+import com.example.util.SightingPolicy
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -56,12 +59,25 @@ fun SightingsScreen(
     val context = LocalContext.current
     val speciesList by viewModel.speciesList.collectAsState()
     val userSightings by viewModel.userSightings.collectAsState()
-    var showAddSightingDialog by remember { mutableStateOf(false) }
+    var showAddSightingDialog by rememberSaveable { mutableStateOf(false) }
     var selectedSightingForDetail by remember { mutableStateOf<UserSighting?>(null) }
 
     // Android Location helper
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
     var detectedLocation by remember { mutableStateOf<Pair<Double, Double>?>(null) }
+
+    var editingId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var isSaving by remember { mutableStateOf(false) }
+    var saveError by remember { mutableStateOf<String?>(null) }
+    var confirmDelete by remember { mutableStateOf<UserSighting?>(null) }
+    val snackbar = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    fun acceptFix(loc: Location?) {
+        if (loc != null && loc.hasAccuracy() && loc.accuracy <= 100f &&
+            (android.os.SystemClock.elapsedRealtimeNanos() - loc.elapsedRealtimeNanos) in 0..120_000_000_000L) {
+            detectedLocation = Pair(loc.latitude, loc.longitude)
+        }
+    }
 
     // Rationale Dialog Permissions launchers
     var showCameraRationale by remember { mutableStateOf(false) }
@@ -89,11 +105,9 @@ fun SightingsScreen(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
-            fusedLocationClient.lastLocation.addOnSuccessListener { loc: Location? ->
-                if (loc != null) {
-                    detectedLocation = Pair(loc.latitude, loc.longitude)
-                }
-            }
+            fusedLocationClient.getCurrentLocation(com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY, com.google.android.gms.tasks.CancellationTokenSource().token)
+                .addOnSuccessListener { loc: Location? -> acceptFix(loc) }
+                .addOnFailureListener { detectedLocation = null }
         } else {
             Toast.makeText(context, "Location is needed to tag where you found something.", Toast.LENGTH_LONG).show()
         }
@@ -102,17 +116,16 @@ fun SightingsScreen(
     // Proactive permissions checks on entering sightings screen
     LaunchedEffect(Unit) {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            showLocationRationale = true
+            // Coordinates remain blank until the user supplies a location.
         } else {
-            fusedLocationClient.lastLocation.addOnSuccessListener { loc: Location? ->
-                if (loc != null) {
-                    detectedLocation = Pair(loc.latitude, loc.longitude)
-                }
-            }
+            fusedLocationClient.getCurrentLocation(com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY, com.google.android.gms.tasks.CancellationTokenSource().token)
+                .addOnSuccessListener { loc: Location? -> acceptFix(loc) }
+                .addOnFailureListener { detectedLocation = null }
         }
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
                 title = {
@@ -137,12 +150,9 @@ fun SightingsScreen(
         floatingActionButton = {
             FloatingActionButton(
                 onClick = {
-                    // Check camera perm on tapping Add Sighting
-                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-                        showCameraRationale = true
-                    } else {
-                        showAddSightingDialog = true
-                    }
+                    editingId = null
+                    saveError = null
+                    showAddSightingDialog = true
                 },
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
@@ -301,33 +311,63 @@ fun SightingsScreen(
         )
     }
 
-    // ADD SIGHTING DIALOG
     if (showAddSightingDialog) {
         AddSightingDialog(
             speciesList = speciesList,
             initialLocation = detectedLocation,
-            onDismiss = { showAddSightingDialog = false },
+            existing = userSightings.find { it.id == editingId },
+            saving = isSaving,
+            error = saveError,
+            onDismiss = { if (!isSaving) showAddSightingDialog = false },
             onSave = { speciesId, lat, lng, notes, photoPath, isPrivate ->
-                viewModel.addUserSighting(speciesId, lat, lng, notes, photoPath, isPrivate)
-                showAddSightingDialog = false
-                Toast.makeText(context, "Sighting saved.", Toast.LENGTH_SHORT).show()
+                isSaving = true
+                saveError = null
+                viewModel.addUserSighting(speciesId, lat, lng, notes, photoPath, isPrivate,
+                    existing = userSightings.find { it.id == editingId }) { error ->
+                    isSaving = false
+                    saveError = error
+                    if (error == null) {
+                        showAddSightingDialog = false
+                        Toast.makeText(context, "Sighting saved.", Toast.LENGTH_SHORT).show()
+                    }
+                }
             }
         )
     }
 
-    // DETAIL SIGHTING DIALOG
     selectedSightingForDetail?.let { sighting ->
         SightingDetailDialog(
             sighting = sighting,
             speciesList = speciesList,
             onDismiss = { selectedSightingForDetail = null },
-            onDelete = {
-                viewModel.deleteUserSighting(sighting)
+            onEdit = {
+                editingId = sighting.id
                 selectedSightingForDetail = null
-                Toast.makeText(context, "Sighting deleted", Toast.LENGTH_SHORT).show()
-            }
+                saveError = null
+                showAddSightingDialog = true
+            },
+            onDelete = { confirmDelete = sighting }
         )
     }
+    confirmDelete?.let { sighting ->
+        AlertDialog(onDismissRequest = { confirmDelete = null },
+            title = { Text("Delete this sighting?") },
+            text = { Text("You can undo the deletion immediately afterwards.") },
+            confirmButton = { TextButton(onClick = {
+                confirmDelete = null
+                viewModel.deleteUserSighting(sighting) { success ->
+                    if (success) {
+                        selectedSightingForDetail = null
+                        scope.launch {
+                            if (snackbar.showSnackbar("Sighting deleted", "Undo", duration = SnackbarDuration.Long) == SnackbarResult.ActionPerformed)
+                                viewModel.restoreSighting(sighting)
+                        }
+                    } else Toast.makeText(context, "Could not delete sighting.", Toast.LENGTH_LONG).show()
+                }
+            }) { Text("Delete") } },
+            dismissButton = { TextButton(onClick = { confirmDelete = null }) { Text("Cancel") } })
+    }
+
 }
 
 @Composable
@@ -448,7 +488,8 @@ fun SightingDetailDialog(
     sighting: UserSighting,
     speciesList: List<Species>,
     onDismiss: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onEdit: () -> Unit
 ) {
     val assoc = speciesList.find { it.id == sighting.speciesId }
     val sName = assoc?.scientificName ?: sighting.speciesId
@@ -538,7 +579,7 @@ fun SightingDetailDialog(
                         sdf.format(Date(sighting.timestamp))
                     }
                     Text(
-                        text = "Recorded at: $fullDate UTC",
+                        text = "Recorded at: $fullDate (device time)",
                         fontFamily = FontFamily.Monospace,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -567,6 +608,7 @@ fun SightingDetailDialog(
                     )
                 }
 
+                OutlinedButton(onClick = onEdit, modifier = Modifier.fillMaxWidth()) { Text("Edit sighting") }
                 Spacer(modifier = Modifier.height(20.dp))
 
                 Row(
@@ -593,23 +635,27 @@ fun SightingDetailDialog(
 fun AddSightingDialog(
     speciesList: List<Species>,
     initialLocation: Pair<Double, Double>?,
+    existing: UserSighting? = null,
+    saving: Boolean = false,
+    error: String? = null,
     onDismiss: () -> Unit,
     onSave: (speciesId: String, lat: Double, lng: Double, notes: String, photoPath: String?, isPrivate: Boolean) -> Unit
 ) {
     val context = LocalContext.current
 
-    var selectedSpecies by remember { mutableStateOf<Species?>(speciesList.firstOrNull()) }
+    var selectedSpeciesId by rememberSaveable(existing?.id) { mutableStateOf(existing?.speciesId ?: "unidentified") }
+    val selectedSpecies = speciesList.find { it.id == selectedSpeciesId }
     var dropShown by remember { mutableStateOf(false) }
 
-    var manualLat by remember { mutableStateOf(initialLocation?.first?.toString() ?: "-37.8136") }
-    var manualLng by remember { mutableStateOf(initialLocation?.second?.toString() ?: "144.9631") }
-    var userNotes by remember { mutableStateOf("") }
-    var isPrivateEntry by remember { mutableStateOf(false) }
+    var manualLat by rememberSaveable(existing?.id) { mutableStateOf(existing?.lat?.toString() ?: initialLocation?.first?.toString() ?: "") }
+    var manualLng by rememberSaveable(existing?.id) { mutableStateOf(existing?.lng?.toString() ?: initialLocation?.second?.toString() ?: "") }
+    var userNotes by rememberSaveable(existing?.id) { mutableStateOf(existing?.notes ?: "") }
+    var isPrivateEntry by rememberSaveable(existing?.id) { mutableStateOf(existing?.isPrivate ?: true) }
 
     // Captured voucher photo (content:// URI string from our FileProvider)
-    var voucherPhotoPath by remember { mutableStateOf<String?>(null) }
+    var voucherPhotoPath by rememberSaveable(existing?.id) { mutableStateOf(existing?.photoLocalPath) }
     // URI we asked the camera app to write the full-resolution image into
-    var pendingPhotoUri by remember { mutableStateOf<Uri?>(null) }
+    var pendingPhotoUri by rememberSaveable { mutableStateOf<Uri?>(null) }
 
     val takePictureLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
@@ -689,7 +735,7 @@ fun AddSightingDialog(
                         shape = RoundedCornerShape(8.dp)
                     ) {
                         Text(
-                            text = selectedSpecies?.scientificName ?: "Pick a species",
+                            text = selectedSpecies?.scientificName ?: "Unidentified specimen",
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.weight(1f),
                             textAlign = TextAlign.Start
@@ -701,11 +747,12 @@ fun AddSightingDialog(
                         expanded = dropShown,
                         onDismissRequest = { dropShown = false }
                     ) {
+                        DropdownMenuItem(text = { Text("Unidentified specimen") }, onClick = { selectedSpeciesId = "unidentified"; dropShown = false })
                         speciesList.forEach { s ->
                             DropdownMenuItem(
                                 text = { Text("${s.scientificName} (${s.commonNames.firstOrNull() ?: ""})") },
                                 onClick = {
-                                    selectedSpecies = s
+                                    selectedSpeciesId = s.id
                                     dropShown = false
                                 }
                             )
@@ -715,6 +762,10 @@ fun AddSightingDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
+                if (error != null) Text(error, color = MaterialTheme.colorScheme.error)
+                if (!SightingPolicy.validCoordinates(manualLat.toDoubleOrNull(), manualLng.toDoubleOrNull()))
+                    Text("Enter a latitude (−90 to 90) and longitude (−180 to 180). No location has been assumed.", style = MaterialTheme.typography.bodySmall)
+                Text("Species is an unverified field label. Leave unidentified when unsure.", style = MaterialTheme.typography.bodySmall)
                 // 2. Latitude & Longitude inputs
                 Text(
                     text = "Location",
@@ -881,7 +932,7 @@ fun AddSightingDialog(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "Already on-device only — this just hides it from any future sharing or export.",
+                            text = "Excluded from shared CSV. Included only in your complete personal backup. Android may back up your records if device backup is enabled.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -902,12 +953,12 @@ fun AddSightingDialog(
                     }
 
                     Button(
-                        enabled = selectedSpecies != null,
+                        enabled = !saving && SightingPolicy.validCoordinates(manualLat.toDoubleOrNull(), manualLng.toDoubleOrNull()),
                         onClick = {
-                            val computedLat = manualLat.toDoubleOrNull() ?: -37.8136
-                            val computedLng = manualLng.toDoubleOrNull() ?: 144.9631
+                            val computedLat = manualLat.toDouble()
+                            val computedLng = manualLng.toDouble()
                             onSave(
-                                selectedSpecies?.id ?: "unidentified",
+                                selectedSpeciesId,
                                 computedLat,
                                 computedLng,
                                 userNotes,

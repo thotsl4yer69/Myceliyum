@@ -42,7 +42,8 @@ class MyceliumApplication : Application() {
         }
 
         val logging = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
+            // Location URLs and headers are sensitive even in development builds.
+            level = HttpLoggingInterceptor.Level.NONE
         }
         val okHttpClient = OkHttpClient.Builder()
             .addInterceptor(logging)

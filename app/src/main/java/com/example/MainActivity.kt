@@ -23,6 +23,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.activity.compose.BackHandler
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
@@ -67,14 +69,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-sealed interface SelectedTab {
-    object Home : SelectedTab
-    object Search : SelectedTab
-    object Map : SelectedTab
-    object Identify : SelectedTab
-    object Sightings : SelectedTab
-    object Settings : SelectedTab
-}
+enum class SelectedTab { Home, Search, Map, Identify, Sightings, Settings }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -83,8 +78,12 @@ fun MainWorkflowLayout(
     updateViewModel: UpdateViewModel
 ) {
     // Nav Navigation tabs states
-    var activeTab by remember { mutableStateOf<SelectedTab>(SelectedTab.Home) }
-    var activeDetailSpecies by remember { mutableStateOf<Species?>(null) }
+    var activeTab by rememberSaveable { mutableStateOf<SelectedTab>(SelectedTab.Home) }
+    var activeDetailSpecies by rememberSaveable { mutableStateOf<Species?>(null) }
+
+    BackHandler(activeDetailSpecies != null || activeTab != SelectedTab.Home) {
+        if (activeDetailSpecies != null) activeDetailSpecies = null else activeTab = SelectedTab.Home
+    }
 
     val splashNoticeAccepted by viewModel.splashNoticeAccepted.collectAsState()
     val updateState by updateViewModel.state.collectAsState()
@@ -104,9 +103,7 @@ fun MainWorkflowLayout(
                 ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
                 ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
             if (granted) fetchDeviceLocation(context, viewModel)
-            else locationPermissionLauncher.launch(
-                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
-            )
+            // Ask for location only when the user chooses the map GPS control.
         }
     }
 
@@ -127,7 +124,7 @@ fun MainWorkflowLayout(
                     containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(4.dp)
                 ) {
                     NavigationBarItem(
-                        selected = activeTab is SelectedTab.Home,
+                        selected = activeTab == SelectedTab.Home,
                         onClick = {
                             activeTab = SelectedTab.Home
                             activeDetailSpecies = null
@@ -138,7 +135,7 @@ fun MainWorkflowLayout(
                     )
 
                     NavigationBarItem(
-                        selected = activeTab is SelectedTab.Search,
+                        selected = activeTab == SelectedTab.Search,
                         onClick = {
                             activeTab = SelectedTab.Search
                             activeDetailSpecies = null
@@ -149,7 +146,7 @@ fun MainWorkflowLayout(
                     )
 
                     NavigationBarItem(
-                        selected = activeTab is SelectedTab.Map,
+                        selected = activeTab == SelectedTab.Map,
                         onClick = {
                             activeTab = SelectedTab.Map
                             activeDetailSpecies = null
@@ -160,7 +157,7 @@ fun MainWorkflowLayout(
                     )
 
                     NavigationBarItem(
-                        selected = activeTab is SelectedTab.Identify,
+                        selected = activeTab == SelectedTab.Identify,
                         onClick = {
                             activeTab = SelectedTab.Identify
                             activeDetailSpecies = null
@@ -171,7 +168,7 @@ fun MainWorkflowLayout(
                     )
 
                     NavigationBarItem(
-                        selected = activeTab is SelectedTab.Sightings,
+                        selected = activeTab == SelectedTab.Sightings,
                         onClick = {
                             activeTab = SelectedTab.Sightings
                             activeDetailSpecies = null
@@ -193,7 +190,7 @@ fun MainWorkflowLayout(
             ) {
                 // Render selected workflow tab
                 when (activeTab) {
-                    is SelectedTab.Home -> HomeScreen(
+                    SelectedTab.Home -> HomeScreen(
                         viewModel = viewModel,
                         onNavigateToSearch = { activeTab = SelectedTab.Search },
                         onNavigateToMap = { activeTab = SelectedTab.Map },
@@ -203,20 +200,20 @@ fun MainWorkflowLayout(
                             activeDetailSpecies = spec
                         }
                     )
-                    is SelectedTab.Search -> SearchScreen(
+                    SelectedTab.Search -> SearchScreen(
                         viewModel = viewModel,
                         onSpeciesSelected = { spec ->
                             activeDetailSpecies = spec
                         }
                     )
-                    is SelectedTab.Map -> MapScreen(
+                    SelectedTab.Map -> MapScreen(
                         viewModel = viewModel
                     )
-                    is SelectedTab.Identify -> IdentifyScreen()
-                    is SelectedTab.Sightings -> SightingsScreen(
+                    SelectedTab.Identify -> IdentifyScreen()
+                    SelectedTab.Sightings -> SightingsScreen(
                         viewModel = viewModel
                     )
-                    is SelectedTab.Settings -> SettingsScreen(
+                    SelectedTab.Settings -> SettingsScreen(
                         viewModel = viewModel,
                         updateViewModel = updateViewModel
                     )

@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 
 // Single app-wide preferences DataStore.
 private val Context.dataStore by preferencesDataStore(name = "mycelium_settings")
@@ -26,6 +27,7 @@ class SettingsStore(private val context: Context) {
         // Stored only on this device; never bundled into the published app and
         // sent only directly to the Anthropic API from the user's own device.
         val ANTHROPIC_API_KEY = stringPreferencesKey("anthropic_api_key")
+        val ENCRYPTED_API_KEY = stringPreferencesKey("anthropic_api_key_encrypted_v1")
     }
 
     companion object {
@@ -49,7 +51,14 @@ class SettingsStore(private val context: Context) {
 
     /** User-supplied Anthropic API key; blank until the user enters one. */
     val anthropicApiKey: Flow<String> =
-        context.dataStore.data.map { it[Keys.ANTHROPIC_API_KEY] ?: "" }
+        context.dataStore.data.onStart {
+            context.dataStore.edit { prefs ->
+                prefs[Keys.ANTHROPIC_API_KEY]?.let { old ->
+                    if (prefs[Keys.ENCRYPTED_API_KEY] == null) prefs[Keys.ENCRYPTED_API_KEY] = DeviceSecret.encrypt(old)
+                    prefs.remove(Keys.ANTHROPIC_API_KEY)
+                }
+            }
+        }.map { DeviceSecret.decrypt(it[Keys.ENCRYPTED_API_KEY] ?: "") }
 
     suspend fun setMeasureUnits(value: String) {
         context.dataStore.edit { it[Keys.UNITS] = value }
@@ -68,6 +77,7 @@ class SettingsStore(private val context: Context) {
     }
 
     suspend fun setAnthropicApiKey(value: String) {
-        context.dataStore.edit { it[Keys.ANTHROPIC_API_KEY] = value.trim() }
+        val ciphertext = DeviceSecret.encrypt(value.trim())
+        context.dataStore.edit { it[Keys.ENCRYPTED_API_KEY] = ciphertext; it.remove(Keys.ANTHROPIC_API_KEY) }
     }
 }

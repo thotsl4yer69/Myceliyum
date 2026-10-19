@@ -65,6 +65,9 @@ interface FungiDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertUserSighting(sighting: UserSighting)
 
+    @Transaction
+    suspend fun importUserSightings(sightings: List<UserSighting>) { sightings.forEach { insertUserSighting(it) } }
+
     @Delete
     suspend fun deleteUserSighting(sighting: UserSighting)
 

@@ -57,6 +57,7 @@ class FungiRepository(
         .add(KotlinJsonAdapterFactory())
         .build()
     private val TAG = "FungiRepository"
+    private val fieldCache = com.example.data.local.FieldCache(context)
 
     // Field-ID diagnostics parsed ONCE from species.json (extra keys Moshi
     // ignores during the Species seed parse). Not persisted in Room — purely an
@@ -88,7 +89,7 @@ class FungiRepository(
                     // species table is independent of user sightings, and inserts
                     // REPLACE on conflict, so this never touches user data.
                     val existingCount = dao.getAllSpecies().size
-                    if (existingCount != speciesList.size) {
+                    run {
                         dao.insertSpecies(speciesList)
                         Log.d(TAG, "Seeded/updated species catalogue: $existingCount -> ${speciesList.size}.")
                     }
@@ -222,7 +223,7 @@ class FungiRepository(
                         val pLng = o.longitude ?: o.location?.split(",")?.getOrNull(1)?.trim()?.toDoubleOrNull() ?: geoLng
                         if (pLat == null || pLng == null) return@mapNotNull null
                         MapObservation(
-                            id = o.id, lat = pLat, lng = pLng,
+                            id = com.example.util.OccurrenceIdentity.key("iNaturalist", o.id.toString()), lat = pLat, lng = pLng,
                             taxonName = o.taxon?.name ?: "Unidentified fungus",
                             commonName = o.taxon?.commonName,
                             source = "iNaturalist",
@@ -245,7 +246,7 @@ class FungiRepository(
                         val pLng = o.decimalLongitude ?: return@mapNotNull null
                         val whenMs = parseObsDate(o.eventDate) // null-safe; falls back to ~30d ago
                         MapObservation(
-                            id = (o.key ?: (pLat * 1e6 + pLng).toLong()),
+                            id = com.example.util.OccurrenceIdentity.canonical("GBIF", o.key?.toString() ?: return@mapNotNull null, o.occurrenceId),
                             lat = pLat, lng = pLng,
                             taxonName = o.scientificName ?: "Fungus (GBIF record)",
                             commonName = null,
@@ -260,7 +261,7 @@ class FungiRepository(
                     Log.w(TAG, "all-fungi GBIF fetch failed: ${e.message}"); emptyList()
                 }
             }
-            (iNatDeferred.await() + gbifDeferred.await())
+            (iNatDeferred.await() + gbifDeferred.await()).distinctBy { it.id }
         }
         areaObsCache.put(key, now to result)
         result
@@ -453,7 +454,7 @@ class FungiRepository(
                 if (parsedLat != null && parsedLng != null) {
                     val obsTime = parseObsDate(iObs.observedOn)
                     Observation(
-                        id = iObs.id,
+                        id = com.example.util.OccurrenceIdentity.key("iNaturalist", iObs.id.toString()),
                         speciesId = species.id,
                         lat = parsedLat,
                         lng = parsedLng,
@@ -483,7 +484,7 @@ class FungiRepository(
                 alaDeferred.await() to gbifDeferred.await()
             }
 
-            val allFresh = freshObservations + alaObs + gbifObs
+            val allFresh = (freshObservations + alaObs + gbifObs).distinctBy { it.id }
 
             // Replace atomically so this area's result (even an empty one) fully
             // supersedes the previous area's cache without a partial state.
@@ -541,7 +542,7 @@ class FungiRepository(
                 // Herbarium specimens are research-grade by definition
                 val quality = if (occ.basisOfRecord == "PRESERVED_SPECIMEN") "research" else "needs_id"
                 Observation(
-                    id = occ.uuid.hashCode().toLong(),
+                    id = com.example.util.OccurrenceIdentity.canonical("ALA", occ.uuid ?: return@mapNotNull null, occ.occurrenceId),
                     speciesId = species.id,
                     lat = olat, lng = olng,
                     observedAt = obsTime,
@@ -586,7 +587,7 @@ class FungiRepository(
                 val obsTime = parseYearMonth(occ.year, occ.month)
                 val quality = if (occ.basisOfRecord == "PRESERVED_SPECIMEN") "research" else "needs_id"
                 Observation(
-                    id = occ.key ?: occ.hashCode().toLong(),
+                    id = com.example.util.OccurrenceIdentity.canonical("GBIF", occ.key?.toString() ?: return@mapNotNull null, occ.occurrenceId),
                     speciesId = species.id,
                     lat = olat, lng = olng,
                     observedAt = obsTime,
@@ -624,36 +625,32 @@ class FungiRepository(
         val avgMaxTemp: Double,
         val avgMinTemp: Double,
         val avgTemp: Double,
+        val fetchedAt: Long = System.currentTimeMillis(),
         val avgSoilMoisture: Double? = null // volumetric m³/m³, 0-7cm layer; null if unavailable
     )
 
     suspend fun getDetailedWeather(lat: Double, lng: Double): WeatherData = withContext(Dispatchers.IO) {
+        val key = "${gridKey(lat, lng)}"
+        val cached = fieldCache.read<WeatherData>("weather", key, WeatherData::class.java, 7 * 24 * 60 * 60 * 1000L)
+        if (cached != null && System.currentTimeMillis() - cached.fetchedAt < CACHE_TTL_MS) return@withContext cached
         try {
-            Log.d(TAG, "Fetching detailed weather from Open-Meteo for ($lat, $lng)")
             val response = openMeteoApi.getPastWeather(limitLat = lat, limitLng = lng)
-
-            val rainfall = response.daily.precipitationSum
-                ?.map { it ?: 0.0 } ?: emptyList()
-            val maxTemps = response.daily.temperatureMax
-                ?.mapNotNull { it } ?: emptyList()
-            val minTemps = response.daily.temperatureMin
-                ?.mapNotNull { it } ?: emptyList()
-
-            val totalRainfall = rainfall.sum()
-            val avgMax = if (maxTemps.isNotEmpty()) maxTemps.average() else 15.0
-            val avgMin = if (minTemps.isNotEmpty()) minTemps.average() else 8.0
-
-            // Recent soil moisture (last ~7 days of hourly readings, 0-7cm layer).
-            val soil = response.hourly?.soilMoisture0to7cm?.mapNotNull { it } ?: emptyList()
-            val avgSoil = if (soil.isNotEmpty()) soil.takeLast(minOf(168, soil.size)).average() else null
-
-            Log.d(TAG, "Weather (${rainfall.size} days): Rain: ${totalRainfall}mm, AvgMax: ${avgMax}C, AvgMin: ${avgMin}C, Soil: $avgSoil")
-            WeatherData(rainfall, totalRainfall, avgMax, avgMin, (avgMax + avgMin) / 2.0, avgSoil)
+            val days = response.daily.time
+            val rain = response.daily.precipitationSum
+            val highs = response.daily.temperatureMax
+            val lows = response.daily.temperatureMin
+            require(days.size >= 30 && rain?.size == days.size && highs?.size == days.size && lows?.size == days.size) { "Incomplete weather observations" }
+            require(rain!!.all { it != null && it.isFinite() && it >= 0 } && highs!!.all { it != null && it.isFinite() } && lows!!.all { it != null && it.isFinite() }) { "Missing weather observations" }
+            val rainfall = rain.filterNotNull()
+            val hi = highs!!.filterNotNull().average()
+            val lo = lows!!.filterNotNull().average()
+            val soil = response.hourly?.soilMoisture0to7cm?.filterNotNull()?.filter { it.isFinite() }?.takeLast(168)
+            val value = WeatherData(rainfall, rainfall.sum(), hi, lo, (hi + lo) / 2, avgSoilMoisture = soil?.takeIf { it.isNotEmpty() }?.average())
+            runCatching { fieldCache.write("weather", key, WeatherData::class.java, value) }
+            value
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to fetch detailed weather, using Victorian autumn defaults", e)
-            // Default: moderate Victorian autumn conditions
-            val defaultDaily = List(45) { 3.0 } // ~3mm per day
-            WeatherData(defaultDaily, 135.0, 15.5, 8.0, 11.75)
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            cached ?: throw java.io.IOException("Weather unavailable for this area. Connect once to save real observations before scoring offline.", e)
         }
     }
 
@@ -665,7 +662,8 @@ class FungiRepository(
     private data class EnvCell(
         val landcover: Int?, val canopyPct: Double?, val ndvi: Double?, val waterDistM: Double?,
         val soilPh: Double? = null, val soilSand: Double? = null,
-        val soilMoisture: Double? = null, val twi: Double? = null, val forestType: Int? = null
+        val soilMoisture: Double? = null, val twi: Double? = null, val forestType: Int? = null,
+        val fetchedAt: Long = System.currentTimeMillis()
     )
     private val envCache = android.util.LruCache<Long, EnvCell>(8000) // bounded == CACHE_MAX
     // Deep Search uses its OWN session caches at a ~12 m snap. The overview caches
@@ -713,12 +711,12 @@ class FungiRepository(
                     val p = line.split('\t')
                     // ≥5 fields: core layers; ≥9 adds soil/moisture/twi; ≥10 adds
                     // forest_type. Older shorter rows still load (extras stay null).
-                    if (p.size >= 5) p[0].toLongOrNull()?.let { k ->
+                    if (p.size >= 11 && (System.currentTimeMillis() - (p[10].toLongOrNull() ?: 0L)) in 0..CACHE_TTL_MS) p[0].toLongOrNull()?.let { k ->
                         envCache.put(k, EnvCell(
                             p[1].toIntOrNull(), p[2].toDoubleOrNull(), p[3].toDoubleOrNull(), p[4].toDoubleOrNull(),
                             p.getOrNull(5)?.toDoubleOrNull(), p.getOrNull(6)?.toDoubleOrNull(),
                             p.getOrNull(7)?.toDoubleOrNull(), p.getOrNull(8)?.toDoubleOrNull(),
-                            p.getOrNull(9)?.toIntOrNull()
+                            p.getOrNull(9)?.toIntOrNull(), p[10].toLong()
                         ))
                     }
                 }
@@ -742,7 +740,7 @@ class FungiRepository(
                     w.write(
                         "$k\t${v.landcover ?: ""}\t${v.canopyPct ?: ""}\t${v.ndvi ?: ""}\t${v.waterDistM ?: ""}" +
                             "\t${v.soilPh ?: ""}\t${v.soilSand ?: ""}\t${v.soilMoisture ?: ""}\t${v.twi ?: ""}" +
-                            "\t${v.forestType ?: ""}\n"
+                            "\t${v.forestType ?: ""}\t${v.fetchedAt}\n"
                     )
                 }
             }
@@ -1141,11 +1139,11 @@ class FungiRepository(
             val missPts = ArrayList<Pair<Double, Double>>()
             for (i in points.indices) {
                 val c = cache.get(gridKey(points[i].first, points[i].second, fine))
-                if (c != null) {
+                if (c != null && System.currentTimeMillis() - c.fetchedAt in 0..CACHE_TTL_MS) {
                     landcover[i] = c.landcover; canopyPct[i] = c.canopyPct; ndvi[i] = c.ndvi; waterDist[i] = c.waterDistM
                     soilPh[i] = c.soilPh; soilSand[i] = c.soilSand; soilMoisture[i] = c.soilMoisture; twi[i] = c.twi
                     forestType[i] = c.forestType
-                    haveAny = true
+                    haveAny = haveAny || listOf(c.landcover, c.canopyPct, c.ndvi, c.waterDistM, c.soilPh, c.soilSand, c.soilMoisture, c.twi, c.forestType).any { it != null }
                 } else {
                     missIdx.add(i); missPts.add(points[i])
                 }
@@ -1307,32 +1305,26 @@ class FungiRepository(
      * Returns total rainfall in mm, and average max recorded temperature in C.
      * (Legacy method — kept for weather summary display in UI)
      */
-    suspend fun getWeatherLast30Days(lat: Double, lng: Double): Pair<Double, Double> = withContext(Dispatchers.IO) {
-        try {
-            Log.d(TAG, "Fetching rainfall and temperature from Open-Meteo for ($lat, $lng)")
-            val response = openMeteoApi.getPastWeather(limitLat = lat, limitLng = lng)
-            val sumList = response.daily.precipitationSum
-            val maxList = response.daily.temperatureMax
-
-            // Sum of last 30 days rainfall
-            val totalRainfall = sumList?.filterNotNull()?.sum() ?: 0.0
-
-            // Average max temp over past 30 days
-            val avgMaxTemp = maxList?.filterNotNull()?.average() ?: 15.0
-
-            Log.d(TAG, "Historical weather (last 30 days): Rainfall: $totalRainfall mm, Avg Max Temp: $avgMaxTemp C")
-            return@withContext Pair(totalRainfall, avgMaxTemp)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to fetch weather from Open-Meteo, using default fallback (95.0mm, 15.5C)", e)
-            // Returning a typical Victorian autumn default which permits moderate fruiting
-            return@withContext Pair(95.0, 15.5)
-        }
+    suspend fun getWeatherLast30Days(lat: Double, lng: Double): Pair<Double, Double>? = try {
+        val value = getDetailedWeather(lat, lng)
+        // A stale cached window is useful for offline reference, not a current summary.
+        if (System.currentTimeMillis() - value.fetchedAt >= CACHE_TTL_MS) null
+        else value.dailyRainfallMm.takeLast(30).sum() to value.avgMaxTemp
+    } catch (e: Exception) {
+        if (e is kotlinx.coroutines.CancellationException) throw e
+        null
     }
 
     /**
      * Clear all caches for management.
      */
     suspend fun clearCaches() = withContext(Dispatchers.IO) {
+        synchronized(this@FungiRepository) {
+            elevCacheFile.delete()
+            envCacheFile.delete()
+            cachesLoaded = true
+        }
+        fieldCache.clear()
         dao.clearAllCachedObservations()
         dao.clearAllObservationCacheAreas()
         // Also empty every in-memory cache so a recompute actually re-fetches.
@@ -1532,7 +1524,7 @@ class FungiRepository(
         // the grid timeout. (The old sequential, retried calls could exceed the
         // 45 s budget and error the whole map to blank.) Canopy + land-use always;
         // mulch only for mulch-associated species (gold tops etc.).
-        val needOsm = env == null && cellLL.isNotEmpty()
+        val needOsm = (env == null || env.landcover.any { it == null }) && cellLL.isNotEmpty()
         val (canopy, landPolys, mulchFeatures) = if (needOsm) coroutineScope {
             val minLat = cellLL.minOf { it.first }; val minLng = cellLL.minOf { it.second }
             val maxLat = cellLL.maxOf { it.first }; val maxLng = cellLL.maxOf { it.second }
@@ -1630,7 +1622,7 @@ class FungiRepository(
                 // available, else OSM forest proximity (mycorrhizal & wood-rot).
                 val canopyDist = if (canopy.isEmpty()) null else nearestFeatureMeters(cellLat, cellLng, canopy)
                 val landClass = if (env == null) classifyLandCell(cellLat, cellLng, landPolys) else LandClass.NEUTRAL
-                val canopyScore = if (env != null) MycoMath.richCanopyScore(
+                val canopyScore = if (env?.landcover?.getOrNull(idx) != null) MycoMath.richCanopyScore(
                     env.canopyPct.getOrNull(idx), env.ndvi.getOrNull(idx), env.landcover.getOrNull(idx), species.id
                 ) else when (landClass) {
                     LandClass.GREEN -> maxOf(0.85, MycoMath.canopyProximityScore(canopyDist))
@@ -1783,8 +1775,12 @@ class FungiRepository(
                 if (env == null) weather.avgSoilMoisture?.let { factors.add("💧 Soil moisture: ${String.format(Locale.US, "%.2f", it)} m³/m³ → ${String.format(Locale.US, "%.0f", MycoMath.soilMoistureFitness(it) * 100)}%") }
                 if (moonScore > 0.7) factors.add("🌙 Moon phase favourable (traditional signal)")
                 if (habitatGate < 0.95) factors.add("⛔ Habitat gate ×${String.format(Locale.US, "%.2f", habitatGate)} — built-up/water/bare ground suppresses this cell")
-                val confidence = MycoMath.predictionConfidence(nearbyRecords, weightedEvidence, env != null, cellElev != null)
-                factors.add("📶 Confidence: ${MycoMath.confidenceLabel(confidence)} — $nearbyRecords nearby record(s), ${if (env != null) "full" else "limited"} map data")
+                val cellHasEnv = env?.landcover?.getOrNull(idx) != null && env.canopyPct.getOrNull(idx) != null && env.ndvi.getOrNull(idx) != null
+                val weatherFresh = System.currentTimeMillis() - weather.fetchedAt < CACHE_TTL_MS
+                val confidence = MycoMath.predictionConfidence(nearbyRecords, weightedEvidence, cellHasEnv, cellElev != null) * if (weatherFresh) 1.0 else 0.5
+                factors.add("Weather: Open-Meteo, saved " + java.text.DateFormat.getDateTimeInstance().format(java.util.Date(weather.fetchedAt)) + if (weatherFresh) "" else " — STALE; suitability may have changed")
+                factors.add("Suitability ranking, not a probability of finding fungi. Victoria model; source resolution varies.")
+                factors.add("📶 Confidence: ${MycoMath.confidenceLabel(confidence)} — $nearbyRecords nearby record(s), ${if (cellHasEnv) "available" else "incomplete"} map data")
                 factors.add("Multi-factor habitat-suitability estimate — not a guarantee of presence.")
 
                 cells.add(HotspotCell(cellLat, cellLng, finalScore, tier, factors, cellSizeMeters = cellMeters, confidence = confidence))
@@ -1956,7 +1952,7 @@ class FungiRepository(
         val env = fetchEnvLayers(cellLL)
         // Habitat layers from OSM/Overpass (only when EE is off) — concurrent +
         // time-boxed so a slow overpass-api.de can't sink the aggregate grid.
-        val needOsm = env == null && cellLL.isNotEmpty()
+        val needOsm = (env == null || env.landcover.any { it == null }) && cellLL.isNotEmpty()
         val (canopy, landPolys) = if (needOsm) coroutineScope {
             val minLat = cellLL.minOf { it.first }; val minLng = cellLL.minOf { it.second }
             val maxLat = cellLL.maxOf { it.first }; val maxLng = cellLL.maxOf { it.second }
@@ -2023,7 +2019,7 @@ class FungiRepository(
                 ) else 0.7
                 val canopyDist = if (canopy.isEmpty()) null else nearestFeatureMeters(cellLat, cellLng, canopy)
                 val landClass = if (env == null) classifyLandCell(cellLat, cellLng, landPolys) else LandClass.NEUTRAL
-                val canopyScore = if (env != null) MycoMath.richCanopyScore(
+                val canopyScore = if (env?.landcover?.getOrNull(idx) != null) MycoMath.richCanopyScore(
                     env.canopyPct.getOrNull(idx), env.ndvi.getOrNull(idx), env.landcover.getOrNull(idx), "aggregate_default"
                 ) else when (landClass) {
                     LandClass.GREEN -> maxOf(0.85, MycoMath.canopyProximityScore(canopyDist))
@@ -2121,8 +2117,12 @@ class FungiRepository(
                 }
                 if (habitatGate < 0.95) factors.add("⛔ Habitat gate ×${String.format(Locale.US, "%.2f", habitatGate)} — built-up/water/bare ground suppresses this cell")
                 if (nearbySpecies.size >= 3) factors.add("🌿 Diversity bonus: ${nearbySpecies.size} distinct species recorded nearby")
-                val confidence = MycoMath.predictionConfidence(nearbyRecords, weightedEvidence, env != null, cellElev != null)
-                factors.add("📶 Confidence: ${MycoMath.confidenceLabel(confidence)} — $nearbyRecords nearby record(s), ${if (env != null) "full" else "limited"} map data")
+                val cellHasEnv = env?.landcover?.getOrNull(idx) != null && env.canopyPct.getOrNull(idx) != null && env.ndvi.getOrNull(idx) != null
+                val weatherFresh = System.currentTimeMillis() - weather.fetchedAt < CACHE_TTL_MS
+                val confidence = MycoMath.predictionConfidence(nearbyRecords, weightedEvidence, cellHasEnv, cellElev != null) * if (weatherFresh) 1.0 else 0.5
+                factors.add("Weather: Open-Meteo, saved " + java.text.DateFormat.getDateTimeInstance().format(java.util.Date(weather.fetchedAt)) + if (weatherFresh) "" else " — STALE; suitability may have changed")
+                factors.add("Suitability ranking, not a probability of finding fungi. Victoria model; source resolution varies.")
+                factors.add("📶 Confidence: ${MycoMath.confidenceLabel(confidence)} — $nearbyRecords nearby record(s), ${if (cellHasEnv) "available" else "incomplete"} map data")
                 factors.add("Multi-factor aggregate estimate — not species-specific.")
 
                 cells.add(HotspotCell(cellLat, cellLng, finalScore, tier, factors, cellSizeMeters = cellMeters, confidence = confidence))

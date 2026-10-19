@@ -17,8 +17,8 @@ android {
     targetSdk = 35
     // CI sets BUILD_NUMBER (= GitHub run number) so every published APK has a
     // unique, increasing versionCode; local builds fall back to 1.
-    versionCode = System.getenv("BUILD_NUMBER")?.toIntOrNull() ?: 1
-    versionName = "7.1"
+    versionCode = System.getenv("BUILD_NUMBER")?.toIntOrNull() ?: 29872800
+    versionName = "7.2"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -170,3 +170,6 @@ dependencies {
   "ksp"(libs.androidx.room.compiler)
   "ksp"(libs.moshi.kotlin.codegen)
 }
+
+// Export schemas for review and migration regression tests.
+ksp { arg("room.schemaLocation", "$projectDir/schemas") }

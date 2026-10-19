@@ -50,40 +50,6 @@ class FungiViewModel(
     private val settingsStore: SettingsStore
 ) : AndroidViewModel(application) {
 
-    // Seed state (ensure database is initialized on start)
-    init {
-        viewModelScope.launch {
-            repository.seedDatabase()
-            speciesList.first { it.isNotEmpty() }.let { list ->
-                if (selectedSpeciesForHotspot.value == null) {
-                    selectedSpeciesForHotspot.value = list.first()
-                }
-            }
-        }
-        // The map opens on a neutral default coordinate; mark the location
-        // "resolved" the first time it's set from a real source (device GPS, a
-        // search, presets, manual coords) so the UI can show "Locating…" instead
-        // of a misleading default city.
-        viewModelScope.launch { mapCenter.drop(1).collect { _locationResolved.value = true } }
-        viewModelScope.launch {
-            combine(
-                mapCenter,
-                searchRadiusKm,
-                selectedSpeciesForHotspot,
-                isAllSpeciesMode
-            ) { center, radius, species, allSpecies ->
-                HotspotRequest(center.first, center.second, radius, species?.id, allSpecies)
-            }
-                .debounce(HOTSPOT_RECOMPUTE_DEBOUNCE_MS)
-                .distinctUntilChanged()
-                .collect { request ->
-                    if (request.allSpecies || request.speciesId != null) {
-                        computeHotspots()
-                    }
-                }
-        }
-    }
-
     // False until the map centre is set from a real source (GPS / user action).
     private val _locationResolved = MutableStateFlow(false)
     val locationResolved: StateFlow<Boolean> = _locationResolved.asStateFlow()
@@ -224,7 +190,7 @@ class FungiViewModel(
     // Initial value true so the returning-user case doesn't flash the disclaimer
     // before DataStore has loaded; a brand-new user sees it once it emits false.
     val splashNoticeAccepted: StateFlow<Boolean> = settingsStore.splashAccepted
-        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     fun setMeasureUnits(value: String) {
         viewModelScope.launch { settingsStore.setMeasureUnits(value) }
@@ -290,6 +256,8 @@ class FungiViewModel(
     }
 
     fun setMapCenter(lat: Double, lng: Double) {
+        require(com.example.util.SightingPolicy.validCoordinates(lat, lng))
+        _locationResolved.value = true
         mapCenter.value = Pair(lat, lng)
     }
 
@@ -298,6 +266,7 @@ class FungiViewModel(
     }
 
     fun computeHotspots() {
+        if (!_locationResolved.value) return
         val (lat, lng) = mapCenter.value
         val radius = searchRadiusKm.value
         val multiSpecies = isAllSpeciesMode.value
@@ -443,29 +412,41 @@ class FungiViewModel(
         longitude: Double,
         notes: String,
         photoPath: String?,
-        isPrivate: Boolean
+        isPrivate: Boolean,
+        existing: UserSighting? = null,
+        onResult: (String?) -> Unit = {}
     ) {
         viewModelScope.launch {
+            if (!com.example.util.SightingPolicy.validCoordinates(latitude, longitude)) {
+                onResult("Enter valid coordinates."); return@launch
+            }
             val sighting = UserSighting(
+                id = existing?.id ?: 0,
                 speciesId = speciesId,
                 lat = latitude,
                 lng = longitude,
-                timestamp = System.currentTimeMillis(),
+                timestamp = existing?.timestamp ?: System.currentTimeMillis(),
                 photoLocalPath = photoPath,
                 notes = notes,
                 isPrivate = isPrivate
             )
-            repository.insertUserSighting(sighting)
+            try { repository.insertUserSighting(sighting); onResult(null) }
+            catch (e: Exception) { if (e is kotlinx.coroutines.CancellationException) throw e; onResult("Could not save. Your draft is still open.") }
         }
     }
 
     /**
      * Deletes user observation sighting
      */
-    fun deleteUserSighting(sighting: UserSighting) {
+    fun deleteUserSighting(sighting: UserSighting, onResult: (Boolean) -> Unit = {}) {
         viewModelScope.launch {
-            repository.deleteUserSighting(sighting)
+            try { repository.deleteUserSighting(sighting); onResult(true) }
+            catch (e: Exception) { if (e is kotlinx.coroutines.CancellationException) throw e; onResult(false) }
         }
+    }
+
+    fun restoreSighting(sighting: UserSighting) {
+        viewModelScope.launch { repository.insertUserSighting(sighting) }
     }
 
     /**
@@ -506,6 +487,41 @@ class FungiViewModel(
             month >= start || month <= end
         }
     }
+
+    // Seed state (ensure database is initialized on start)
+    init {
+        viewModelScope.launch {
+            repository.seedDatabase()
+            speciesList.first { it.isNotEmpty() }.let { list ->
+                if (selectedSpeciesForHotspot.value == null) {
+                    selectedSpeciesForHotspot.value = list.first()
+                }
+            }
+        }
+        // The map opens on a neutral default coordinate; mark the location
+        // "resolved" the first time it's set from a real source (device GPS, a
+        // search, presets, manual coords) so the UI can show "Locating…" instead
+        // of a misleading default city.
+        viewModelScope.launch { mapCenter.drop(1).collect { _locationResolved.value = true } }
+        viewModelScope.launch {
+            combine(
+                mapCenter,
+                searchRadiusKm,
+                selectedSpeciesForHotspot,
+                isAllSpeciesMode
+            ) { center, radius, species, allSpecies ->
+                HotspotRequest(center.first, center.second, radius, species?.id, allSpecies)
+            }
+                .debounce(HOTSPOT_RECOMPUTE_DEBOUNCE_MS)
+                .distinctUntilChanged()
+                .collect { request ->
+                    if (_locationResolved.value && (request.allSpecies || request.speciesId != null)) {
+                        computeHotspots()
+                    }
+                }
+        }
+    }
+
 
     // Factory Class
     companion object {
