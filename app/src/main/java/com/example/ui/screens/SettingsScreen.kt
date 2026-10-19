@@ -359,14 +359,14 @@ fun SettingsScreen(
                         Icon(imageVector = Icons.Default.IosShare, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                         Spacer(modifier = Modifier.width(12.dp))
                         Text(
-                            text = "Export sightings",
+                            text = "Export shareable sightings",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold
                         )
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Save your sightings as a CSV file you can open in a spreadsheet or import into a GIS tool.",
+                        text = "Exports only sightings not marked private. Keep a separate personal backup for private observations.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 16.sp
@@ -374,10 +374,10 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                     Button(
                         onClick = {
-                            if (userSightings.isEmpty()) {
-                                Toast.makeText(context, "No sightings to export yet — log one first.", Toast.LENGTH_LONG).show()
+                            if (userSightings.none { !it.isPrivate }) {
+                                Toast.makeText(context, "No shareable sightings: private entries stay on your device.", Toast.LENGTH_LONG).show()
                             } else {
-                                val csv = buildCsvString(userSightings)
+                                val csv = buildCsvString(userSightings.filterNot { it.isPrivate })
                                 val filePath = saveCsvFile(context, csv)
                                 if (filePath.isNotEmpty()) {
                                     exportedCsvPreview = csv
@@ -545,7 +545,7 @@ private fun buildCsvString(sightings: List<UserSighting>): String {
     val defSdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
     defSdf.timeZone = TimeZone.getTimeZone("UTC")
 
-    for (s in sightings) {
+    for (s in sightings.filterNot { it.isPrivate }) {
         val dateString = defSdf.format(Date(s.timestamp))
         val escapedNotes = s.notes.replace("\"", "\"\"")
         sb.append("${s.id},\"${s.speciesId}\",${s.lat},${s.lng},${s.timestamp},\"$dateString\",\"$escapedNotes\",${s.isPrivate}\n")
