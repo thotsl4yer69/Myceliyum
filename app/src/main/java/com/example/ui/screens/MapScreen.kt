@@ -1523,10 +1523,30 @@ fun OSMMapView(
     // or a Deep-Search zoom.
     val lastCenter = remember { doubleArrayOf(centerX, centerY) }
     val lastFocusKey = remember { longArrayOf(0L) }
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    val idleHandler = remember { Handler(Looper.getMainLooper()) }
+    val currentIdle by rememberUpdatedState(onCameraIdle)
+    val currentSelection by rememberUpdatedState(onCellSelected)
+    val map = remember { MapView(context) }
+    val lastOverlayInputs = remember { arrayOfNulls<Any>(1) }
+    val lastMapTheme = remember { arrayOf<String?>(null) }
+    DisposableEffect(map, lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) map.onResume()
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_PAUSE) map.onPause()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        if (lifecycleOwner.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) map.onResume()
+        onDispose {
+            idleHandler.removeCallbacksAndMessages(null)
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            map.onPause()
+        }
+    }
 
     AndroidView(
         factory = { ctx ->
-            val mapView = MapView(ctx)
+            val mapView = map
             mapView.setTileSource(tileSourceForTheme(mapTheme))
             mapView.setMultiTouchControls(true)
             mapView.controller.setZoom(13.0)
@@ -1536,13 +1556,13 @@ fun OSMMapView(
             // MapListener fires continuously while panning/zooming, so debounce
             // and only commit the new centre once movement settles (~half a
             // second after the last gesture) to avoid recomputing on every frame.
-            val idleHandler = Handler(Looper.getMainLooper())
+
             var idleRunnable: Runnable? = null
             fun scheduleIdle() {
                 idleRunnable?.let { idleHandler.removeCallbacks(it) }
                 val r = Runnable {
                     val c = mapView.mapCenter
-                    onCameraIdle(c.latitude, c.longitude)
+                    currentIdle(c.latitude, c.longitude)
                 }
                 idleRunnable = r
                 idleHandler.postDelayed(r, 550)
@@ -1555,7 +1575,10 @@ fun OSMMapView(
         },
         update = { mapView ->
             // Apply the selected map style (and a real dark mode via colour inversion).
-            mapView.setTileSource(tileSourceForTheme(mapTheme))
+            if (lastMapTheme[0] != mapTheme) {
+                mapView.setTileSource(tileSourceForTheme(mapTheme))
+                lastMapTheme[0] = mapTheme
+            }
             mapView.overlayManager.tilesOverlay.setColorFilter(
                 if (mapTheme == "Dark") TilesOverlay.INVERT_COLORS else null
             )
@@ -1575,6 +1598,10 @@ fun OSMMapView(
                 }
             }
 
+            val overlayInputs = listOf(centerX, centerY, radiusKm, heatmapCells, rankedPins, observationPins, allFungiPins, selectedSpeciesName)
+            if (lastOverlayInputs[0] == overlayInputs) return@AndroidView
+            lastOverlayInputs[0] = overlayInputs
+            // Rebuild only when the actual overlay data changes.
             // Clear all overlays to redraw. No catch-all tap overlay any more:
             // taps now belong to the markers and cells (for info/selection),
             // while panning the map relocates the search centre.
@@ -1650,7 +1677,7 @@ fun OSMMapView(
                     setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
                     icon = numberedPinDrawable(context, i + 1, mapPinColorInt(cell.tier))
                     infoWindow = null
-                    setOnMarkerClickListener { _, _ -> onCellSelected(cell); true }
+                    setOnMarkerClickListener { _, _ -> currentSelection(cell); true }
                 }
                 mapView.overlays.add(marker)
             }
@@ -1698,6 +1725,7 @@ fun OSMMapView(
 
             mapView.invalidate()
         },
+        onRelease = { it.onDetach() },
         modifier = Modifier.fillMaxSize()
     )
 }

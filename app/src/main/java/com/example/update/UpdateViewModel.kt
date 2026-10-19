@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.BuildConfig
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -14,10 +15,8 @@ import kotlinx.coroutines.launch
  * Drives the in-app update experience: checking the rolling GitHub release for
  * a newer build, then downloading and installing it on request.
  *
- * The installed build's [BuildConfig.VERSION_CODE] equals the GitHub Actions run
- * number it was built from (CI sets `BUILD_NUMBER`); the published
- * `version.json` carries the same number for the latest build, so a strictly
- * greater remote value means an update is available.
+ * Installed and published version codes come from the same committed build
+ * configuration. Only complete, integrity-protected metadata can enable updates.
  */
 class UpdateViewModel(
     app: Application,
@@ -43,7 +42,7 @@ class UpdateViewModel(
             _state.value = when {
                 remote == null ->
                     if (silent) UpdateState.Idle
-                    else UpdateState.Failed("Couldn't reach the update server.", silent = false)
+                    else UpdateState.Failed("No verified release is available, or the update server could not be reached.", silent = false)
                 VersionCompare.isUpdateAvailable(currentVersionCode, remote) ->
                     UpdateState.Available(remote)
                 else ->
@@ -58,21 +57,37 @@ class UpdateViewModel(
      * first and re-arms the prompt.
      */
     fun downloadAndInstall(release: ReleaseVersion) {
-        if (!updateManager.canInstallPackages()) {
-            _state.value = UpdateState.NeedsInstallPermission(release)
-            updateManager.openInstallPermissionSettings()
+        if (_state.value is UpdateState.Downloading) return
+        if (!ReleasePolicy.validMetadata(release)) {
+            _state.value = UpdateState.Failed("Release verification is incomplete.", silent = false)
+            return
+        }
+        try {
+            if (!updateManager.canInstallPackages()) {
+                _state.value = UpdateState.NeedsInstallPermission(release)
+                updateManager.openInstallPermissionSettings()
+                return
+            }
+        } catch (_: Exception) {
+            _state.value = UpdateState.Failed("Could not open install permission settings.", silent = false)
             return
         }
         _state.value = UpdateState.Downloading(release)
         viewModelScope.launch {
-            val apkUrl = release.apkUrl.ifBlank { UpdateRepository.DEFAULT_APK_URL }
-            val apk = updateManager.downloadApk(apkUrl)
-            if (apk != null) {
+            var downloaded: java.io.File? = null
+            try {
+                val apk = updateManager.downloadApk(release.apkUrl)
+                    ?: throw IllegalStateException("Download failed. Try again.")
+                downloaded = apk
+                updateManager.verifyApk(apk, release)
                 updateManager.launchInstaller(apk)
-                // Installer is now foreground; return to a neutral state.
                 _state.value = UpdateState.Idle
-            } else {
-                _state.value = UpdateState.Failed("Download failed. Try again.", silent = false)
+            } catch (cancelled: CancellationException) {
+                downloaded?.delete()
+                throw cancelled
+            } catch (error: Exception) {
+                downloaded?.delete()
+                _state.value = UpdateState.Failed(error.message ?: "Update verification failed.", silent = false)
             }
         }
     }

@@ -69,7 +69,8 @@ data class INatTaxonPhotoWrap(
 data class INatTaxonPhoto(
     @Json(name = "medium_url") val mediumUrl: String?,
     @Json(name = "url") val url: String?,
-    @Json(name = "attribution") val attribution: String?
+    @Json(name = "attribution") val attribution: String?,
+    @Json(name = "license_code") val licenseCode: String? = null
 )
 
 data class INatResponse(

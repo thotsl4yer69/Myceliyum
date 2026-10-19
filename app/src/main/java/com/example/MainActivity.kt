@@ -23,6 +23,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.activity.compose.BackHandler
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
@@ -67,14 +69,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-sealed interface SelectedTab {
-    object Home : SelectedTab
-    object Search : SelectedTab
-    object Map : SelectedTab
-    object Identify : SelectedTab
-    object Sightings : SelectedTab
-    object Settings : SelectedTab
-}
+enum class SelectedTab { Home, Search, Map, Identify, Sightings, Settings }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -82,9 +77,14 @@ fun MainWorkflowLayout(
     viewModel: FungiViewModel,
     updateViewModel: UpdateViewModel
 ) {
+    val tabState = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
     // Nav Navigation tabs states
-    var activeTab by remember { mutableStateOf<SelectedTab>(SelectedTab.Home) }
-    var activeDetailSpecies by remember { mutableStateOf<Species?>(null) }
+    var activeTab by rememberSaveable { mutableStateOf<SelectedTab>(SelectedTab.Home) }
+    var activeDetailSpecies by rememberSaveable { mutableStateOf<Species?>(null) }
+
+    BackHandler(activeDetailSpecies != null || activeTab != SelectedTab.Home) {
+        if (activeDetailSpecies != null) activeDetailSpecies = null else activeTab = SelectedTab.Home
+    }
 
     val splashNoticeAccepted by viewModel.splashNoticeAccepted.collectAsState()
     val updateState by updateViewModel.state.collectAsState()
@@ -104,9 +104,7 @@ fun MainWorkflowLayout(
                 ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
                 ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
             if (granted) fetchDeviceLocation(context, viewModel)
-            else locationPermissionLauncher.launch(
-                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
-            )
+            // Ask for location only when the user chooses the map GPS control.
         }
     }
 
@@ -127,7 +125,7 @@ fun MainWorkflowLayout(
                     containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(4.dp)
                 ) {
                     NavigationBarItem(
-                        selected = activeTab is SelectedTab.Home,
+                        selected = activeTab == SelectedTab.Home,
                         onClick = {
                             activeTab = SelectedTab.Home
                             activeDetailSpecies = null
@@ -138,7 +136,7 @@ fun MainWorkflowLayout(
                     )
 
                     NavigationBarItem(
-                        selected = activeTab is SelectedTab.Search,
+                        selected = activeTab == SelectedTab.Search,
                         onClick = {
                             activeTab = SelectedTab.Search
                             activeDetailSpecies = null
@@ -149,7 +147,7 @@ fun MainWorkflowLayout(
                     )
 
                     NavigationBarItem(
-                        selected = activeTab is SelectedTab.Map,
+                        selected = activeTab == SelectedTab.Map,
                         onClick = {
                             activeTab = SelectedTab.Map
                             activeDetailSpecies = null
@@ -160,7 +158,7 @@ fun MainWorkflowLayout(
                     )
 
                     NavigationBarItem(
-                        selected = activeTab is SelectedTab.Identify,
+                        selected = activeTab == SelectedTab.Identify,
                         onClick = {
                             activeTab = SelectedTab.Identify
                             activeDetailSpecies = null
@@ -171,7 +169,7 @@ fun MainWorkflowLayout(
                     )
 
                     NavigationBarItem(
-                        selected = activeTab is SelectedTab.Sightings,
+                        selected = activeTab == SelectedTab.Sightings,
                         onClick = {
                             activeTab = SelectedTab.Sightings
                             activeDetailSpecies = null
@@ -191,9 +189,10 @@ fun MainWorkflowLayout(
                     .padding(innerPadding)
                     .background(MaterialTheme.colorScheme.background)
             ) {
-                // Render selected workflow tab
+                // Keep drafts and scroll positions when switching tabs.
+                tabState.SaveableStateProvider(activeTab.name) {
                 when (activeTab) {
-                    is SelectedTab.Home -> HomeScreen(
+                    SelectedTab.Home -> HomeScreen(
                         viewModel = viewModel,
                         onNavigateToSearch = { activeTab = SelectedTab.Search },
                         onNavigateToMap = { activeTab = SelectedTab.Map },
@@ -203,23 +202,25 @@ fun MainWorkflowLayout(
                             activeDetailSpecies = spec
                         }
                     )
-                    is SelectedTab.Search -> SearchScreen(
+                    SelectedTab.Search -> SearchScreen(
                         viewModel = viewModel,
                         onSpeciesSelected = { spec ->
                             activeDetailSpecies = spec
                         }
                     )
-                    is SelectedTab.Map -> MapScreen(
+                    SelectedTab.Map -> MapScreen(
                         viewModel = viewModel
                     )
-                    is SelectedTab.Identify -> IdentifyScreen()
-                    is SelectedTab.Sightings -> SightingsScreen(
+                    SelectedTab.Identify -> IdentifyScreen()
+                    SelectedTab.Sightings -> SightingsScreen(
                         viewModel = viewModel
                     )
-                    is SelectedTab.Settings -> SettingsScreen(
+                    SelectedTab.Settings -> SettingsScreen(
                         viewModel = viewModel,
                         updateViewModel = updateViewModel
                     )
+                }
+
                 }
 
                 // 2. High-fidelity slide-over Species Detail Screen when a details request is focal!
@@ -261,26 +262,28 @@ private fun fetchDeviceLocation(context: android.content.Context, viewModel: Fun
     try {
         val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
         fun updateMapCenter(loc: android.location.Location?) {
-            if (loc != null) {
+            if (loc != null && loc.hasAccuracy() && loc.accuracy <= 100f &&
+                (android.os.SystemClock.elapsedRealtimeNanos() - loc.elapsedRealtimeNanos) in 0..120_000_000_000L) {
                 viewModel.setMapCenter(loc.latitude, loc.longitude)
             } else {
                 Log.w("MainActivity", "Location lookup completed without a device fix.")
             }
         }
-        fun requestFreshLocation(fallback: android.location.Location? = null) {
+        fun requestFreshLocation() {
             val tokenSource = CancellationTokenSource()
             fusedLocationClient.getCurrentLocation(
                 Priority.PRIORITY_HIGH_ACCURACY,
                 tokenSource.token
             )
-                .addOnSuccessListener { fresh -> updateMapCenter(fresh ?: fallback) }
-                .addOnFailureListener { updateMapCenter(fallback) }
+                .addOnSuccessListener { fresh -> updateMapCenter(fresh) }
+                .addOnFailureListener { updateMapCenter(null) }
         }
         fusedLocationClient.lastLocation
             .addOnSuccessListener { loc ->
                 val isFresh = loc != null &&
-                    (System.currentTimeMillis() - loc.time) <= FRESH_LOCATION_MAX_AGE_MS
-                if (isFresh) updateMapCenter(loc) else requestFreshLocation(loc)
+                    loc.hasAccuracy() && loc.accuracy <= 100f &&
+                    (System.currentTimeMillis() - loc.time) in 0..FRESH_LOCATION_MAX_AGE_MS
+                if (isFresh) updateMapCenter(loc) else requestFreshLocation()
             }
             .addOnFailureListener { requestFreshLocation() }
     } catch (se: SecurityException) {

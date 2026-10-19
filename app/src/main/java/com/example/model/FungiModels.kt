@@ -22,11 +22,11 @@ data class Species(
     val lookAlikes: List<String>,
     val notes: String,
     val imageUrls: List<String>
-)
+) : java.io.Serializable
 
 @Entity(tableName = "observations")
 data class Observation(
-    @PrimaryKey val id: Long,
+    @PrimaryKey val id: String,
     val speciesId: String,
     val lat: Double,
     val lng: Double,
@@ -85,7 +85,7 @@ data class SpeciesDiagnostics(
  * kingdom-wide iNaturalist query.
  */
 data class MapObservation(
-    val id: Long,
+    val id: String,
     val lat: Double,
     val lng: Double,
     val taxonName: String,      // e.g. "Amanita muscaria" or "Cortinarius"
@@ -107,7 +107,7 @@ data class UserSighting(
     val photoLocalPath: String?,
     val notes: String,
     val isPrivate: Boolean
-)
+) : java.io.Serializable
 
 /**
  * 5-tier hotspot cell for the prediction grid.

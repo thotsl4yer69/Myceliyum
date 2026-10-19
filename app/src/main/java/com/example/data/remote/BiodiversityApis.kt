@@ -31,6 +31,7 @@ data class ALAResponse(
 )
 
 data class ALAOccurrence(
+    @Json(name = "occurrenceID") val occurrenceId: String? = null,
     @Json(name = "uuid") val uuid: String?,
     @Json(name = "scientificName") val scientificName: String?,
     @Json(name = "decimalLatitude") val decimalLatitude: Double?,
@@ -138,6 +139,7 @@ data class GBIFResponse(
 )
 
 data class GBIFOccurrence(
+    @Json(name = "occurrenceID") val occurrenceId: String? = null,
     @Json(name = "key") val key: Long?,
     @Json(name = "scientificName") val scientificName: String?,
     @Json(name = "decimalLatitude") val decimalLatitude: Double?,

@@ -23,9 +23,9 @@ Endpoints:
                             guarded — a failure in any one returns nulls for that
                             layer only and never affects the core layers above.
 
-Security: if BACKEND_TOKEN is set, every request (except /health) must send
-a matching `X-Api-Token` header. Deploy authenticated where possible; the
-token is a lightweight guard against casual abuse of the public endpoint.
+Security: BACKEND_TOKEN is required for every non-health request. Missing
+configuration fails closed. Never compile this server credential into a public
+APK. Put a separately authenticated, rate-limited gateway in front of this service.
 """
 import datetime
 import hmac
@@ -36,6 +36,7 @@ import ee
 from flask import Flask, jsonify, request
 
 app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = 64 * 1024
 
 _EE_READY = False
 BACKEND_TOKEN = os.environ.get("BACKEND_TOKEN", "")
@@ -55,7 +56,9 @@ def ensure_ee() -> None:
 def _auth():
     if request.path == "/health":
         return None
-    if BACKEND_TOKEN and not hmac.compare_digest(
+    if not BACKEND_TOKEN:
+        return jsonify({"error": "service authentication is not configured"}), 503
+    if not hmac.compare_digest(
         request.headers.get("X-Api-Token", ""), BACKEND_TOKEN
     ):
         return jsonify({"error": "unauthorized"}), 401
@@ -67,28 +70,46 @@ def health():
     return jsonify({"status": "ok"})
 
 
+@app.errorhandler(413)
+def too_large(_error):
+    return jsonify({"error": "request body exceeds 64 KiB"}), 413
+
+
+def validate_points(body):
+    if not isinstance(body, dict):
+        raise ValueError("body must be a JSON object")
+    points = body.get("points")
+    if not isinstance(points, list) or not 1 <= len(points) <= MAX_POINTS:
+        raise ValueError(f"points must contain 1 to {MAX_POINTS} coordinate pairs")
+    for point in points:
+        if not isinstance(point, list) or len(point) != 2:
+            raise ValueError("points must be [latitude, longitude] pairs")
+        if any(isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) for v in point):
+            raise ValueError("coordinates must be finite numbers")
+        if not -90 <= point[0] <= 90 or not -180 <= point[1] <= 180:
+            raise ValueError("coordinates are outside valid geographic bounds")
+    return points
+
+
 @app.post("/env-grid")
 def env_grid():
     try:
-        ensure_ee()
-    except Exception as exc:  # noqa: BLE001
-        return jsonify({"error": f"earth engine init failed: {exc}"}), 500
-
-    body = request.get_json(force=True, silent=True) or {}
-    points = body.get("points") or []
-    if not points:
-        return jsonify({"error": "no points supplied"}), 400
-    if len(points) > MAX_POINTS:
-        return jsonify({"error": f"too many points (max {MAX_POINTS})"}), 400
-
-    # FeatureCollection of points (Earth Engine expects [lng, lat]).
+        points = validate_points(request.get_json(silent=True))
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 400
     try:
-        feats = [
-            ee.Feature(ee.Geometry.Point([float(p[1]), float(p[0])]), {"idx": i})
-            for i, p in enumerate(points)
-        ]
-    except (TypeError, ValueError, IndexError):
-        return jsonify({"error": "points must be numeric [lat, lng] pairs"}), 400
+        ensure_ee()
+        return _compute_grid(points)
+    except Exception as error:  # Provider details must not be returned to clients.
+        app.logger.error("environment provider failure: %s", type(error).__name__)
+        return jsonify({"error": "environment data is temporarily unavailable"}), 502
+
+
+def _compute_grid(points):
+    feats = [
+        ee.Feature(ee.Geometry.Point([p[1], p[0]]), {"idx": i})
+        for i, p in enumerate(points)
+    ]
     fc = ee.FeatureCollection(feats)
 
     # ── Layers ────────────────────────────────────────────────────────
@@ -120,7 +141,7 @@ def env_grid():
     try:
         features = sampled.getInfo()["features"]
     except Exception as exc:  # noqa: BLE001
-        return jsonify({"error": f"earth engine compute failed: {exc}"}), 502
+        raise RuntimeError("core environment sampling failed") from exc
 
     by_idx = {f["properties"].get("idx"): f["properties"] for f in features}
     n = len(points)
