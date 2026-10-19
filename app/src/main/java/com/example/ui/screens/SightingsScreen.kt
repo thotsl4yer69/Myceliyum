@@ -598,11 +598,13 @@ fun AddSightingDialog(
 ) {
     val context = LocalContext.current
 
-    var selectedSpecies by remember { mutableStateOf<Species?>(speciesList.firstOrNull()) }
+    var selectedSpecies by remember { mutableStateOf<Species?>(null) }
     var dropShown by remember { mutableStateOf(false) }
 
-    var manualLat by remember { mutableStateOf(initialLocation?.first?.toString() ?: "-37.8136") }
-    var manualLng by remember { mutableStateOf(initialLocation?.second?.toString() ?: "144.9631") }
+    var manualLat by remember { mutableStateOf(initialLocation?.first?.toString() ?: "") }
+    var manualLng by remember { mutableStateOf(initialLocation?.second?.toString() ?: "") }
+    val validLatitude = manualLat.toDoubleOrNull()?.takeIf { it.isFinite() && it in -90.0..90.0 }
+    val validLongitude = manualLng.toDoubleOrNull()?.takeIf { it.isFinite() && it in -180.0..180.0 }
     var userNotes by remember { mutableStateOf("") }
     var isPrivateEntry by remember { mutableStateOf(false) }
 
@@ -701,6 +703,10 @@ fun AddSightingDialog(
                         expanded = dropShown,
                         onDismissRequest = { dropShown = false }
                     ) {
+                        DropdownMenuItem(
+                            text = { Text("Unidentified specimen") },
+                            onClick = { selectedSpecies = null; dropShown = false }
+                        )
                         speciesList.forEach { s ->
                             DropdownMenuItem(
                                 text = { Text("${s.scientificName} (${s.commonNames.firstOrNull() ?: ""})") },
@@ -745,6 +751,12 @@ fun AddSightingDialog(
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
+
+                if (validLatitude == null || validLongitude == null) {
+                    Text("Enter a real latitude (-90 to 90) and longitude (-180 to 180) before saving.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error)
+                }
 
                 // 3. User Notes
                 Text(
@@ -902,18 +914,18 @@ fun AddSightingDialog(
                     }
 
                     Button(
-                        enabled = selectedSpecies != null,
+                        enabled = validLatitude != null && validLongitude != null,
                         onClick = {
-                            val computedLat = manualLat.toDoubleOrNull() ?: -37.8136
-                            val computedLng = manualLng.toDoubleOrNull() ?: 144.9631
-                            onSave(
-                                selectedSpecies?.id ?: "unidentified",
-                                computedLat,
-                                computedLng,
-                                userNotes,
-                                voucherPhotoPath,
-                                isPrivateEntry
-                            )
+                            if (validLatitude != null && validLongitude != null) {
+                                onSave(
+                                    selectedSpecies?.id ?: "unidentified",
+                                    validLatitude,
+                                    validLongitude,
+                                    userNotes,
+                                    voucherPhotoPath,
+                                    isPrivateEntry
+                                )
+                            }
                         },
                         shape = RoundedCornerShape(8.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
