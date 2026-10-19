@@ -101,7 +101,11 @@ jobs:
           script: |
             chmod +x gradlew
             ./gradlew connectedDebugAndroidTest --stacktrace
-            adb pull /sdcard/Android/data/com.aistudio.myceliummapper.vcfqka/files/screenshots device-screenshots
+            if adb shell test -d /sdcard/Android/data/com.aistudio.myceliummapper.vcfqka/files/screenshots; then
+              adb pull /sdcard/Android/data/com.aistudio.myceliummapper.vcfqka/files/screenshots device-screenshots
+            else
+              echo "No screenshots exported by this test run; instrumentation verdict above remains authoritative."
+            fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
