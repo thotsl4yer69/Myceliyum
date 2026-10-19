@@ -24,7 +24,17 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - uses: android-actions/setup-android@v3
+      # Current Ubuntu runners already have cmdline-tools/latest. The v3 action
+      # attempts to install the removed legacy SDK package "tools" and fails
+      # before it reaches Gradle; use supported package names instead.
+      - name: Install current Android SDK packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${ANDROID_HOME:?Android SDK missing}"
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$SDKMANAGER"
+          "$SDKMANAGER" --install "platforms;android-35" "build-tools;35.0.0" "platform-tools"
       - uses: gradle/actions/setup-gradle@v4
       - uses: actions/setup-node@v4
         with:
@@ -65,7 +75,17 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - uses: android-actions/setup-android@v3
+      # Current Ubuntu runners already have cmdline-tools/latest. The v3 action
+      # attempts to install the removed legacy SDK package "tools" and fails
+      # before it reaches Gradle; use supported package names instead.
+      - name: Install current Android SDK packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${ANDROID_HOME:?Android SDK missing}"
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$SDKMANAGER"
+          "$SDKMANAGER" --install "platforms;android-35" "build-tools;35.0.0" "platform-tools"
       - uses: gradle/actions/setup-gradle@v4
       - name: Enable KVM
         run: |
@@ -118,7 +138,17 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - uses: android-actions/setup-android@v3
+      # Current Ubuntu runners already have cmdline-tools/latest. The v3 action
+      # attempts to install the removed legacy SDK package "tools" and fails
+      # before it reaches Gradle; use supported package names instead.
+      - name: Install current Android SDK packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${ANDROID_HOME:?Android SDK missing}"
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$SDKMANAGER"
+          "$SDKMANAGER" --install "platforms;android-35" "build-tools;35.0.0" "platform-tools"
       - uses: gradle/actions/setup-gradle@v4
       - name: Build and verify production APK
         run: |
