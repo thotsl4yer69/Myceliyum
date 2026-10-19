@@ -120,7 +120,7 @@ class FungiRepository(
                         adapter.fromJson(jsonString)?.associateBy { it.id } ?: emptyMap()
                     }
                 } catch (e: Exception) {
-            if (e is kotlinx.coroutines.CancellationException) throw e
+                    if (e is kotlinx.coroutines.CancellationException) throw e
                     Log.e(TAG, "Repository operation failed; details omitted")
                     emptyMap()
                 }
