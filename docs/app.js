@@ -2,227 +2,12 @@
    MYCELIYUMS — interactivity
    ============================================================ */
 
-/* Field catalogue — 28 taxa. Photos resolve live from Wikipedia/Wikimedia
-   Commons (CC) per species and cache locally; plates shown until resolved. */
-const SPECIES = [
-  /* ---- DEADLY ---- */
-  {
-    sci: "Amanita phalloides", com: "Death Cap", genus: "Amanita", family: "Amanitaceae",
-    habitat: "Oak & Beech Woodland", season: [2, 6], spore: "White", sporeHex: "#f3f1e9",
-    status: "deadly", statusLabel: "Deadly", tags: ["deadly", "toxic"], capHex: "#9aa05a",
-    marks: "Greenish-olive cap, pure white gills, skirt ring, large sack-like volva at the base.",
-    look: "Mistaken for straw & paddy-straw mushrooms — causes most fatal poisonings worldwide. Amatoxins survive cooking."
-  },
-  {
-    sci: "Amanita virosa", com: "Destroying Angel", genus: "Amanita", family: "Amanitaceae",
-    habitat: "Mixed & Birch Forest", season: [1, 5], spore: "White", sporeHex: "#f3f1e9",
-    status: "deadly", statusLabel: "Deadly", tags: ["deadly", "toxic"], capHex: "#e8e6da",
-    marks: "Pure white throughout, shaggy stem, flimsy skirt, deep sack volva.",
-    look: "Young buttons pass for edible puffballs — always slice buttons top-to-bottom to check for a hidden outline."
-  },
-  {
-    sci: "Galerina marginata", com: "Funeral Bell", genus: "Galerina", family: "Hymenogastraceae",
-    habitat: "Rotting Conifer Wood", season: [3, 7], spore: "Rusty brown", sporeHex: "#8a5a2e",
-    status: "deadly", statusLabel: "Deadly", tags: ["deadly", "toxic"], capHex: "#b07a3a",
-    marks: "Small honey-brown hygrophanous cap, ring zone on stem, clusters on dead logs.",
-    look: "Deadly twin of honey fungus and wood-loving Psilocybe — same logs, same season. Rusty print = walk away."
-  },
-  {
-    sci: "Cortinarius rubellus", com: "Deadly Webcap", genus: "Cortinarius", family: "Cortinariaceae",
-    habitat: "Mossy Conifer Forest", season: [2, 6], spore: "Rust", sporeHex: "#a05a28",
-    status: "deadly", statusLabel: "Deadly", tags: ["deadly", "toxic"], capHex: "#c06a2e",
-    marks: "Tawny-orange conical cap, cobweb veil remnants, yellow zig-zag bands on stem.",
-    look: "Picked in error for chanterelles — orellanine destroys kidneys weeks after the meal."
-  },
-  {
-    sci: "Gyromitra esculenta", com: "False Morel", genus: "Gyromitra", family: "Discinaceae",
-    habitat: "Sandy Pine Forest", season: [8, 11], spore: "Cream", sporeHex: "#e8dcc0",
-    status: "deadly", statusLabel: "Deadly", tags: ["deadly", "toxic"], capHex: "#7a4a32",
-    marks: "Brain-like reddish-brown folded cap; interior chambered, not hollow.",
-    look: "True morels are honeycomb-PITTED and fully hollow. Gyromitrin is lethal raw and risky cooked."
-  },
-
-  /* ---- TOXIC ---- */
-  {
-    sci: "Amanita muscaria", com: "Fly Agaric", genus: "Amanita", family: "Amanitaceae",
-    habitat: "Conifer & Birch Plantation", season: [4, 6], spore: "White", sporeHex: "#f3f1e9",
-    status: "toxic", statusLabel: "Toxic", tags: ["toxic", "invasive"], capHex: "#c23b2e",
-    img: "https://commons.wikimedia.org/wiki/Special:FilePath/Fliegenpilz_fly_agaric_Amanita_muscaria.JPG?width=600", rid: "spAmanita",
-    marks: "Scarlet cap with white warts, white gills, bulbous base with scaly rings.",
-    look: "Rain-faded caps resemble edible blushers — blushers flush pink when cut. Invasive in the southern hemisphere."
-  },
-  {
-    sci: "Amanita pantherina", com: "Panther Cap", genus: "Amanita", family: "Amanitaceae",
-    habitat: "Beech & Conifer Forest", season: [3, 6], spore: "White", sporeHex: "#f3f1e9",
-    status: "toxic", statusLabel: "Toxic", tags: ["toxic"], capHex: "#8a6a4a",
-    marks: "Bronze cap with PURE-white warts, collared bulb at stem base.",
-    look: "Confused with the edible blusher — the blusher bruises pink, panther stays white. Stronger toxins than fly agaric."
-  },
-  {
-    sci: "Chlorophyllum molybdites", com: "Green-spored Parasol", genus: "Chlorophyllum", family: "Agaricaceae",
-    habitat: "Lawns & Grass Rings", season: [1, 4], spore: "Green", sporeHex: "#7a8c5a",
-    status: "toxic", statusLabel: "Toxic", tags: ["toxic"], capHex: "#d9d0bb",
-    marks: "Large white parasol in grass; gills age grey-green; double-edged ring.",
-    look: "The #1 cause of mushroom poisoning on lawns — split from true parasols by its GREEN spore print."
-  },
-  {
-    sci: "Agaricus xanthodermus", com: "Yellow Stainer", genus: "Agaricus", family: "Agaricaceae",
-    habitat: "Parks, Gardens, Hedgerows", season: [2, 6], spore: "Chocolate brown", sporeHex: "#4a3328",
-    status: "toxic", statusLabel: "Toxic", tags: ["toxic"], capHex: "#ddd8c8",
-    marks: "Stains chrome-yellow instantly at the stem base when cut; ink / phenol smell.",
-    look: "Passes for the field mushroom in every other way — the yellow flash and chemical smell give it away."
-  },
-  {
-    sci: "Rubroboletus satanas", com: "Satan's Bolete", genus: "Rubroboletus", family: "Boletaceae",
-    habitat: "Chalky Oak Woodland", season: [1, 4], spore: "Olive-brown", sporeHex: "#5d5230",
-    status: "toxic", statusLabel: "Toxic", tags: ["toxic"], capHex: "#cfc8b8",
-    marks: "Pale chalky cap, blood-red pores, swollen red-netted stem; flesh blues when cut.",
-    look: "Treat every red-pored, blue-bruising bolete as suspect until keyed out properly."
-  },
-  {
-    sci: "Gymnopilus junonius", com: "Spectacular Rustgill", genus: "Gymnopilus", family: "Hymenogastraceae",
-    habitat: "Eucalypt Forest / Parks", season: [3, 7], spore: "Rusty orange", sporeHex: "#b5662e",
-    status: "toxic", statusLabel: "Inedible", tags: ["toxic"], capHex: "#d98a2e",
-    img: "https://commons.wikimedia.org/wiki/Special:FilePath/Gymnopilus_spectabilis_42904.jpg?width=600", rid: "spGymnopilus",
-    marks: "Huge golden clusters at trunk bases; rusty spore dust collects on the ring.",
-    look: "Resembles honey fungus at a glance — intensely bitter, rusty-orange print."
-  },
-  {
-    sci: "Hypholoma fasciculare", com: "Sulphur Tuft", genus: "Hypholoma", family: "Strophariaceae",
-    habitat: "Stumps & Dead Wood", season: [3, 8], spore: "Purple-brown", sporeHex: "#3a2b3a",
-    status: "toxic", statusLabel: "Toxic", tags: ["toxic"], capHex: "#e0c04a",
-    marks: "Dense sulphur-yellow tufts, greenish gills, slender curved stems.",
-    look: "Shares stumps with honey fungus and edible brick caps — bitter taste and green gill tint mark it out."
-  },
-  {
-    sci: "Omphalotus nidiformis", com: "Ghost Fungus", genus: "Omphalotus", family: "Omphalotaceae",
-    habitat: "Eucalypt Woodland", season: [3, 7], spore: "White", sporeHex: "#f3f1e9",
-    status: "bio", statusLabel: "Bioluminescent", tags: ["bio", "toxic"], capHex: "#d9d3c3",
-    img: "https://commons.wikimedia.org/wiki/Special:FilePath/Omphalotus_nidiformis%2C_Ghost_Fungus%2C_Australia.jpg?width=600", rid: "spOmphalotus",
-    marks: "Fan-shaped cream brackets at eucalypt bases; glows soft green in full darkness.",
-    look: "Harvested in error as oyster mushroom — if it glows at night, drop it. Severe GI toxin."
-  },
-  {
-    sci: "Omphalotus olearius", com: "Jack-o'-Lantern", genus: "Omphalotus", family: "Omphalotaceae",
-    habitat: "Olive & Oak Stumps", season: [1, 5], spore: "Cream-yellow", sporeHex: "#e8d9a8",
-    status: "toxic", statusLabel: "Toxic", tags: ["toxic", "bio"], capHex: "#e07a2a",
-    marks: "Bright orange clusters; TRUE blade gills running down the stem; faint night glow.",
-    look: "The classic chanterelle impostor — chanterelles have blunt forking ridges, never thin blade gills."
-  },
-
-  /* ---- EDIBLE (with field cautions) ---- */
-  {
-    sci: "Boletus edulis", com: "Porcini · Cep", genus: "Boletus", family: "Boletaceae",
-    habitat: "Oak, Beech & Pine Forest", season: [2, 5], spore: "Olive-brown", sporeHex: "#5d5230",
-    status: "edible", statusLabel: "Edible", tags: ["edible"], capHex: "#8a5a32",
-    marks: "Bun-brown cap, pores white aging yellow-olive, fine white net on a swollen stem.",
-    look: "Bitter bolete shares the build — pinkish pores and a DARK stem net; one ruins the whole pan."
-  },
-  {
-    sci: "Cantharellus cibarius", com: "Chanterelle", genus: "Cantharellus", family: "Cantharellaceae",
-    habitat: "Mossy Hardwood & Conifer", season: [2, 6], spore: "Pale yellow", sporeHex: "#e8d9a8",
-    status: "edible", statusLabel: "Edible", tags: ["edible"], capHex: "#e8b53a",
-    marks: "Egg-yolk colour throughout, blunt forking ridges (not gills), apricot smell.",
-    look: "Check against jack-o'-lantern and false chanterelle — both carry true thin gills."
-  },
-  {
-    sci: "Macrolepiota procera", com: "Parasol", genus: "Macrolepiota", family: "Agaricaceae",
-    habitat: "Pasture Edge & Open Woods", season: [2, 5], spore: "White", sporeHex: "#f3f1e9",
-    status: "edible", statusLabel: "Edible", tags: ["edible"], capHex: "#b09a72",
-    marks: "Snakeskin-patterned stem, movable double ring, drumstick-shaped buttons.",
-    look: "In green-spored regions ALWAYS print lawn finds — Chlorophyllum molybdites mimics it perfectly."
-  },
-  {
-    sci: "Pleurotus ostreatus", com: "Oyster Mushroom", genus: "Pleurotus", family: "Pleurotaceae",
-    habitat: "Dead Hardwood, Shelved", season: [4, 9], spore: "White-lilac", sporeHex: "#d9d3e3",
-    status: "edible", statusLabel: "Edible", tags: ["edible"], capHex: "#9a9282",
-    marks: "Shell-shaped caps in shelves, decurrent gills, stem rudimentary or absent.",
-    look: "In Australia & NZ rule out ghost fungus first — same shelf habit, toxic, glows at night."
-  },
-  {
-    sci: "Morchella esculenta", com: "Common Morel", genus: "Morchella", family: "Morchellaceae",
-    habitat: "Disturbed Ground & Orchards", season: [8, 11], spore: "Cream", sporeHex: "#e8dcc0",
-    status: "edible", statusLabel: "Edible", tags: ["edible"], capHex: "#b0a070",
-    marks: "Honeycomb-pitted cap fused to the stem; completely hollow when split.",
-    look: "False morel is wrinkled-brainy, chambered inside, and deadly. Always cook morels through."
-  },
-  {
-    sci: "Lactarius deliciosus", com: "Saffron Milk Cap", genus: "Lactarius", family: "Russulaceae",
-    habitat: "Pine Plantations", season: [2, 5], spore: "Cream", sporeHex: "#e8dcc0",
-    status: "edible", statusLabel: "Edible", tags: ["edible"], capHex: "#d9822e",
-    marks: "Carrot-orange latex when cut, zonate cap, bruises green with handling.",
-    look: "Woolly milk cap weeps WHITE peppery latex — zonate too, but shaggy-rimmed."
-  },
-  {
-    sci: "Coprinus comatus", com: "Shaggy Ink Cap", genus: "Coprinus", family: "Agaricaceae",
-    habitat: "Roadsides & Disturbed Soil", season: [2, 6], spore: "Black", sporeHex: "#1a1a1a",
-    status: "edible", statusLabel: "Edible", tags: ["edible"], capHex: "#e3e0d3",
-    marks: "White shaggy torpedo caps that dissolve into black ink within a day.",
-    look: "Common ink cap (smooth grey cap) reacts violently with alcohol — keep them separate."
-  },
-  {
-    sci: "Suillus luteus", com: "Slippery Jack", genus: "Suillus", family: "Suillaceae",
-    habitat: "Pine Plantations", season: [2, 6], spore: "Brown", sporeHex: "#6e4a2a",
-    status: "edible", statusLabel: "Edible", tags: ["edible"], capHex: "#7a4a28",
-    marks: "Slimy chestnut cap, purple-tinged ring, fine dotted yellow pores.",
-    look: "Few risky twins under pine — peel the slime skin; it upsets some stomachs."
-  },
-  {
-    sci: "Hydnum repandum", com: "Hedgehog Mushroom", genus: "Hydnum", family: "Hydnaceae",
-    habitat: "Mossy Mixed Forest", season: [3, 7], spore: "White", sporeHex: "#f3f1e9",
-    status: "edible", statusLabel: "Edible", tags: ["edible"], capHex: "#e0c090",
-    marks: "Cream cap with soft SPINES underneath instead of gills or pores.",
-    look: "No dangerous species carries spines — the safest beginner identification there is."
-  },
-  {
-    sci: "Armillaria mellea", com: "Honey Fungus", genus: "Armillaria", family: "Physalacriaceae",
-    habitat: "Stumps & Living Roots", season: [3, 6], spore: "White", sporeHex: "#f3f1e9",
-    status: "edible", statusLabel: "Edible · cook well", tags: ["edible", "bio"], capHex: "#b08a4a",
-    marks: "Honey-tan scaly caps in bursts, white ring, black bootlace rhizomorphs under bark; mycelium glows faintly.",
-    look: "Deadly Galerina fruits on the same logs — Galerina prints rusty brown, Armillaria white."
-  },
-
-  /* ---- PSYCHOACTIVE ---- */
-  {
-    sci: "Psilocybe subaeruginosa", com: "Gold-top", genus: "Psilocybe", family: "Hymenogastraceae",
-    habitat: "Eucalypt / Urban Mulch", season: [4, 8], spore: "Purple-brown", sporeHex: "#3a2b3a",
-    status: "psy", statusLabel: "Psychoactive", tags: ["psy"], capHex: "#c08a4a",
-    img: "https://inaturalist-open-data.s3.amazonaws.com/photos/518685963/medium.jpg", rid: "spPsilocybe",
-    marks: "Caramel hygrophanous cap, intense blue-green bruising, pale fibrous stem.",
-    look: "Galerina marginata fruits in the same mulch and is lethal — print every wood-lover."
-  },
-  {
-    sci: "Psilocybe semilanceata", com: "Liberty Cap", genus: "Psilocybe", family: "Hymenogastraceae",
-    habitat: "Sheep Pasture & Rank Grass", season: [4, 7], spore: "Purple-brown", sporeHex: "#3a2b3a",
-    status: "psy", statusLabel: "Psychoactive", tags: ["psy"], capHex: "#b0985a",
-    marks: "Nipple-topped conical cap, striate when damp, slender wavy stem.",
-    look: "Small brown grassland species blur together — deadly Cortinarius and Galerina print rust, not purple-brown."
-  },
-
-  /* ---- BIOLUMINESCENT / INVASIVE ---- */
-  {
-    sci: "Mycena chlorophos", com: "Night-light Bonnet", genus: "Mycena", family: "Mycenaceae",
-    habitat: "Subtropical Woody Litter", season: [1, 4], spore: "White", sporeHex: "#f3f1e9",
-    status: "bio", statusLabel: "Bioluminescent", tags: ["bio"], capHex: "#c8d9c0",
-    marks: "Tiny pale parasols; rim-lit green glow, strongest the first night after rain.",
-    look: "Too small to eat, unmistakable to log — a flagship sighting for night surveys."
-  },
-  {
-    sci: "Favolaschia calocera", com: "Orange Pore Fungus", genus: "Favolaschia", family: "Mycenaceae",
-    habitat: "Rainforest / Damp Gully", season: [3, 8], spore: "White", sporeHex: "#f3f1e9",
-    status: "invasive", statusLabel: "Invasive", tags: ["invasive"], capHex: "#e2752f",
-    img: "https://commons.wikimedia.org/wiki/Special:FilePath/Favolaschia_calocera_38204.jpg?width=600", rid: "spFavolaschia",
-    marks: "Bright orange ping-pong-bat caps with honeycomb pores on the underside.",
-    look: "Nothing dangerous shares the look — log every sighting to help track its spread."
-  }
-];
-
 const MONTHS = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
 
 function seasonBar(start, end) {
   let cells = "";
   for (let m = 1; m <= 12; m++) {
-    const on = m >= start && m <= end ? " on" : "";
+    const on = (start <= end ? m >= start && m <= end : m >= start || m <= end) ? " on" : "";
     cells += `<span class="${on.trim()}"></span>`;
   }
   return cells;
@@ -245,12 +30,12 @@ function speciesCard(s, i) {
   const sbClass = { deadly: "sb-deadly", toxic: "sb-toxic", psy: "sb-psy", bio: "sb-bio", invasive: "sb-invasive", edible: "sb-edible" }[s.status];
   const resolved = (window.__resources && s.rid && window.__resources[s.rid]) || s.img;
   const media = resolved
-    ? `<img src="${resolved}" alt="${s.sci}" loading="lazy" onerror="this.closest('.ph').classList.add('is-plate'); this.remove();">`
+    ? `<img src="${resolved}" alt="${s.sci}" loading="lazy" onerror="showPhotoUnavailable(this.closest('.ph'))">`
     : plateArt(s.capHex);
   const specno = 'SPC-' + String(i + 1).padStart(2, '0');
   return `
   <article class="species" data-tags="${s.tags.join(' ')}" data-i="${i}">
-    <div class="ph${resolved ? '' : ' is-plate'}" title="Expand specimen photo">
+    <div class="ph${resolved ? '' : ' is-plate'}" role="button" tabindex="0" aria-label="Expand reference photo of ${s.sci}">
       <span class="status-badge ${sbClass}">${s.statusLabel}</span>
       <span class="specno">${specno}</span>
       ${media}
@@ -260,7 +45,7 @@ function speciesCard(s, i) {
         <div class="sci">${s.sci}</div>
         <div class="com">${s.com}</div>
       </div>
-      <p class="tax">${s.genus} · ${s.family}</p>
+      <p class="tax">${s.genus} · ${s.family}</p><p class="catalogue-source"><a href="${s.source}" target="_blank" rel="noopener noreferrer">Catalogue source</a> · Identification unverified</p>
       <div class="spec-meta">
         <div class="r"><span class="k">Habitat</span><span class="v">${s.habitat}</span></div>
         <div class="r"><span class="k">Spore Print</span><span class="v"><span class="spore-dot" style="background:${s.sporeHex}"></span>${s.spore}</span></div>
@@ -279,19 +64,30 @@ function speciesCard(s, i) {
 }
 
 /* ---- live photo resolution — Wikipedia REST summary (CC imagery) ---- */
-const IMG_CACHE_KEY = 'myc_taxa_img_v1';
+const IMG_CACHE_KEY = 'myc_taxa_img_v2';
+
+function showPhotoUnavailable(ph) {
+  if (!ph) return;
+  ph.classList.add('is-plate');
+  ph.querySelectorAll('img, .plate, .photo-unavailable').forEach(el => el.remove());
+  const note = document.createElement('span');
+  note.className = 'photo-unavailable';
+  note.textContent = 'Reference photo unavailable';
+  ph.appendChild(note);
+}
 
 function applySpeciesImage(i, thumb, full) {
   const card = document.querySelector(`.species[data-i="${i}"]`);
   if (!card) return;
   const ph = card.querySelector('.ph');
   if (full) ph.dataset.full = full;
+  ph.querySelector('.photo-unavailable')?.remove();
   let img = ph.querySelector('img');
   if (img) { if (!SPECIES[i].img) img.src = thumb; return; }
   img = document.createElement('img');
   img.alt = SPECIES[i].sci;
   img.loading = 'lazy';
-  img.onerror = function () { ph.classList.add('is-plate'); img.remove(); };
+  img.onerror = function () { showPhotoUnavailable(ph); };
   img.src = thumb;
   const plate = ph.querySelector('.plate');
   if (plate) plate.remove();
@@ -301,26 +97,46 @@ function applySpeciesImage(i, thumb, full) {
 
 async function resolveImages() {
   let cache = {};
-  try { cache = JSON.parse(localStorage.getItem(IMG_CACHE_KEY) || '{}'); } catch (e) {}
-  let dirty = false;
-  const jobs = SPECIES.map(async (s, i) => {
-    const key = s.sci;
-    if (cache[key] && cache[key].t) { applySpeciesImage(i, cache[key].t, cache[key].f); return; }
+  try { cache = JSON.parse(localStorage.getItem(IMG_CACHE_KEY) || '{}'); } catch (_) {}
+  let next = 0;
+  const plain = value => { const node = document.createElement('div'); node.innerHTML = value || ''; return node.textContent || ''; };
+  async function resolve(s, i) {
     try {
-      const r = await fetch('https://en.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(s.sci.replace(/ /g, '_')));
-      if (!r.ok) return;
-      const j = await r.json();
-      const src = j.thumbnail && j.thumbnail.source;
-      if (!src) return;
-      const thumb = src.replace(/\/(\d+)px-/, '/640px-');
-      const full = src.replace(/\/(\d+)px-/, '/1280px-');
-      cache[key] = { t: thumb, f: full };
-      dirty = true;
-      applySpeciesImage(i, thumb, full);
-    } catch (e) { /* offline — plates remain */ }
-  });
-  await Promise.allSettled(jobs);
-  if (dirty) { try { localStorage.setItem(IMG_CACHE_KEY, JSON.stringify(cache)); } catch (e) {} }
+      let photo = cache[s.sci];
+      if (!photo || !photo.license || Date.now() - photo.savedAt > 30 * 86400000) {
+        const summary = await fetch('https://en.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(s.sci.replace(/ /g, '_')));
+        if (!summary.ok) throw new Error('No photo');
+        const info = await summary.json();
+        const src = info.thumbnail?.source;
+        if (!src) throw new Error('No photo');
+        const filename = decodeURIComponent(src.split('/').slice(-2, -1)[0]);
+        const params = new URLSearchParams({ action: 'query', format: 'json', origin: '*', prop: 'imageinfo', iiprop: 'url|extmetadata', iiurlwidth: '640', titles: 'File:' + filename });
+        const result = await fetch('https://commons.wikimedia.org/w/api.php?' + params);
+        if (!result.ok) throw new Error('No licence');
+        const metadata = await result.json();
+        const data = Object.values(metadata.query?.pages || {})[0]?.imageinfo?.[0];
+        const licence = plain(data?.extmetadata?.LicenseShortName?.value);
+        if (!data || !/^(CC BY(?:-SA)? [0-9.]+|CC0|Public domain)$/i.test(licence)) throw new Error('Licence unavailable');
+        photo = { t: data.thumburl || data.url, f: data.url, license: licence, credit: plain(data.extmetadata?.Artist?.value), source: data.descriptionurl, savedAt: Date.now() };
+        cache[s.sci] = photo;
+      }
+      applySpeciesImage(i, photo.t, photo.f);
+      const card = document.querySelector('.species[data-i="' + i + '"]');
+      if (card && !card.querySelector('.photo-credit')) {
+        const credit = document.createElement('a');
+        credit.className = 'photo-credit';
+        credit.href = photo.source; credit.target = '_blank'; credit.rel = 'noopener noreferrer';
+        credit.textContent = [photo.credit, photo.license, 'Original photo'].filter(Boolean).join(' · ');
+        card.querySelector('.body').appendChild(credit);
+      }
+    } catch (_) {
+      showPhotoUnavailable(document.querySelector('.species[data-i="' + i + '"] .ph'));
+    }
+  }
+  await Promise.all(Array.from({length: 4}, async () => {
+    while (next < SPECIES.length) { const i = next++; await resolve(SPECIES[i], i); }
+  }));
+  try { localStorage.setItem(IMG_CACHE_KEY, JSON.stringify(cache)); } catch (_) {}
 }
 
 /* ---- specimen lens — click a photo to expand for field comparison ---- */
@@ -329,6 +145,10 @@ function initLens() {
   if (!grid) return;
   const lens = document.createElement('div');
   lens.className = 'lens';
+  lens.setAttribute('role', 'dialog');
+  lens.setAttribute('aria-modal', 'true');
+  lens.setAttribute('aria-label', 'Reference photo comparison');
+  let opener;
   lens.innerHTML =
     '<div class="lens-card">' +
       '<div class="lens-ph"><img alt=""><span class="lens-no"></span></div>' +
@@ -344,11 +164,13 @@ function initLens() {
     '</div>';
   document.body.appendChild(lens);
 
-  function close() { lens.classList.remove('open'); document.body.style.overflow = ''; }
+  function close() { if (!lens.classList.contains('open')) return; lens.classList.remove('open'); document.body.style.overflow = ''; opener?.focus(); }
   lens.addEventListener('click', (e) => { if (e.target === lens) close(); });
   lens.querySelector('.lens-close').addEventListener('click', close);
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
 
+  grid.addEventListener('keydown', e => { if (e.target.closest('.ph') && ['Enter', ' '].includes(e.key)) { e.preventDefault(); e.target.closest('.ph').click(); } });
+  lens.addEventListener('keydown', e => { if (e.key === 'Tab') { e.preventDefault(); lens.querySelector('.lens-close').focus(); } });
   grid.addEventListener('click', (e) => {
     const ph = e.target.closest('.ph');
     if (!ph || ph.classList.contains('is-plate')) return;
@@ -357,6 +179,8 @@ function initLens() {
     const img = ph.querySelector('img');
     if (!s || !img) return;
     const sbClass = { deadly: 'sb-deadly', toxic: 'sb-toxic', psy: 'sb-psy', bio: 'sb-bio', invasive: 'sb-invasive', edible: 'sb-edible' }[s.status];
+    opener = ph;
+    lens.querySelector('.lens-ph img').alt = s.sci + ' — reference photo, not an identification';
     lens.querySelector('.lens-ph img').src = ph.dataset.full || img.src;
     lens.querySelector('.lens-no').textContent = 'SPC-' + String(+card.dataset.i + 1).padStart(2, '0') + ' · FIELD COMPARISON VIEW';
     const badge = lens.querySelector('.lens-badge');
@@ -368,6 +192,7 @@ function initLens() {
     lens.querySelector('.lens-marks').innerHTML = s.marks ? '<b>Field marks</b>' + s.marks : '';
     lens.querySelector('.lens-look').innerHTML = s.look ? '<b>Lookalike warning</b>' + s.look : '';
     lens.classList.add('open');
+    lens.querySelector('.lens-close').focus();
     document.body.style.overflow = 'hidden';
   });
 }
@@ -380,9 +205,11 @@ function renderCatalogue() {
 function initFilter() {
   const chips = document.querySelectorAll('.chip');
   chips.forEach(chip => {
+    chip.setAttribute('aria-pressed', chip.classList.contains('active') ? 'true' : 'false');
     chip.addEventListener('click', () => {
-      chips.forEach(c => c.classList.remove('active'));
+      chips.forEach(c => { c.classList.remove('active'); c.setAttribute('aria-pressed', 'false'); });
       chip.classList.add('active');
+      chip.setAttribute('aria-pressed', 'true');
       const f = chip.dataset.filter;
       document.querySelectorAll('.species').forEach(card => {
         const show = f === 'all' || card.dataset.tags.split(' ').includes(f);
@@ -415,18 +242,17 @@ function renderHeatmap() {
   ];
   const colFor = p => p > 0.66 ? '#FF4D4D' : p > 0.4 ? '#FFC04D' : '#4DDFAC';
 
-  const dark = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-    maxZoom: 19, subdomains: 'abcd', attribution: '© OpenStreetMap, © CARTO'
+  const dark = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19, attribution: '© OpenStreetMap contributors'
   });
-  const topo = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
-    maxZoom: 17, subdomains: 'abc', attribution: '© OpenTopoMap (CC-BY-SA)'
-  });
-  const hillshade = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Elevation/World_Hillshade/MapServer/tile/{z}/{y}/{x}', {
-    maxZoom: 19, opacity: 0.4, attribution: 'Hillshade © Esri'
-  });
-
-  const map = L.map(el, { zoomControl: true, attributionControl: true, scrollWheelZoom: false, layers: [dark, hillshade] })
+  const map = L.map(el, { zoomControl: true, attributionControl: true, scrollWheelZoom: false, layers: [dark] })
     .setView([-37.852, 145.347], 13);
+  const mapStatus = document.createElement('p');
+  mapStatus.className = 'map-status'; mapStatus.setAttribute('role', 'status');
+  mapStatus.textContent = 'Illustrative sample — these markers and conditions are not live observations.';
+  el.after(mapStatus);
+  let tileErrors = 0;
+  dark.on('tileerror', () => { if (++tileErrors >= 3) mapStatus.textContent = 'Basemap unavailable. Sample markers are illustrative; try again when connected.'; });
 
   /* ---- probability heat surface ---- */
   const heatPts = [];
@@ -455,7 +281,7 @@ function renderHeatmap() {
       iconSize: [170, 16], iconAnchor: [8, 8]
     });
     const m = L.marker([s.lat, s.lng], { icon }).addTo(hotspots)
-      .bindPopup(`<b>${s.name}</b><br><span class="pp-band" style="color:${c}">${s.band} · P=${s.p.toFixed(2)}</span><br>${s.elev} m · ${s.temp}°C · ${s.moist}% moisture<br>${s.obs} recent observations · ${s.canopy}`);
+      .bindPopup(`<b>${s.name}</b><br><span class="pp-band" style="color:${c}">${s.band} · Score ${Math.round(s.p * 100)}/100</span><br>${s.elev} m · ${s.temp}°C · ${s.moist}% moisture<br>${s.obs} recent observations · ${s.canopy}`);
     m.on('click', () => setDetail(s));
     m.on('mouseover', () => setDetail(s));
   });
@@ -466,12 +292,12 @@ function renderHeatmap() {
     iconSize: [16, 16], iconAnchor: [8, 8]
   });
   L.marker([station.lat, station.lng], { icon: sIcon }).addTo(map)
-    .bindPopup(`<b>${station.name}</b><br><span class="pp-band" style="color:#54E0A0">CURRENT FIELD GRID STATION</span><br>Auto-set from your GPS fix`);
+    .bindPopup(`<b>${station.name}</b><br><span class="pp-band" style="color:#54E0A0">EXAMPLE FIELD GRID STATION</span><br>Illustrative station location`);
 
   /* ---- layer switcher ---- */
   L.control.layers(
-    { 'Dark map': dark, 'Terrain (topo)': topo },
-    { 'Probability heat': heat, 'Elevation relief': hillshade, 'Hotspot pins': hotspots },
+    { 'Street map': dark },
+    { 'Illustrative suitability': heat, 'Sample pins': hotspots },
     { collapsed: true, position: 'topright' }
   ).addTo(map);
 
@@ -490,7 +316,7 @@ function renderHeatmap() {
     const c = colFor(s.p);
     const pin = (icon) => icon;
     detail.innerHTML =
-      `<div class="hd-head"><span class="hd-name">${s.name}</span><span class="hd-score" style="color:${c}">P=${s.p.toFixed(2)} · ${s.band}</span></div>` +
+      `<div class="hd-head"><span class="hd-name">${s.name}</span><span class="hd-score" style="color:${c}">Score ${Math.round(s.p * 100)}/100 · ${s.band}</span></div>` +
       `<div class="hd-grid">` +
         `<div class="hd-cell"><div class="k">${ICON.elev} Elevation</div><div class="v">${s.elev} m ASL</div></div>` +
         `<div class="hd-cell"><div class="k">${ICON.temp} Soil temp</div><div class="v">${s.temp}°C</div></div>` +
@@ -500,11 +326,11 @@ function renderHeatmap() {
         `<div class="hd-cell"><div class="k">${ICON.humid} Dewpoint</div><div class="v">${s.dew}°C</div></div>` +
         `<div class="hd-cell"><div class="k">${ICON.temp} Days since rain</div><div class="v">${s.dry} <span style="font-size:11px;color:var(--ink-dim)">d</span></div></div>` +
         `<div class="hd-cell"><div class="k">${ICON.obs} Recent sightings</div><div class="v">${s.obs} <span style="font-size:11px;color:var(--ink-dim)">iNat · 30d</span></div></div>` +
-        `<div class="hd-cell"><div class="k">${ICON.elev} Model confidence</div><div class="v">${Math.round(s.conf * 100)}%</div><div class="hd-bar"><i style="width:${Math.round(s.conf * 100)}%;background:${c}"></i></div></div>` +
+        `<div class="hd-cell"><div class="k">${ICON.elev} Illustrative confidence</div><div class="v">${Math.round(s.conf * 100)}%</div><div class="hd-bar"><i style="width:${Math.round(s.conf * 100)}%;background:${c}"></i></div></div>` +
         `<div class="hd-cell wide"><div class="k">${ICON.canopy} Canopy</div><div class="v">${s.canopy}</div></div>` +
         `<div class="hd-cell wide"><div class="k">${ICON.sub} Substrate</div><div class="v">${s.sub}</div></div>` +
       `</div>` +
-      `<div class="hd-hint">▸ Representative sample sweep · the live unit centres on your GPS fix. Click a pin or toggle layers (top-right) for terrain &amp; the probability surface.</div>`;
+      `<div class="hd-hint">▸ Representative sample sweep · the live unit centres on your GPS fix. Click a pin or toggle layers (top-right) for terrain &amp; the sample suitability surface.</div>`;
   }
   setDetail(spots[0]);
 
@@ -515,10 +341,10 @@ function renderHeatmap() {
     const totObs = spots.reduce((a, s) => a + s.obs, 0);
     const avgConf = Math.round(spots.reduce((a, s) => a + s.conf, 0) / spots.length * 100);
     stats.innerHTML =
-      `<div class="s"><div class="n hot">${Math.round(peak * 100)}%</div><div class="k">Peak likelihood</div></div>` +
-      `<div class="s"><div class="n">${spots.length}</div><div class="k">Active hotspots</div></div>` +
-      `<div class="s"><div class="n">${totObs}</div><div class="k">Obs ingested · 30d</div></div>` +
-      `<div class="s"><div class="n">${avgConf}%</div><div class="k">Model confidence</div></div>` +
+      `<div class="s"><div class="n hot">${Math.round(peak * 100)}/100</div><div class="k">Sample peak score</div></div>` +
+      `<div class="s"><div class="n">${spots.length}</div><div class="k">Sample cells</div></div>` +
+      `<div class="s"><div class="n">${totObs}</div><div class="k">Sample records</div></div>` +
+      `<div class="s"><div class="n">${avgConf}%</div><div class="k">Illustrative confidence</div></div>` +
       `<div class="s"><div class="n">5</div><div class="k">API endpoints</div></div>` +
       `<div class="s"><div class="n">8<span style="font-size:11px"> km</span></div><div class="k">Sweep radius</div></div>`;
   }
@@ -574,43 +400,6 @@ function initNav() {
   }
 }
 
-/* launch waitlist — persisted locally */
-function initWaitlist() {
-  const form = document.getElementById('waitlistForm');
-  if (!form) return;
-  const input = document.getElementById('wlEmail');
-  const msg = document.getElementById('wlMsg');
-  const KEY = 'myceliyum_waitlist';
-
-  const saved = JSON.parse(localStorage.getItem(KEY) || '[]');
-  if (saved.length && saved.includes(input.value)) { /* noop */ }
-
-  form.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const email = input.value.trim();
-    const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-    if (!valid) {
-      form.classList.add('error');
-      msg.textContent = '> Enter a valid field address to continue.';
-      msg.className = 'wl-msg err';
-      input.focus();
-      return;
-    }
-    form.classList.remove('error');
-    const list = JSON.parse(localStorage.getItem(KEY) || '[]');
-    if (list.includes(email)) {
-      msg.textContent = '> Already on the list — dispatches incoming.';
-      msg.className = 'wl-msg ok';
-      return;
-    }
-    list.push(email);
-    localStorage.setItem(KEY, JSON.stringify(list));
-    form.reset();
-    msg.textContent = '> Logged. You\u2019re #' + list.length + ' on the field roster.';
-    msg.className = 'wl-msg ok';
-  });
-}
-
 /* copy build command */
 function initCopy() {
   const box = document.getElementById('buildCmd');
@@ -659,8 +448,8 @@ function initTicker() {
   const items = [
     ['RAIN 7D', '42 mm', 0], ['SOIL MOIST', '88%', 0], ['SOIL TEMP', '12.4\u00B0C', 0],
     ['HUMIDITY', '91%', 0], ['CANOPY', '82%', 1], ['NDVI', '0.52', 1],
-    ['OBS 30D', '18', 0], ['PEAK P', '0.94', 1], ['GPS', 'FIX 3D \u00B7 11 SV', 0],
-    ['EARTH ENGINE', 'LIVE', 1], ['SAT RES', '30 m', 0], ['ENGINE', 'ONLINE', 1]
+    ['OBS 30D', '18', 0], ['SAMPLE SCORE', '94/100', 1], ['GPS', 'EXAMPLE ONLY', 0],
+    ['MODE', 'ILLUSTRATIVE', 1], ['SOURCE RES', 'VARIES', 0], ['ENGINE', 'EXAMPLE', 1]
   ];
   const seq = items.map(function (it) {
     return '<span class="tm' + (it[2] ? ' on' : '') + '"><b>' + it[0] + '</b>' + it[1] + '</span>';
@@ -676,7 +465,8 @@ function boot() {
   renderHeatmap();
   initReveal();
   initNav();
-  initWaitlist();
+  try { localStorage.removeItem('myceliyum_waitlist'); } catch (_) {}
+  initReleaseDownload();
   initCopy();
   initClock();
   initTicker();
