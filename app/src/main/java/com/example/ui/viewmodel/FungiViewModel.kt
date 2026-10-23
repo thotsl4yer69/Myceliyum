@@ -50,40 +50,6 @@ class FungiViewModel(
     private val settingsStore: SettingsStore
 ) : AndroidViewModel(application) {
 
-    // Seed state (ensure database is initialized on start)
-    init {
-        viewModelScope.launch {
-            repository.seedDatabase()
-            speciesList.first { it.isNotEmpty() }.let { list ->
-                if (selectedSpeciesForHotspot.value == null) {
-                    selectedSpeciesForHotspot.value = list.first()
-                }
-            }
-        }
-        // The map opens on a neutral default coordinate; mark the location
-        // "resolved" the first time it's set from a real source (device GPS, a
-        // search, presets, manual coords) so the UI can show "Locating…" instead
-        // of a misleading default city.
-        viewModelScope.launch { mapCenter.drop(1).collect { _locationResolved.value = true } }
-        viewModelScope.launch {
-            combine(
-                mapCenter,
-                searchRadiusKm,
-                selectedSpeciesForHotspot,
-                isAllSpeciesMode
-            ) { center, radius, species, allSpecies ->
-                HotspotRequest(center.first, center.second, radius, species?.id, allSpecies)
-            }
-                .debounce(HOTSPOT_RECOMPUTE_DEBOUNCE_MS)
-                .distinctUntilChanged()
-                .collect { request ->
-                    if (request.allSpecies || request.speciesId != null) {
-                        computeHotspots()
-                    }
-                }
-        }
-    }
-
     // False until the map centre is set from a real source (GPS / user action).
     private val _locationResolved = MutableStateFlow(false)
     val locationResolved: StateFlow<Boolean> = _locationResolved.asStateFlow()
@@ -504,6 +470,40 @@ class FungiViewModel(
             month in start..end
         } else {
             month >= start || month <= end
+        }
+    }
+
+    // Seed state (ensure database is initialized on start)
+    init {
+        viewModelScope.launch {
+            repository.seedDatabase()
+            speciesList.first { it.isNotEmpty() }.let { list ->
+                if (selectedSpeciesForHotspot.value == null) {
+                    selectedSpeciesForHotspot.value = list.first()
+                }
+            }
+        }
+        // The map opens on a neutral default coordinate; mark the location
+        // "resolved" the first time it's set from a real source (device GPS, a
+        // search, presets, manual coords) so the UI can show "Locating…" instead
+        // of a misleading default city.
+        viewModelScope.launch { mapCenter.drop(1).collect { _locationResolved.value = true } }
+        viewModelScope.launch {
+            combine(
+                mapCenter,
+                searchRadiusKm,
+                selectedSpeciesForHotspot,
+                isAllSpeciesMode
+            ) { center, radius, species, allSpecies ->
+                HotspotRequest(center.first, center.second, radius, species?.id, allSpecies)
+            }
+                .debounce(HOTSPOT_RECOMPUTE_DEBOUNCE_MS)
+                .distinctUntilChanged()
+                .collect { request ->
+                    if (request.allSpecies || request.speciesId != null) {
+                        computeHotspots()
+                    }
+                }
         }
     }
 

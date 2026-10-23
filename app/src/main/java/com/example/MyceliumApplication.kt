@@ -42,7 +42,8 @@ class MyceliumApplication : Application() {
         }
 
         val logging = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
+            // Never log exact user coordinates or API response bodies.
+            level = HttpLoggingInterceptor.Level.NONE
         }
         val okHttpClient = OkHttpClient.Builder()
             .addInterceptor(logging)

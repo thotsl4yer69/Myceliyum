@@ -33,7 +33,6 @@ abstract class AppDatabase : RoomDatabase() {
                     "mycelium_mapper_db"
                 )
                 .addMigrations(MIGRATION_3_4)
-                .fallbackToDestructiveMigration()
                 .build()
                 INSTANCE = instance
                 instance

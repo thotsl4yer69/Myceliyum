@@ -633,15 +633,18 @@ class FungiRepository(
             val response = openMeteoApi.getPastWeather(limitLat = lat, limitLng = lng)
 
             val rainfall = response.daily.precipitationSum
-                ?.map { it ?: 0.0 } ?: emptyList()
+                ?.map { it ?: throw IllegalStateException("Incomplete rainfall history") } ?: emptyList()
             val maxTemps = response.daily.temperatureMax
                 ?.mapNotNull { it } ?: emptyList()
             val minTemps = response.daily.temperatureMin
                 ?.mapNotNull { it } ?: emptyList()
 
             val totalRainfall = rainfall.sum()
-            val avgMax = if (maxTemps.isNotEmpty()) maxTemps.average() else 15.0
-            val avgMin = if (minTemps.isNotEmpty()) minTemps.average() else 8.0
+            require(rainfall.isNotEmpty() && maxTemps.isNotEmpty() && minTemps.isNotEmpty()) {
+                "No usable measured weather observations returned"
+            }
+            val avgMax = maxTemps.average()
+            val avgMin = minTemps.average()
 
             // Recent soil moisture (last ~7 days of hourly readings, 0-7cm layer).
             val soil = response.hourly?.soilMoisture0to7cm?.mapNotNull { it } ?: emptyList()
@@ -650,10 +653,9 @@ class FungiRepository(
             Log.d(TAG, "Weather (${rainfall.size} days): Rain: ${totalRainfall}mm, AvgMax: ${avgMax}C, AvgMin: ${avgMin}C, Soil: $avgSoil")
             WeatherData(rainfall, totalRainfall, avgMax, avgMin, (avgMax + avgMin) / 2.0, avgSoil)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to fetch detailed weather, using Victorian autumn defaults", e)
-            // Default: moderate Victorian autumn conditions
-            val defaultDaily = List(45) { 3.0 } // ~3mm per day
-            WeatherData(defaultDaily, 135.0, 15.5, 8.0, 11.75)
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.w(TAG, "Measured weather unavailable; no fabricated values will be used")
+            throw IllegalStateException("Measured weather unavailable. Reconnect and retry.", e)
         }
     }
 
@@ -1315,17 +1317,23 @@ class FungiRepository(
             val maxList = response.daily.temperatureMax
 
             // Sum of last 30 days rainfall
-            val totalRainfall = sumList?.filterNotNull()?.sum() ?: 0.0
+            val totalRainfall = sumList?.takeLast(30)
+                ?.takeIf { it.size == 30 }
+                ?.map { it ?: throw IllegalStateException("Incomplete 30-day rainfall history") }
+                ?.sum() ?: throw IllegalStateException("30-day rainfall history unavailable")
 
             // Average max temp over past 30 days
-            val avgMaxTemp = maxList?.filterNotNull()?.average() ?: 15.0
+            val avgMaxTemp = maxList?.takeLast(30)
+                ?.takeIf { it.size == 30 }
+                ?.map { it ?: throw IllegalStateException("Incomplete 30-day temperature history") }
+                ?.average() ?: throw IllegalStateException("30-day temperature history unavailable")
 
             Log.d(TAG, "Historical weather (last 30 days): Rainfall: $totalRainfall mm, Avg Max Temp: $avgMaxTemp C")
             return@withContext Pair(totalRainfall, avgMaxTemp)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to fetch weather from Open-Meteo, using default fallback (95.0mm, 15.5C)", e)
-            // Returning a typical Victorian autumn default which permits moderate fruiting
-            return@withContext Pair(95.0, 15.5)
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.w(TAG, "Measured 30-day weather unavailable; refusing invented readings")
+            throw IllegalStateException("Measured weather summary unavailable", e)
         }
     }
 

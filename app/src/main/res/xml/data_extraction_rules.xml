@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-  Backup/transfer rules. The app stores only personal sightings (Room),
-  cached iNaturalist responses, and DataStore preferences — all of which are
-  safe to back up and restore on a new device.
--->
+<!-- Back up sightings, but not the preferences DataStore containing a
+     user-supplied API credential, via cloud backup or device transfer. -->
 <data-extraction-rules>
-    <cloud-backup />
-    <device-transfer />
+    <cloud-backup>
+        <exclude domain="file" path="datastore/mycelium_settings.preferences_pb" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="file" path="datastore/mycelium_settings.preferences_pb" />
+    </device-transfer>
 </data-extraction-rules>
