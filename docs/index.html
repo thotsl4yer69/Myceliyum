@@ -35,12 +35,12 @@
     <div class="grp">
       <span class="lamp"><i></i>SYS ONLINE</span>
       <span class="sep">/</span>
-      <span class="lamp amber util"><i></i>EARTH ENGINE LIVE</span>
+      <span class="lamp amber util"><i></i>SATELLITE INPUTS OPTIONAL</span>
     </div>
     <div class="grp util">
       <span>UNIT&nbsp;MYC-01</span>
       <span class="sep">·</span>
-      <span>GPS&nbsp;FIX&nbsp;3D</span>
+      <span>DEMO&nbsp;DISPLAY</span>
       <span class="sep">·</span>
       <span>11&nbsp;SV</span>
       <span class="sep">·</span>
@@ -93,7 +93,7 @@
           <span class="tag">SAT <b>EARTH ENGINE</b></span>
         </div>
         <h1>Read the forest<br>before it <span class="em">fruits.</span></h1>
-        <p class="hero-sub">Myceliyums fuses <b>five live data sources</b> — a curated species catalogue, iNaturalist observations, Open-Meteo weather, Google place-search and <b>Earth Engine satellite layers</b> (land cover, tree-canopy %, NDVI) — into a grid model that scores <b>where fungi are likely fruiting</b>. Quality first: every signal that drives a flush, on every cell.</p>
+        <p class="hero-sub">Myceliyums combines a shared species catalogue, biodiversity observations, weather and available environmental layers into a <b>relative habitat suitability score</b>. Scoring is tuned for Victoria, Australia. Missing inputs reduce confidence; scores are not measured probabilities of finding fungi. The display shown here is an illustrative example.</p>
         <div class="hero-actions">
           <a class="btn btn-primary" href="#download">
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.6 9.5 19 7a.4.4 0 0 0-.7-.4L16.9 9a9.9 9.9 0 0 0-9.8 0L5.7 6.6A.4.4 0 0 0 5 7l1.4 2.5A8 8 0 0 0 2 16h20a8 8 0 0 0-4.4-6.5ZM7 13.8a1 1 0 1 1 0-2 1 1 0 0 1 0 2Zm10 0a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"/></svg>
@@ -102,8 +102,8 @@
           <a class="btn btn-ghost" href="#hotspots">Open the scope</a>
         </div>
         <div class="spec-strip">
-          <div class="cell"><div class="n">28</div><div class="k">Catalogued taxa</div></div>
-          <div class="cell"><div class="n">10</div><div class="k">Weighted signals</div></div>
+          <div class="cell"><div class="n">74</div><div class="k">Catalogued taxa</div></div>
+          <div class="cell"><div class="n">15</div><div class="k">Weighted signals</div></div>
           <div class="cell"><div class="n">05</div><div class="k">Live data sources</div></div>
           <div class="cell"><div class="n">30<span class="u">m</span></div><div class="k">Satellite resolution</div></div>
         </div>
@@ -111,11 +111,11 @@
 
       <div class="hero-mock">
         <span class="corner-coord cc-tl">FIG.01 — FIELD UNIT READOUT</span>
-        <span class="corner-coord cc-br">● LIVE · GPS LOCK</span>
+        <span class="corner-coord cc-br">● ILLUSTRATIVE DEMO</span>
         <div class="device cuts">
           <div class="dev-top">
             <span class="id">MYC-01 · FW 2.4.1</span>
-            <span class="live"><i></i>LIVE</span>
+            <span class="live"><i></i>DEMO</span>
           </div>
           <div class="ports"><i></i><i></i><i></i></div>
           <div class="screen scan">
@@ -143,7 +143,7 @@
                 </div>
 
                 <div class="app-section-h">
-                  <span class="mlabel" style="color:var(--amber)">LIVE CONDITIONS · OPEN-METEO</span>
+                  <span class="mlabel" style="color:var(--amber)">SAMPLE CONDITIONS</span>
                   <span class="all">SYNC 6m</span>
                 </div>
                 <div class="cond-grid">
@@ -160,7 +160,7 @@
 
                 <div class="app-section-h">
                   <span class="mlabel" style="color:var(--amber)">SATELLITE LAYERS · EARTH ENGINE</span>
-                  <span class="all">30m</span>
+                  <span class="all">Varies</span>
                 </div>
                 <div class="cond-grid sat">
                   <div class="cond"><div class="cv">82<span class="cu">%</span></div><div class="ck">Canopy</div></div>
@@ -258,8 +258,8 @@
           <div class="fic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 17l5-5 4 4 8-9"/><path d="M16 7h5v5"/></svg></div>
         </div>
         <h3>Hotspot predictor</h3>
-        <p>A grid model scores fruiting likelihood across <b>ten weighted signals</b> — satellite land cover, tree-canopy and NDVI fused with rainfall, soil, terrain and the species' seasonal window.</p>
-        <span class="tag">10 signals · Grid scoring</span>
+        <p>A grid model scores relative suitability across <b>fifteen weighted signals</b> — satellite land cover, tree-canopy and NDVI fused with rainfall, soil, terrain and the species' seasonal window.</p>
+        <span class="tag">15 signals · Grid scoring</span>
       </article>
       <article class="feat">
         <div class="feat-top">
@@ -285,7 +285,7 @@
           <div class="fic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7a2 2 0 0 1 2-2h3l1.5-2h5L21 5h-2a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/><circle cx="12" cy="12" r="3.4"/></svg></div>
         </div>
         <h3>Sightings logbook</h3>
-        <p>Log finds with a real camera voucher photo, GPS fix and field notes. Keep entries yours, then export the whole logbook to CSV whenever you like.</p>
+        <p>Log finds with a real camera voucher photo, GPS fix and field notes. Private records stay out of shared CSV exports. A separate personal backup includes every record and photo.</p>
         <span class="tag">Photo · GPS · CSV export</span>
       </article>
       <article class="feat">
@@ -307,7 +307,7 @@
     <div class="block-head reveal">
       <span class="fig sig">SEC 02 / HOTSPOT SCOPE</span>
       <h2 class="section-h">A fruiting forecast,<br>scored grid by grid.</h2>
-      <p class="section-lead">The model sweeps a grid around your station and weights <b>ten signals</b> that drive a flush — satellite land cover, canopy and NDVI alongside weather, soil, terrain and season — then paints the cells most worth walking. Real iNaturalist sightings drop as pins you can <b>tap for the species, date and place</b>.</p>
+      <p class="section-lead">The model sweeps a grid around your station and weights <b>fifteen signals</b> that drive a flush — satellite land cover, canopy and NDVI alongside weather, soil, terrain and season — then paints the cells most worth walking. Real iNaturalist sightings drop as pins you can <b>tap for the species, date and place</b>.</p>
     </div>
     <div class="hot-grid">
       <div class="reveal">
@@ -398,11 +398,11 @@
     <div class="block-head reveal">
       <span class="fig">SEC 03 / SPECIMEN INDEX</span>
       <h2 class="section-h">The species file.</h2>
-      <p class="section-lead">Twenty-eight field-grade reference cards — the edible, the deadly, and every dangerous twin in between. Each dossier carries field marks, spore print, season and a lookalike warning; tap any photo to expand it for side-by-side comparison in the field.</p>
+      <p class="section-lead">Seventy-four reference cards shared with the Android catalogue. These notes and photographs do not verify a specimen or establish that it is safe to eat. Each dossier carries field marks, spore print, season and a lookalike warning; tap any photo to expand it for side-by-side comparison in the field.</p>
     </div>
     <div class="filter-row reveal">
       <button class="chip active" data-filter="all">All taxa</button>
-      <button class="chip" data-filter="edible">Edible</button>
+      <button class="chip" data-filter="reference">Reference only</button>
       <button class="chip" data-filter="deadly">Deadly</button>
       <button class="chip" data-filter="toxic">Toxic</button>
       <button class="chip" data-filter="psy">Psychoactive</button>
@@ -419,7 +419,7 @@
     <div class="block-head reveal">
       <span class="fig sig">SEC 04 / SIGNAL PATH</span>
       <h2 class="section-h">Ingest. Score.<br>Surface.</h2>
-      <p class="section-lead">Every sweep runs the same three-stage chain — pull the signals, weight them into a per-cell score, then paint what's worth walking. Cloud-computed where it counts, cached on-device so a dropped signal never stops the sweep.</p>
+      <p class="section-lead">Every sweep runs the same three-stage chain — pull the signals, weight them into a per-cell score, then paint what's worth walking. Available data is cached on-device. Prepare an area before leaving coverage; saved snapshots show their age. Basemap tiles are not included in an offline area.</p>
     </div>
     <div class="chain reveal">
       <div class="stage">
@@ -428,7 +428,7 @@
           <span class="stage-tag">INGEST</span>
         </div>
         <h4>Pull the signals</h4>
-        <p>Five live sources gather data for the grid around your station on every sweep.</p>
+        <p>The app requests available observations, weather and environmental inputs, and labels cached or missing data.</p>
         <ul class="stage-list">
           <li><span>Species catalogue</span><em>on-device</em></li>
           <li><span>iNaturalist obs.</span><em>API</em></li>
@@ -444,9 +444,9 @@
           <span class="stage-tag">SCORE</span>
         </div>
         <h4>Weight &amp; fuse</h4>
-        <p>The engine blends ten weighted signals into a fruiting probability for every grid cell.</p>
+        <p>The engine blends fifteen weighted signals into a relative suitability score for every grid cell.</p>
         <ul class="stage-list">
-          <li><span>10 weighted signals</span><em>model</em></li>
+          <li><span>15 weighted signals</span><em>model</em></li>
           <li><span>Per-cell grid score</span><em>0–1</em></li>
           <li><span>Cloud + local cache</span><em>hybrid</em></li>
         </ul>
@@ -475,20 +475,10 @@
     <div class="wl-card reveal">
       <div class="wl-copy">
         <span class="fig">SEC 05 / FIELD ROSTER</span>
-        <h2 class="section-h" style="margin-bottom:14px;">Get pinged when<br>the season opens.</h2>
-        <p class="section-lead">Drop your email for build releases, new taxa added to the catalogue, and the first signal when the fruiting season kicks off in your region. No spam — just field dispatches.</p>
+        <h2 class="section-h" style="margin-bottom:14px;">Follow the<br>release notes.</h2>
+        <p class="section-lead">Read published changes and verification notes on GitHub. This page does not collect email addresses or send notifications.</p>
       </div>
-      <form class="wl-form" id="waitlistForm" novalidate>
-        <label class="mlabel" for="wlEmail">FIELD DISPATCH SIGN-UP</label>
-        <div class="wl-input-row">
-          <input type="email" id="wlEmail" name="email" placeholder="forager@field.au" autocomplete="email" required>
-          <button type="submit" class="btn btn-primary">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m0 0-6-6m6 6-6 6"/></svg>
-            Enrol
-          </button>
-        </div>
-        <p class="wl-msg" id="wlMsg" role="status" aria-live="polite"></p>
-      </form>
+      <a class="btn btn-primary" href="https://github.com/thotsl4yer69/Myceliyum/releases" target="_blank" rel="noopener noreferrer">Read release notes</a>
     </div>
   </div>
 </section>
@@ -499,11 +489,11 @@
     <div class="cta-card reveal cuts">
       <span class="fig sig" style="justify-content:center;">SEC 06 / INSTALL · ANDROID</span>
       <h2 style="margin-top:18px;">Take the terminal<br>into the field.</h2>
-      <p>One tap installs the latest build straight onto your device — no store, no account. After that the terminal <b>updates itself</b>: each new field build is offered in-app and, now that every build shares one signing key, installs cleanly over the last. Prefer to roll your own? Clone the repo and compile with the bundled Gradle wrapper.</p>
+      <p>The download becomes available after a build passes its checks and a matching release manifest and APK are published. Back up your sightings before changing installations. Check release notes for signing compatibility.</p>
       <div class="cta-actions">
-        <a class="btn btn-primary" href="https://github.com/thotsl4yer69/Myceliyum/releases/latest/download/app-debug.apk" target="_blank" rel="noopener noreferrer">
+        <a class="btn btn-primary" href="#download" data-release-download aria-disabled="true" target="_blank" rel="noopener noreferrer">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
-          Download APK · direct
+          Checking verified build…
         </a>
         <a class="btn btn-ghost" href="https://github.com/thotsl4yer69/Myceliyum/releases/latest" target="_blank" rel="noopener noreferrer">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 5a2 2 0 0 1 2-2h8l6 6v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5Z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg>
@@ -518,7 +508,7 @@
           Copy
         </span>
       </div>
-      <p class="cta-note">First run: open the file and allow <code>install from this source</code>. &nbsp;·&nbsp; Stable-signed, so in-app updates install without conflicts. &nbsp;·&nbsp; If an update ever reports a “conflict”, uninstall once then reinstall from here.</p>
+      <p class="cta-note" id="releaseStatus" role="status">No verified download has been confirmed. Keep your existing installation and records while release checks are pending.</p>
     </div>
   </div>
 </section>
@@ -551,7 +541,7 @@
         <div class="foot-col">
           <h5>Build</h5>
           <a href="https://github.com/thotsl4yer69/Myceliyum" target="_blank" rel="noopener noreferrer">Source on GitHub</a>
-          <a href="https://github.com/thotsl4yer69/Myceliyum/releases/latest/download/app-debug.apk" target="_blank" rel="noopener noreferrer">Download APK</a>
+          <a href="#download" data-release-download aria-disabled="true" target="_blank" rel="noopener noreferrer">Download APK</a>
           <a href="https://github.com/thotsl4yer69/Myceliyum#build--run" target="_blank" rel="noopener noreferrer">Build instructions</a>
         </div>
         <div class="foot-col">
@@ -579,6 +569,8 @@
 </template>
 
 <script src="hyphae-bg.js"></script>
+<script src="catalogue.js"></script>
+<script src="release.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
