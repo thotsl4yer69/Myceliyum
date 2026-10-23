@@ -1,0 +1,35 @@
+name: Verify Myceliyum catalogue and release trust
+on:
+  pull_request:
+    paths:
+      - "docs/**"
+      - "tests/site.test.cjs"
+      - "scripts/sync_catalogue.cjs"
+      - ".github/workflows/site-verify.yml"
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "tests/site.test.cjs"
+      - "scripts/sync_catalogue.cjs"
+      - ".github/workflows/site-verify.yml"
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check generated website catalogue
+        run: node scripts/sync_catalogue.cjs --check
+      - name: Verify JavaScript syntax
+        run: |
+          node --check docs/catalogue.js
+          node --check docs/release.js
+          node --check docs/app.js
+      - name: Run site regression checks
+        run: node --test tests/site.test.cjs
